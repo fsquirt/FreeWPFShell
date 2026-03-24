@@ -44,11 +44,9 @@ namespace FreeWPFShell.View
                 },
             };
 
-            _connection = new ConPtyConnection();
             var conn = new ConPtyConnection("cmd.exe", 120, 30);
 
             Terminal.Connection = conn;
-            Terminal.Connection = _connection;
             Terminal.SetTheme(theme, "Cascadia Code", 12);
             Terminal.Focus();
         }

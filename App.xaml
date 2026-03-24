@@ -19,7 +19,7 @@
             </Style>
 
             <ResourceDictionary.MergedDictionaries>
-                <mica:ThemeDictionary DesignModeTheme="Auto" Theme="Auto" />
+                <mica:ThemeDictionary DesignModeTheme="Dark" Theme="Dark" />
                 <mica:ControlsDictionary />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
