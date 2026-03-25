@@ -1,0 +1,84 @@
+<UserControl x:Class="FreeWPFShell.Pages.TerminalAndSFTP"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:term="clr-namespace:Microsoft.Terminal.Wpf;assembly=Microsoft.Terminal.Wpf"
+             mc:Ignorable="d" 
+             d:DesignHeight="800" d:DesignWidth="800">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="1.5*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Terminal -->
+        <term:TerminalControl x:Name="Terminal" Grid.Row="0" Margin="10" Focusable="True" Loaded="Terminal_Loaded" PreviewKeyDown="Terminal_PreviewKeyDown" KeyboardNavigation.DirectionalNavigation="None" KeyboardNavigation.TabNavigation="None" KeyboardNavigation.ControlTabNavigation="None" Background="#1E3047" />
+
+        <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Center" ResizeBehavior="PreviousAndNext" ResizeDirection="Rows" Background="Transparent" Focusable="False"/>
+
+        <!-- SFTP -->
+        <Grid Grid.Row="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <Border Grid.Row="0" Height="35" Background="Transparent" Padding="5">
+                <Grid>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button x:Name="BtnBack" Content="⬅️" Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}" Click="BtnBack_Click" />
+                        <Button x:Name="BtnForward" Content="➡️" Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}" Click="BtnForward_Click" />
+                        <Button x:Name="BtnRefresh" Content="🔄" Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}" Click="BtnRefresh_Click" />
+                        <Button x:Name="BtnUp" Content="⬆️" Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}" Click="BtnUp_Click" />
+                        <Button x:Name="BtnNewFolder" Content="📁" Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}" Margin="0,0,10,0" Click="BtnNewFolder_Click" />
+                        
+                        <TextBlock x:Name="TxtCurrentPath" Text="/" VerticalAlignment="Center" Margin="0,0,15,0" />
+
+                        <Button x:Name="BtnUpload" Content="↑ 上传" Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}" Margin="0,0,5,0" Click="BtnUpload_Click">
+                            <Button.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="上传文件" Click="CtxUploadFile_Click" />
+                                    <MenuItem Header="上传文件夹" Click="CtxUploadFolder_Click" />
+                                </ContextMenu>
+                            </Button.ContextMenu>
+                        </Button>
+                        <Button x:Name="BtnDownload" Content="↓ 下载" Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}" Margin="0,0,15,0" Click="BtnDownload_Click" />
+
+                        <TextBlock x:Name="TxtStatusIcon" Text="✅" VerticalAlignment="Center" FontSize="16" Cursor="Help" ToolTip="当前没有传输任务" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <DataGrid x:Name="FileGrid" Grid.Row="1" AutoGenerateColumns="False" HeadersVisibility="Column" Background="Transparent" RowHeaderWidth="0" GridLinesVisibility="None" BorderThickness="0" MouseDoubleClick="FileGrid_MouseDoubleClick" IsReadOnly="True" SelectionMode="Extended">
+                <DataGrid.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="下载" Click="CtxGridDownload_Click" />
+                        <MenuItem Header="删除" Click="CtxGridDelete_Click" />
+                        <MenuItem Header="重命名" Click="CtxGridRename_Click" />
+                        <MenuItem Header="复制" Click="CtxGridCopy_Click" />
+                        <MenuItem Header="粘贴" Click="CtxGridPaste_Click" />
+                    </ContextMenu>
+                </DataGrid.ContextMenu>
+                <DataGrid.Columns>
+                    <DataGridTemplateColumn Header="文件名" Width="2*">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Icon}" Margin="0,0,5,0"/>
+                                    <TextBlock Text="{Binding Name}"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTextColumn Header="大小" Binding="{Binding Size}" Width="*"/>
+                    <DataGridTextColumn Header="类型" Binding="{Binding Type}" Width="*"/>
+                    <DataGridTextColumn Header="修改时间" Binding="{Binding Date}" Width="1.5*"/>
+                    <DataGridTextColumn Header="权限" Binding="{Binding Perms}" Width="*"/>
+                    <DataGridTextColumn Header="用户/用户组" Binding="{Binding Owner}" Width="*"/>
+                </DataGrid.Columns>
+            </DataGrid>
+        </Grid>
+    </Grid>
+</UserControl>

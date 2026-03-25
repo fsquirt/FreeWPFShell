@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -12,7 +12,7 @@ using System.IO;
 
 namespace FreeWPFShell.Share
 {
-    class SshManager
+    public class SshManager
     {
         // ==========================================
         // 1. 数据模型与枚举定义

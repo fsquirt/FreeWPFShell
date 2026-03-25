@@ -5,7 +5,6 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:FreeWPFShell"
         xmlns:mica="clr-namespace:MicaWPF.Controls;assembly=MicaWPF"
-        xmlns:term="clr-namespace:Microsoft.Terminal.Wpf;assembly=Microsoft.Terminal.Wpf"
         mc:Ignorable="d"
         Title="FreeWPFShell 0.0.1" Height="800" Width="1280"
         SystemBackdropType="Acrylic" TitleBarType="WinUI"
@@ -36,8 +35,8 @@
                 <Border Grid.Row="0" BorderBrush="Transparent" BorderThickness="1" CornerRadius="3" Padding="4" Margin="0,0,0,10">
                     <Grid>
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="IP 38.207.165.125" />
-                            <Button Content="复制" Margin="10,0,0,0" Padding="5,1" Background="Transparent"  />
+                            <TextBlock x:Name="TxtHostIp" Text="未连接" />
+                            <Button Content="复制" Margin="10,0,0,0" Padding="5,1" Background="Transparent" Click="BtnCopyIp_Click" />
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -122,7 +121,8 @@
                 </DataGrid>
             </Grid>
 
-            <GridSplitter HorizontalAlignment="Left" Background="Transparent" RenderTransformOrigin="0.5,0.5" Width="0" Grid.Column="2">
+            <!-- Splitter -->
+            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="Transparent" Focusable="False">
                 <GridSplitter.RenderTransform>
                     <TransformGroup>
                         <ScaleTransform ScaleX="1"/>
@@ -135,79 +135,14 @@
 
             <Grid Grid.Column="2">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="1.5*"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
-
-                <TabControl Grid.Row="0" BorderThickness="0" Background="#1E3047">
-                    <TabItem Header="🐧 服务器" IsSelected="True">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="*"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
-
-                            <term:TerminalControl x:Name="Terminal" Grid.Row="0" Margin="10" Focusable="True" Loaded="Terminal_Loaded" PreviewKeyDown="Terminal_PreviewKeyDown" KeyboardNavigation.DirectionalNavigation="None" KeyboardNavigation.TabNavigation="None" KeyboardNavigation.ControlTabNavigation="None" />
-                            
-                        </Grid>
-                    </TabItem>
-                    <TabItem Header="+"/>
+                <TabControl x:Name="SessionTabs" Grid.Row="0" BorderThickness="0" Background="Transparent" SelectionChanged="SessionTabs_SelectionChanged" KeyboardNavigation.DirectionalNavigation="None" KeyboardNavigation.TabNavigation="None">
+                    <TabItem x:Name="WelcomeTab" Header="🏠 首页" />
                 </TabControl>
-
-                <GridSplitter Grid.Row="1" Height="3" HorizontalAlignment="Stretch" Background="Transparent" VerticalAlignment="Center"/>
-
-                <TabControl Grid.Row="2" BorderThickness="0" Background="Transparent">
-                    <TabItem Header="文件" IsSelected="True">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="129*"/>
-                                <ColumnDefinition Width="409*"/>
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="*"/>
-                            </Grid.RowDefinitions>
-
-                            <Border Grid.Row="0" Height="35" Background="Transparent" Padding="5" Grid.ColumnSpan="2">
-                                <Grid>
-                                    <StackPanel Orientation="Horizontal">
-                                        <Button x:Name="BtnBack" Content="⬅️" Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}" Click="BtnBack_Click" Foreground="White" />
-                                        <Button x:Name="BtnForward" Content="➡️" Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}" Click="BtnForward_Click" Foreground="White" />
-                                        <Button x:Name="BtnRefresh" Content="🔄" Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}" Click="BtnRefresh_Click" Foreground="White" />
-                                        <Button x:Name="BtnUp" Content="⬆️" Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}" Click="BtnUp_Click" Foreground="White" />
-                                        <Button x:Name="BtnNewFolder" Content="📁" Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}" Margin="0,0,10,0" Click="BtnNewFolder_Click" Foreground="White" />
-                                        <TextBlock x:Name="TxtCurrentPath" Text="/root" VerticalAlignment="Center"  Foreground="White" />
-                                    </StackPanel>
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" >
-                                        <TextBlock Text="历史 🔄 ⬆️" VerticalAlignment="Center"   />
-                                    </StackPanel>
-                                </Grid>
-                            </Border>
-
-                            <DataGrid x:Name="FileGrid" Grid.Row="1" AutoGenerateColumns="False" HeadersVisibility="Column" Background="Transparent" RowHeaderWidth="0" GridLinesVisibility="None" BorderThickness="0" Grid.ColumnSpan="2" MouseDoubleClick="FileGrid_MouseDoubleClick" IsReadOnly="True" SelectionMode="Single">
-                                <DataGrid.Columns>
-                                    <DataGridTemplateColumn Header="文件名" Width="2*">
-                                        <DataGridTemplateColumn.CellTemplate>
-                                            <DataTemplate>
-                                                <StackPanel Orientation="Horizontal">
-                                                    <TextBlock Text="{Binding Icon}" Margin="0,0,5,0"/>
-                                                    <TextBlock Text="{Binding Name}"/>
-                                                </StackPanel>
-                                            </DataTemplate>
-                                        </DataGridTemplateColumn.CellTemplate>
-                                    </DataGridTemplateColumn>
-                                    <DataGridTextColumn Header="大小" Binding="{Binding Size}" Width="*"/>
-                                    <DataGridTextColumn Header="类型" Binding="{Binding Type}" Width="*"/>
-                                    <DataGridTextColumn Header="修改时间" Binding="{Binding Date}" Width="1.5*"/>
-                                    <DataGridTextColumn Header="权限" Binding="{Binding Perms}" Width="*"/>
-                                    <DataGridTextColumn Header="用户/用户组" Binding="{Binding Owner}" Width="*"/>
-                                </DataGrid.Columns>
-                            </DataGrid>
-                        </Grid>
-                    </TabItem>
-                    <TabItem Header="命令"/>
-                </TabControl>
+                
+                <Grid x:Name="PagesContainer" Grid.Row="1" />
             </Grid>
         </Grid>
     </DockPanel>

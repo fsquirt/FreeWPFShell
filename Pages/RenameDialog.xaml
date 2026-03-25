@@ -1,0 +1,28 @@
+<Window x:Class="FreeWPFShell.Pages.RenameDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="重命名" Height="180" Width="350"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize" Topmost="True">
+    
+    <Border Background="#21252B" CornerRadius="10" BorderBrush="#3B4048" BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="40" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="60" />
+            </Grid.RowDefinitions>
+            
+            <Border Grid.Row="0" Background="#282C34" CornerRadius="10,10,0,0" MouseLeftButtonDown="Header_MouseDown">
+                <TextBlock Text="重命名文件" Foreground="White" FontWeight="SemiBold" VerticalAlignment="Center" Margin="15,0"/>
+            </Border>
+            
+            <TextBox x:Name="TxtNewName" Grid.Row="1" Margin="20,15,20,10" VerticalAlignment="Center" Background="#1E2227" Foreground="White" BorderBrush="#2C313C" Padding="5" FontSize="14"/>
+            
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,20,0">
+                <Button Content="取消" Width="80" Height="30" Margin="0,0,10,0" Foreground="White" Background="#4B5363" BorderThickness="0" Cursor="Hand" Click="BtnCancel_Click"/>
+                <Button Content="确定" Width="80" Height="30" Foreground="White" Background="#61AFEF" BorderThickness="0" Cursor="Hand" Click="BtnConfirm_Click" IsDefault="True"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

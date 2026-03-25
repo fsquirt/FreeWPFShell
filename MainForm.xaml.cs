@@ -1,38 +1,16 @@
-using Microsoft.Terminal.Wpf;
 using System;
 using System.Collections.Generic;
-using System.Data.Common;
-using System.Text;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using Renci.SshNet;
-using Renci.SshNet.Sftp;
 using System.Collections.ObjectModel;
 using System.Linq;
+using FreeWPFShell.Share;
 
 namespace FreeWPFShell
 {
-    /// <summary>
-    /// MainForm.xaml 的交互逻辑
-    /// </summary>
-    public class RemoteFile
-    {
-        public string Icon { get; set; }
-        public string Name { get; set; }
-        public string Size { get; set; }
-        public string Type { get; set; }
-        public string Date { get; set; }
-        public string Perms { get; set; }
-        public string Owner { get; set; }
-        public bool IsDirectory { get; set; }
-        public string FullName { get; set; }
-    }
-
     public class ProcessItem
     {
         public string Mem { get; set; }
@@ -49,13 +27,11 @@ namespace FreeWPFShell
 
     public partial class MainForm
     {
-        private ConPtyConnection _connection;
-        
-        private SftpClient _sftpClient;
-        private SshClient _sshMonitorClient;
         private System.Windows.Threading.DispatcherTimer _timer;
+        private Dictionary<string, SshClient> _activeMonitors = new Dictionary<string, SshClient>();
+        private SshClient _currentMonitorClient;
+        private SshManager.SshConnectionInfo _currentMonitorHost;
         
-        private ObservableCollection<RemoteFile> _remoteFiles = new ObservableCollection<RemoteFile>();
         private ObservableCollection<ProcessItem> _processes = new ObservableCollection<ProcessItem>();
         private ObservableCollection<DiskItem> _disks = new ObservableCollection<DiskItem>();
         private ulong _lastCpuTotal = 0, _lastCpuIdle = 0;
@@ -63,118 +39,205 @@ namespace FreeWPFShell
         private DateTime _lastNetTime = DateTime.MinValue;
         private List<(double rx, double tx)> _netHistory = new List<(double, double)>();
         private int _tickCount = 0;
-        private string _currentPath = "/";
-        private Stack<string> _backHistory = new Stack<string>();
-        private Stack<string> _forwardHistory = new Stack<string>();
 
         public MainForm()
         {
             InitializeComponent();
-            Terminal.Loaded += Terminal_Loaded;
-        }
 
-        private void Terminal_Loaded(object sender, RoutedEventArgs e)
-        {
-            uint[] colorTable = new uint[16]
-            {
-                0x000c0c0c, 0x001f0fc5, 0x000ea113, 0x00009cc1,
-                0x00da3700, 0x00981788, 0x00dd963a, 0x00cccccc,
-                0x00767676, 0x005648e7, 0x000cc616, 0x00a5f1f9,
-                0x00ff783b, 0x009e00b4, 0x00d6d661, 0x00f2f2f2
-            };
+            // Setup WelcomeTab
+            var welcomePage = new Pages.WelcomePage();
+            WelcomeTab.Tag = welcomePage; // Store reference in Tag
+            PagesContainer.Children.Add(welcomePage);
 
-            var theme = new TerminalTheme
-            {
-                DefaultBackground = 0x0047301E, // #1E3047 (BGR format)
-                DefaultForeground = 0x00ffffff,
-                DefaultSelectionBackground = 0x00ffffff,
-                CursorStyle = CursorStyle.BlinkingBar,
-                ColorTable = colorTable
-            };
-
-            Terminal.SetTheme(theme, "Cascadia Code", 10);
-
-             //_connection = new ConPtyConnection("cmd.exe", 120, 30);
-            _connection = new ConPtyConnection("ssh cloudyou@192.168.80.128", 120, 40);
-            Terminal.Connection = _connection;
-
-            Terminal.Focus();
-            
-            // Auto login via Output Hook (wait for prompt instead of blind delay)
-            string outputBuffer = "";
-            EventHandler<Microsoft.Terminal.Wpf.TerminalOutputEventArgs> onOutput = null;
-            onOutput = (s, args) =>
-            {
-                if (args.Data != null)
-                {
-                    outputBuffer += args.Data;
-                    if (outputBuffer.ToLower().Contains("password:"))
-                    {
-                        _connection.TerminalOutput -= onOutput;
-                        System.Threading.Tasks.Task.Delay(50).ContinueWith(_ => _connection.WriteInput("1234\n"));
-                    }
-                    if (outputBuffer.Length > 2048) outputBuffer = ""; 
-                }
-            };
-            _connection.TerminalOutput += onOutput;
-            
-            // Auto resize hack to fix TUI rendering glitches
-            Dispatcher.InvokeAsync(async () => 
-            {
-                await System.Threading.Tasks.Task.Delay(600); // After login happens
-                Terminal.Margin = new Thickness(10, 10, 10, 11);
-                await System.Threading.Tasks.Task.Delay(100);
-                Terminal.Margin = new Thickness(10);
-            }, System.Windows.Threading.DispatcherPriority.Background);
-            
-            try
-            {
-                _sftpClient = new SftpClient("192.168.80.128", 22, "cloudyou", "1234");
-                _sftpClient.Connect();
-                _currentPath = _sftpClient.WorkingDirectory ?? "/";
-                FileGrid.ItemsSource = _remoteFiles;
-                LoadPath(_currentPath);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("SFTP连接失败: " + ex.Message);
-            }
-
-            // Start Monitoring Thread
             ProcessGrid.ItemsSource = _processes;
             DiskGrid.ItemsSource = _disks;
-            
-            System.Threading.Tasks.Task.Run(() => 
-            {
-                try {
-                    _sshMonitorClient = new SshClient("192.168.80.128", 22, "cloudyou", "1234");
-                    _sshMonitorClient.Connect();
-                    
-                    Dispatcher.InvokeAsync(() => {
-                        _timer = new System.Windows.Threading.DispatcherTimer();
-                        _timer.Interval = TimeSpan.FromSeconds(2);
-                        _timer.Tick += MonitorTick;
-                        _timer.Start();
-                        MonitorTick(null, null); // Fire immediately once
-                    });
-                }
-                catch {}
-            });
+
+            _timer = new System.Windows.Threading.DispatcherTimer();
+            _timer.Interval = TimeSpan.FromSeconds(2);
+            _timer.Tick += MonitorTick;
+            _timer.Start();
         }
 
-        private void Terminal_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        public void OpenSession(SshManager.SshConnectionInfo hostInfo)
         {
-            // Intercept Tab key before WPF attempts to use it for focus navigation
-            if (e.Key == Key.Tab)
+            var terminalPage = new Pages.TerminalAndSFTP(hostInfo);
+            
+            string tabHeader = string.IsNullOrEmpty(hostInfo.HostName) 
+                ? hostInfo.IpAddress 
+                : hostInfo.HostName;
+
+            var headerPanel = new StackPanel { Orientation = Orientation.Horizontal };
+            headerPanel.Children.Add(new TextBlock { Text = tabHeader, VerticalAlignment = VerticalAlignment.Center });
+            
+            var btnClose = new Button
             {
-                e.Handled = true;
-                _connection?.WriteInput("\t");
+                Content = "×",
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Margin = new Thickness(10, 0, 0, 0),
+                Foreground = Brushes.Gray,
+                Cursor = System.Windows.Input.Cursors.Hand,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            
+            var tabItem = new TabItem
+            {
+                Header = headerPanel,
+                Tag = terminalPage
+            };
+
+            btnClose.Click += (s, e) => CloseSessionTab(tabItem, hostInfo.Id);
+            headerPanel.Children.Add(btnClose);
+
+            PagesContainer.Children.Add(terminalPage);
+            SessionTabs.Items.Add(tabItem);
+            SessionTabs.SelectedItem = tabItem;
+        }
+
+        private async void CloseSessionTab(TabItem tabItem, string hostId)
+        {
+            if (tabItem.Tag is Pages.TerminalAndSFTP terminalPage)
+            {
+                PagesContainer.Children.Remove(terminalPage);
+                // Disconnect in background
+                await System.Threading.Tasks.Task.Run(() => terminalPage.Disconnect());
+            }
+
+            // Remove background monitor connection
+            if (_activeMonitors.ContainsKey(hostId))
+            {
+                var client = _activeMonitors[hostId];
+                _activeMonitors.Remove(hostId);
+                
+                System.Threading.Tasks.Task.Run(() =>
+                {
+                    try
+                    {
+                        client.Disconnect();
+                        client.Dispose();
+                    }
+                    catch { }
+                });
+            }
+
+            if (_currentMonitorHost?.Id == hostId)
+            {
+                _currentMonitorHost = null;
+                _currentMonitorClient = null;
+            }
+
+            SessionTabs.Items.Remove(tabItem);
+        }
+
+        private void SessionTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (SessionTabs.SelectedItem is TabItem selectedTab && selectedTab.Tag is UIElement activeView)
+            {
+                // Toggle visibility in PagesContainer to completely prevent Virtualizing Unload/Load
+                foreach (UIElement child in PagesContainer.Children)
+                {
+                    child.Visibility = (child == activeView) ? Visibility.Visible : Visibility.Collapsed;
+                }
+
+                if (activeView is Pages.TerminalAndSFTP terminalPage)
+                {
+                    SwitchMonitorToHost(terminalPage.HostInfo);
+                }
+                else
+                {
+                    // Must be WelcomePage
+                    _currentMonitorHost = null;
+                    _currentMonitorClient = null;
+                    ResetSidebar();
+                }
+            }
+        }
+
+        private void SwitchMonitorToHost(SshManager.SshConnectionInfo hostInfo)
+        {
+            if (_currentMonitorHost != null && _currentMonitorHost.Id == hostInfo.Id)
+                return; // Already monitoring this host
+
+            _currentMonitorHost = hostInfo;
+            TxtHostIp.Text = $"IP {hostInfo.IpAddress}";
+            ResetMonitorState();
+
+            // Try to reuse or spin up background monitor connection
+            if (_activeMonitors.ContainsKey(hostInfo.Id) && _activeMonitors[hostInfo.Id].IsConnected)
+            {
+                _currentMonitorClient = _activeMonitors[hostInfo.Id];
+                MonitorTick(null, null); // Immediate update
+            }
+            else
+            {
+                System.Threading.Tasks.Task.Run(() => 
+                {
+                    try {
+                        var client = new SshClient(hostInfo.IpAddress, hostInfo.SshPort, hostInfo.SshUser, hostInfo.DecryptedSshSecret ?? "");
+                        client.Connect();
+                        _activeMonitors[hostInfo.Id] = client;
+                        
+                        Dispatcher.InvokeAsync(() => {
+                            if (_currentMonitorHost?.Id == hostInfo.Id)
+                            {
+                                _currentMonitorClient = client;
+                                MonitorTick(null, null);
+                            }
+                        });
+                    }
+                    catch {}
+                });
+            }
+        }
+
+        private void ResetMonitorState()
+        {
+            _lastCpuTotal = 0;
+            _lastCpuIdle = 0;
+            _lastRx = 0;
+            _lastTx = 0;
+            _lastNetTime = DateTime.MinValue;
+            _netHistory.Clear();
+            _tickCount = 0;
+            NetChartCanvas.Children.Clear();
+        }
+
+        private void ResetSidebar()
+        {
+            TxtHostIp.Text = "未连接";
+            TxtUptime.Text = "运行 -- 天...";
+            TxtPing.Text = "--ms";
+            TxtLoad.Text = "负载 --, --, --";
+            ProgCpu.Value = 0;
+            TxtCpuPct.Text = "0%";
+            TxtCpuText.Text = "0.0%";
+            ProgMem.Value = 0;
+            TxtMemPct.Text = "0%";
+            TxtMemText.Text = "0M/0M";
+            ProgSwap.Value = 0;
+            TxtSwapPct.Text = "0%";
+            TxtSwapText.Text = "0M/0M";
+            TxtNetUp.Text = "0K";
+            TxtNetDown.Text = "0K";
+            TxtNetIface.Text = "--";
+            TxtNetMax.Text = "100K";
+            TxtNetMid.Text = "50K";
+            NetChartCanvas.Children.Clear();
+            _processes.Clear();
+            _disks.Clear();
+        }
+
+        private void BtnCopyIp_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentMonitorHost != null)
+            {
+                Clipboard.SetText(_currentMonitorHost.IpAddress);
             }
         }
 
         private async void MonitorTick(object sender, EventArgs e)
         {
-            if (_sshMonitorClient == null || !_sshMonitorClient.IsConnected) return;
+            if (_currentMonitorClient == null || !_currentMonitorClient.IsConnected) return;
             
             _tickCount++;
             PingCheckAsync();
@@ -185,7 +248,7 @@ namespace FreeWPFShell
                 if (_tickCount % 60 == 1) {
                     cmdStr += "; echo \"==DISK==\"; df -h --output=target,avail,size";
                 }
-                var cmd = _sshMonitorClient.CreateCommand(cmdStr);
+                var cmd = _currentMonitorClient.CreateCommand(cmdStr);
                 var result = await System.Threading.Tasks.Task.Run(() => cmd.Execute());
                 ParseTopOutput(result);
             }
@@ -194,9 +257,10 @@ namespace FreeWPFShell
 
         private async void PingCheckAsync()
         {
+            if (_currentMonitorHost == null) return;
             try {
                 using (var ping = new System.Net.NetworkInformation.Ping()) {
-                    var reply = await ping.SendPingAsync("192.168.32.132", 2000);
+                    var reply = await ping.SendPingAsync(_currentMonitorHost.IpAddress, 2000);
                     if (reply.Status == System.Net.NetworkInformation.IPStatus.Success) {
                         TxtPing.Text = $"{reply.RoundtripTime}ms";
                     } else {
@@ -315,7 +379,6 @@ namespace FreeWPFShell
                 if (sections.Length > 3) {
                     _processes.Clear();
                     var procLines = sections[3].Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-                    // line 0 is header: %MEM %CPU COMMAND
                     for (int i = 1; i < procLines.Length; i++) {
                         var parts = procLines[i].Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
                         if (parts.Length >= 3) {
@@ -360,7 +423,7 @@ namespace FreeWPFShell
                                     _lastNetTime = now;
                                 }
                             }
-                            break; // use first external interface
+                            break;
                         }
                     }
                 }
@@ -369,7 +432,7 @@ namespace FreeWPFShell
                 if (sections.Length > 5) {
                     _disks.Clear();
                     var diskLines = sections[5].Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-                    for (int i = 1; i < diskLines.Length; i++) { // Skip header
+                    for (int i = 1; i < diskLines.Length; i++) {
                         var parts = diskLines[i].Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
                         if (parts.Length >= 3) {
                             string target = parts[0];
@@ -392,7 +455,7 @@ namespace FreeWPFShell
             if (_netHistory.Count == 0) return;
 
             double maxVal = _netHistory.Max(x => Math.Max(x.rx, x.tx));
-            if (maxVal < 1024) maxVal = 1024; // Min scale 1KB/s
+            if (maxVal < 1024) maxVal = 1024;
 
             TxtNetMax.Text = FormatNetSpeed(maxVal);
             TxtNetMid.Text = FormatNetSpeed(maxVal / 2);
@@ -449,144 +512,26 @@ namespace FreeWPFShell
             return (kb / 1024).ToString("0") + "M";
         }
 
-        private void LoadPath(string path, bool isHistory = false)
-        {
-            if (_sftpClient == null || !_sftpClient.IsConnected) return;
-            try
-            {
-                var files = _sftpClient.ListDirectory(path);
-                
-                if (!isHistory && _currentPath != path)
-                {
-                    _backHistory.Push(_currentPath);
-                    _forwardHistory.Clear();
-                }
-                
-                _currentPath = path;
-                TxtCurrentPath.Text = path;
-                
-                var list = new List<RemoteFile>();
-                foreach (var f in files)
-                {
-                    if (f.Name == "." || f.Name == "..") continue;
-                    
-                    list.Add(new RemoteFile
-                    {
-                        Icon = f.IsDirectory ? "📁" : "📄",
-                        Name = f.Name,
-                        Size = f.IsDirectory ? "" : FormatSize(f.Length),
-                        Type = f.IsDirectory ? "文件夹" : "文件",
-                        Date = f.LastWriteTime.ToString("yyyy/MM/dd HH:mm"),
-                        Perms = GetPerms(f),
-                        Owner = $"{f.UserId}::{f.GroupId}",
-                        IsDirectory = f.IsDirectory,
-                        FullName = f.FullName
-                    });
-                }
-                
-                _remoteFiles.Clear();
-                foreach (var f in list.OrderByDescending(x => x.IsDirectory).ThenBy(x => x.Name))
-                {
-                    _remoteFiles.Add(f);
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("访问失败: " + ex.Message);
-            }
-        }
-
-        private string GetPerms(ISftpFile f)
-        {
-            string s = f.IsDirectory ? "d" : "-";
-            s += f.OwnerCanRead ? "r" : "-";
-            s += f.OwnerCanWrite ? "w" : "-";
-            s += f.OwnerCanExecute ? "x" : "-";
-            s += f.GroupCanRead ? "r" : "-";
-            s += f.GroupCanWrite ? "w" : "-";
-            s += f.GroupCanExecute ? "x" : "-";
-            s += f.OthersCanRead ? "r" : "-";
-            s += f.OthersCanWrite ? "w" : "-";
-            s += f.OthersCanExecute ? "x" : "-";
-            return s;
-        }
-
-        private string FormatSize(long bytes)
-        {
-            string[] exts = { "B", "KB", "MB", "GB", "TB" };
-            int i = 0;
-            double d = bytes;
-            while (d >= 1024 && i < exts.Length - 1)
-            {
-                d /= 1024;
-                i++;
-            }
-            return $"{d:0.##} {exts[i]}";
-        }
-
-        private void BtnBack_Click(object sender, RoutedEventArgs e)
-        {
-            if (_backHistory.Count > 0)
-            {
-                _forwardHistory.Push(_currentPath);
-                LoadPath(_backHistory.Pop(), true);
-            }
-        }
-
-        private void BtnForward_Click(object sender, RoutedEventArgs e)
-        {
-            if (_forwardHistory.Count > 0)
-            {
-                _backHistory.Push(_currentPath);
-                LoadPath(_forwardHistory.Pop(), true);
-            }
-        }
-
-        private void BtnRefresh_Click(object sender, RoutedEventArgs e)
-        {
-            LoadPath(_currentPath, true);
-        }
-
-        private void BtnUp_Click(object sender, RoutedEventArgs e)
-        {
-            if (_currentPath != "/")
-            {
-                int lastSlash = _currentPath.TrimEnd('/').LastIndexOf('/');
-                string parent = lastSlash > 0 ? _currentPath.Substring(0, lastSlash) : "/";
-                LoadPath(parent);
-            }
-        }
-
-        private void BtnNewFolder_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                string newDir = _currentPath == "/" ? "/NewFolder" : _currentPath.TrimEnd('/') + "/NewFolder";
-                _sftpClient.CreateDirectory(newDir);
-                LoadPath(_currentPath, true);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("新建文件夹失败: " + ex.Message);
-            }
-        }
-
-        private void FileGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
-        {
-            if (FileGrid.SelectedItem is RemoteFile selectedFile && selectedFile.IsDirectory)
-            {
-                LoadPath(selectedFile.FullName);
-            }
-        }
-
         private void MicaWindow_Closed(object sender, EventArgs e)
         {
             _timer?.Stop();
-            _sshMonitorClient?.Disconnect();
-            _sshMonitorClient?.Dispose();
-            _sftpClient?.Disconnect();
-            _sftpClient?.Dispose();
-            _connection?.Close();
+            
+            foreach (var client in _activeMonitors.Values)
+            {
+                try {
+                    client.Disconnect();
+                    client.Dispose();
+                } catch {}
+            }
+            _activeMonitors.Clear();
+
+            foreach (var item in SessionTabs.Items.OfType<TabItem>())
+            {
+                if (item.Tag is Pages.TerminalAndSFTP terminalPage)
+                {
+                    terminalPage.Disconnect();
+                }
+            }
         }
     }
 }
