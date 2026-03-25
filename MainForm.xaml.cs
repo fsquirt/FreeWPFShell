@@ -95,7 +95,7 @@ namespace FreeWPFShell
             Terminal.SetTheme(theme, "Cascadia Code", 10);
 
              //_connection = new ConPtyConnection("cmd.exe", 120, 30);
-            _connection = new ConPtyConnection("ssh cloudyou@192.168.32.132", 120, 40);
+            _connection = new ConPtyConnection("ssh cloudyou@192.168.80.128", 120, 40);
             Terminal.Connection = _connection;
 
             Terminal.Focus();
@@ -129,7 +129,7 @@ namespace FreeWPFShell
             
             try
             {
-                _sftpClient = new SftpClient("192.168.32.132", 22, "cloudyou", "1234");
+                _sftpClient = new SftpClient("192.168.80.128", 22, "cloudyou", "1234");
                 _sftpClient.Connect();
                 _currentPath = _sftpClient.WorkingDirectory ?? "/";
                 FileGrid.ItemsSource = _remoteFiles;
@@ -147,12 +147,12 @@ namespace FreeWPFShell
             System.Threading.Tasks.Task.Run(() => 
             {
                 try {
-                    _sshMonitorClient = new SshClient("192.168.32.132", 22, "cloudyou", "1234");
+                    _sshMonitorClient = new SshClient("192.168.80.128", 22, "cloudyou", "1234");
                     _sshMonitorClient.Connect();
                     
                     Dispatcher.InvokeAsync(() => {
                         _timer = new System.Windows.Threading.DispatcherTimer();
-                        _timer.Interval = TimeSpan.FromSeconds(1);
+                        _timer.Interval = TimeSpan.FromSeconds(2);
                         _timer.Tick += MonitorTick;
                         _timer.Start();
                         MonitorTick(null, null); // Fire immediately once
