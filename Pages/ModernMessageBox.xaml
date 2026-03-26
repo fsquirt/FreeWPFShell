@@ -1,34 +1,29 @@
-<Window x:Class="FreeWPFShell.Pages.ModernMessageBox"
+<mica:MicaWindow x:Class="FreeWPFShell.Pages.ModernMessageBox"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mica="clr-namespace:MicaWPF.Controls;assembly=MicaWPF"
         Title="提示" Height="220" Width="400"
-        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        SystemBackdropType="Acrylic"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize" Topmost="True">
     
-    <Border Background="#21252B" CornerRadius="10" BorderBrush="#3B4048" BorderThickness="1">
+    <Border>
         <Grid>
             <Grid.RowDefinitions>
-                <RowDefinition Height="40" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="60" />
             </Grid.RowDefinitions>
-            
-            <!-- Header -->
-            <Border Grid.Row="0" Background="#282C34" CornerRadius="10,10,0,0" MouseLeftButtonDown="Header_MouseDown">
-                <TextBlock x:Name="TxtTitle" Text="提示" Foreground="White" FontWeight="SemiBold" VerticalAlignment="Center" Margin="15,0"/>
-            </Border>
-            
+
             <!-- Message -->
-            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="20,15,20,5">
+            <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" Margin="20,15,20,5">
                 <TextBlock x:Name="TxtMessage" Text="Message" Foreground="#ABB2BF" TextWrapping="Wrap" VerticalAlignment="Center" FontSize="14"/>
             </ScrollViewer>
             
             <!-- Buttons -->
-            <StackPanel x:Name="PnlButtons" Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,20,0">
-                <Button x:Name="BtnYes" Content="是 (Yes)" Width="80" Height="30" Margin="0,0,10,0" Foreground="White" Background="#98C379" BorderThickness="0" Cursor="Hand" Click="BtnYes_Click" Visibility="Collapsed"/>
-                <Button x:Name="BtnNo" Content="否 (No)" Width="80" Height="30" Foreground="White" Background="#E06C75" BorderThickness="0" Cursor="Hand" Click="BtnNo_Click" Visibility="Collapsed"/>
-                <Button x:Name="BtnOk" Content="确定" Width="80" Height="30" Foreground="White" Background="#61AFEF" BorderThickness="0" Cursor="Hand" Click="BtnOk_Click" Visibility="Visible"/>
+            <StackPanel x:Name="PnlButtons" Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,20,0">
+                <mica:Button x:Name="BtnYes" Content="是 (Yes)" Width="80" Height="30" Margin="0,0,10,0" Click="BtnYes_Click" Visibility="Collapsed"/>
+                <mica:Button x:Name="BtnNo" Content="否 (No)" Width="80" Height="30" Click="BtnNo_Click" Visibility="Collapsed"/>
+                <mica:Button x:Name="BtnOk" Content="确定" Width="80" Height="30" Click="BtnOk_Click" Visibility="Visible"/>
             </StackPanel>
         </Grid>
     </Border>
-</Window>
+</mica:MicaWindow>

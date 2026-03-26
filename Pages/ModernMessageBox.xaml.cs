@@ -1,16 +1,16 @@
 using System.Windows;
 using System.Windows.Input;
+using MicaWPF.Controls;
 
 namespace FreeWPFShell.Pages
 {
-    public partial class ModernMessageBox : Window
+    public partial class ModernMessageBox : MicaWindow
     {
         public MessageBoxResult Result { get; private set; } = MessageBoxResult.Cancel;
 
         public ModernMessageBox(string message, string title, MessageBoxButton button, MessageBoxImage image)
         {
             InitializeComponent();
-            TxtTitle.Text = title;
             TxtMessage.Text = message;
 
             if (button == MessageBoxButton.YesNo)

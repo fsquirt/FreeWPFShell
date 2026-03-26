@@ -4,7 +4,7 @@ using FreeWPFShell.Share;
 
 namespace FreeWPFShell.Pages
 {
-    public partial class AddConnection : Window
+    public partial class AddConnection 
     {
         private SshManager.SshConnectionManager _sshManager;
         private string _editingHostId;
@@ -46,7 +46,7 @@ namespace FreeWPFShell.Pages
                     txtProxyHost.Text = editHost.Proxy.ServerAddress;
                     txtProxyPort.Text = editHost.Proxy.Port.ToString();
                     txtProxyUsername.Text = editHost.Proxy.Username;
-                    txtProxyPassword.Password = editHost.Proxy.Password;
+                    txtProxyPassword.Text = editHost.Proxy.Password;
                 }
             }
         }
@@ -96,7 +96,7 @@ namespace FreeWPFShell.Pages
             // Our rule: if editing & password empty, we keep old secret.
             if (string.IsNullOrEmpty(_editingHostId))
             {
-                if (rbPassword.IsChecked == true && string.IsNullOrEmpty(txtPassword.Password))
+                if (rbPassword.IsChecked == true && string.IsNullOrEmpty(txtPassword.Text))
                 {
                     ModernMessageBox.Show("请输入密码。", "提示", MessageBoxButton.OK, MessageBoxImage.Warning);
                     txtPassword.Focus();
@@ -137,7 +137,7 @@ namespace FreeWPFShell.Pages
                     ServerAddress = txtProxyHost.Text.Trim(),
                     Port = int.TryParse(txtProxyPort.Text, out int pp) ? pp : 1080,
                     Username = txtProxyUsername.Text.Trim(),
-                    Password = txtProxyPassword.Password
+                    Password = txtProxyPassword.Text
                 };
             }
 
@@ -147,7 +147,7 @@ namespace FreeWPFShell.Pages
         private string GetSecret()
         {
             if (rbPassword.IsChecked == true)
-                return txtPassword.Password;
+                return txtPassword.Text;
             return txtKeyPath.Text; 
         }
 

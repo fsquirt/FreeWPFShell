@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:term="clr-namespace:Microsoft.Terminal.Wpf;assembly=Microsoft.Terminal.Wpf"
+             xmlns:mica="clr-namespace:MicaWPF.Controls;assembly=MicaWPF"
              mc:Ignorable="d" 
              d:DesignHeight="800" d:DesignWidth="800">
     <Grid>
@@ -14,7 +15,16 @@
         </Grid.RowDefinitions>
 
         <!-- Terminal -->
-        <term:TerminalControl x:Name="Terminal" Grid.Row="0" Margin="10" Focusable="True" Loaded="Terminal_Loaded" PreviewKeyDown="Terminal_PreviewKeyDown" KeyboardNavigation.DirectionalNavigation="None" KeyboardNavigation.TabNavigation="None" KeyboardNavigation.ControlTabNavigation="None" Background="#1E3047" />
+        <Grid Grid.Row="0" Margin="10">
+            <term:TerminalControl x:Name="Terminal" Focusable="True" Loaded="Terminal_Loaded" PreviewKeyDown="Terminal_PreviewKeyDown" KeyboardNavigation.DirectionalNavigation="None" KeyboardNavigation.TabNavigation="None" KeyboardNavigation.ControlTabNavigation="None" Background="#1E3047" />
+            
+            <Border x:Name="PnlLoading" Background="#CC1E3047" Visibility="Visible">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock x:Name="TxtLoadingStatus" Text="正在连接服务器..." Foreground="White" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                    <mica:Button x:Name="BtnCancelConnect" Content="取消连接" Margin="0,15,0,0" Width="100" Height="30" Click="BtnCancelConnect_Click"/>
+                </StackPanel>
+            </Border>
+        </Grid>
 
         <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Center" ResizeBehavior="PreviousAndNext" ResizeDirection="Rows" Background="Transparent" Focusable="False"/>
 
@@ -28,23 +38,23 @@
             <Border Grid.Row="0" Height="35" Background="Transparent" Padding="5">
                 <Grid>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <Button x:Name="BtnBack" Content="⬅️" Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}" Click="BtnBack_Click" />
-                        <Button x:Name="BtnForward" Content="➡️" Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}" Click="BtnForward_Click" />
-                        <Button x:Name="BtnRefresh" Content="🔄" Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}" Click="BtnRefresh_Click" />
-                        <Button x:Name="BtnUp" Content="⬆️" Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}" Click="BtnUp_Click" />
-                        <Button x:Name="BtnNewFolder" Content="📁" Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}" Margin="0,0,10,0" Click="BtnNewFolder_Click" />
+                        <mica:Button x:Name="BtnBack" Content="⬅️" Click="BtnBack_Click" Margin="0,0,5,0" />
+                        <mica:Button x:Name="BtnForward" Content="➡️" Click="BtnForward_Click" Margin="0,0,5,0" />
+                        <mica:Button x:Name="BtnRefresh" Content="🔄" Click="BtnRefresh_Click" Margin="0,0,5,0" />
+                        <mica:Button x:Name="BtnUp" Content="⬆️" Click="BtnUp_Click" Margin="0,0,5,0" />
+                        <mica:Button x:Name="BtnNewFolder" Content="📁" Margin="0,0,10,0" Click="BtnNewFolder_Click" />
                         
                         <TextBlock x:Name="TxtCurrentPath" Text="/" VerticalAlignment="Center" Margin="0,0,15,0" />
 
-                        <Button x:Name="BtnUpload" Content="↑ 上传" Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}" Margin="0,0,5,0" Click="BtnUpload_Click">
-                            <Button.ContextMenu>
+                        <mica:Button x:Name="BtnUpload" Content="↑ 上传" Margin="0,0,5,0" Click="BtnUpload_Click">
+                            <mica:Button.ContextMenu>
                                 <ContextMenu>
                                     <MenuItem Header="上传文件" Click="CtxUploadFile_Click" />
                                     <MenuItem Header="上传文件夹" Click="CtxUploadFolder_Click" />
                                 </ContextMenu>
-                            </Button.ContextMenu>
-                        </Button>
-                        <Button x:Name="BtnDownload" Content="↓ 下载" Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}" Margin="0,0,15,0" Click="BtnDownload_Click" />
+                            </mica:Button.ContextMenu>
+                        </mica:Button>
+                        <mica:Button x:Name="BtnDownload" Content="↓ 下载" Margin="0,0,15,0" Click="BtnDownload_Click" />
 
                         <TextBlock x:Name="TxtStatusIcon" Text="✅" VerticalAlignment="Center" FontSize="16" Cursor="Help" ToolTip="当前没有传输任务" />
                     </StackPanel>

@@ -53,6 +53,14 @@ namespace FreeWPFShell.Pages
             }
         }
 
+        private void BtnSettings_Click(object sender, RoutedEventArgs e)
+        {
+            var settings = new SettingsWindow();
+            settings.Owner = Window.GetWindow(this);
+            settings.ShowDialog();
+            LoadHosts(); // Refresh the list in case locks changed visibility
+        }
+
         private void HostsList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
             if (HostsList.SelectedItem is SshManager.SshConnectionInfo selectedHost)

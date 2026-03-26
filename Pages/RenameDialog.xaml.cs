@@ -1,9 +1,10 @@
 using System.Windows;
 using System.Windows.Input;
+using MicaWPF.Controls;
 
 namespace FreeWPFShell.Pages
 {
-    public partial class RenameDialog : Window
+    public partial class RenameDialog : MicaWindow
     {
         public string NewName { get; private set; }
 

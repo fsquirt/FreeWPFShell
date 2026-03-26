@@ -162,7 +162,7 @@ namespace FreeWPFShell
             TxtHostIp.Text = $"IP {hostInfo.IpAddress}";
             ResetMonitorState();
 
-            // Try to reuse or spin up background monitor connection
+            // Check if background monitor is already up
             if (_activeMonitors.ContainsKey(hostInfo.Id) && _activeMonitors[hostInfo.Id].IsConnected)
             {
                 _currentMonitorClient = _activeMonitors[hostInfo.Id];
@@ -170,24 +170,32 @@ namespace FreeWPFShell
             }
             else
             {
-                System.Threading.Tasks.Task.Run(() => 
-                {
-                    try {
-                        var client = new SshClient(hostInfo.IpAddress, hostInfo.SshPort, hostInfo.SshUser, hostInfo.DecryptedSshSecret ?? "");
-                        client.Connect();
-                        _activeMonitors[hostInfo.Id] = client;
-                        
-                        Dispatcher.InvokeAsync(() => {
-                            if (_currentMonitorHost?.Id == hostInfo.Id)
-                            {
-                                _currentMonitorClient = client;
-                                MonitorTick(null, null);
-                            }
-                        });
-                    }
-                    catch {}
-                });
+                // Defer connection establishing to TerminalAndSFTP to avoid multiple simultaneous handshakes
+                _currentMonitorClient = null;
             }
+        }
+
+        public void StartBackgroundMonitor(SshManager.SshConnectionInfo hostInfo)
+        {
+            if (_activeMonitors.ContainsKey(hostInfo.Id)) return;
+
+            System.Threading.Tasks.Task.Run(() => 
+            {
+                try {
+                    var client = new SshClient(hostInfo.IpAddress, hostInfo.SshPort, hostInfo.SshUser, hostInfo.DecryptedSshSecret ?? "");
+                    client.Connect();
+                    
+                    Dispatcher.InvokeAsync(() => {
+                        _activeMonitors[hostInfo.Id] = client;
+                        if (_currentMonitorHost?.Id == hostInfo.Id)
+                        {
+                            _currentMonitorClient = client;
+                            MonitorTick(null, null);
+                        }
+                    });
+                }
+                catch {}
+            });
         }
 
         private void ResetMonitorState()
