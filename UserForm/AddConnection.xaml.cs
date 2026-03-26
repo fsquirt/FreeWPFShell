@@ -7,10 +7,10 @@ namespace FreeWPFShell.UserForm
     public partial class AddConnection 
     {
         private SshManager.SshConnectionManager _sshManager;
-        private string _editingHostId;
+        private string? _editingHostId;
 
         public bool ConnectAfterSave { get; private set; }
-        public SshManager.SshConnectionInfo SavedHostInfo { get; private set; }
+        public SshManager.SshConnectionInfo? SavedHostInfo { get; private set; }
 
         public AddConnection()
         {

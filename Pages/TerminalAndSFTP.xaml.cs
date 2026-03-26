@@ -17,15 +17,15 @@ namespace FreeWPFShell.Pages
 {
     public class RemoteFile
     {
-        public string Icon { get; set; }
-        public string Name { get; set; }
-        public string Size { get; set; }
-        public string Type { get; set; }
-        public string Date { get; set; }
-        public string Perms { get; set; }
-        public string Owner { get; set; }
+        public string Icon { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Size { get; set; } = string.Empty;
+        public string Type { get; set; } = string.Empty;
+        public string Date { get; set; } = string.Empty;
+        public string Perms { get; set; } = string.Empty;
+        public string Owner { get; set; } = string.Empty;
         public bool IsDirectory { get; set; }
-        public string FullName { get; set; }
+        public string FullName { get; set; } = string.Empty;
     }
 
     public partial class TerminalAndSFTP : UserControl
@@ -46,10 +46,10 @@ namespace FreeWPFShell.Pages
         private System.Threading.CancellationTokenSource _connectCts = new System.Threading.CancellationTokenSource();
 
         public Share.SshSessionInstance Session { get; }
-        public SshManager.SshConnectionInfo HostInfo => Session?.HostInfo;
+        public SshManager.SshConnectionInfo? HostInfo => Session?.HostInfo;
         
-        private SftpClient _sftpClient => Session?.SftpClient;
-        private SshClient _sshCmdClient => Session?.MasterClient;
+        private SftpClient _sftpClient => Session?.SftpClient!;
+        private SshClient _sshCmdClient => Session?.MasterClient!;
 
         public TerminalAndSFTP(Share.SshSessionInstance session)
         {
@@ -315,7 +315,7 @@ namespace FreeWPFShell.Pages
         private string GetUniqueLocalPath(string targetPath)
         {
             if (!File.Exists(targetPath) && !Directory.Exists(targetPath)) return targetPath;
-            string dir = Path.GetDirectoryName(targetPath);
+            string dir = Path.GetDirectoryName(targetPath) ?? string.Empty;
             string name = Path.GetFileNameWithoutExtension(targetPath);
             string ext = Path.GetExtension(targetPath);
             int count = 1;
@@ -564,7 +564,7 @@ namespace FreeWPFShell.Pages
         {
             var items = FileGrid.SelectedItems.Cast<RemoteFile>().ToList();
             if (items.Count == 0) return;
-            string payload = $"FreeWPFRemoteCopy|{HostInfo.Id}|" + string.Join("|", items.Select(x => x.FullName));
+            string payload = $"FreeWPFRemoteCopy|{HostInfo?.Id}|" + string.Join("|", items.Select(x => x.FullName));
             Clipboard.SetText(payload);
         }
 
@@ -573,13 +573,15 @@ namespace FreeWPFShell.Pages
             if (Clipboard.ContainsFileDropList())
             {
                 var files = Clipboard.GetFileDropList();
-                foreach (string localItem in files)
-                    UploadLocalItemAsync(localItem, _currentPath);
+                foreach (string? file in files)
+                {
+                    if (file != null) UploadLocalItemAsync(file, _currentPath);
+                }
             }
             else if (Clipboard.ContainsText())
             {
-                string text = Clipboard.GetText();
-                if (text.StartsWith($"FreeWPFRemoteCopy|{HostInfo.Id}|"))
+                string text = Clipboard.GetText() ?? string.Empty;
+                if (text.StartsWith($"FreeWPFRemoteCopy|{HostInfo?.Id}|"))
                 {
                     string[] parts = text.Split('|');
                     var srcFiles = parts.Skip(2); // Skip prefix and hostId

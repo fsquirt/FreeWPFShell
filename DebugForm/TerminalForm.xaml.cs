@@ -1,4 +1,4 @@
-﻿using Microsoft.Terminal.Wpf;
+using Microsoft.Terminal.Wpf;
 using System;
 using System.Collections.Generic;
 using System.Data.Common;
@@ -19,7 +19,7 @@ namespace FreeWPFShell.View
     /// </summary>
     public partial class TerminalForm : Window
     {
-        private ConPtyConnection _connection;
+        private ConPtyConnection? _connection;
 
         public TerminalForm()
         {
@@ -45,6 +45,7 @@ namespace FreeWPFShell.View
             };
 
             var conn = new ConPtyConnection("cmd.exe", 120, 30);
+            _connection = conn;
 
             Terminal.Connection = conn;
             Terminal.SetTheme(theme, "Cascadia Code", 12);

@@ -1,4 +1,4 @@
-﻿using Microsoft.Terminal.Wpf;
+using Microsoft.Terminal.Wpf;
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -108,7 +108,7 @@ public class ConPtyConnection : ITerminalConnection, IDisposable
     const uint EXTENDED_STARTUPINFO_PRESENT = 0x00080000;
     static readonly IntPtr PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE = new IntPtr(0x00020016);
 
-    public event EventHandler<TerminalOutputEventArgs> TerminalOutput;
+    public event EventHandler<TerminalOutputEventArgs>? TerminalOutput;
     IntPtr _hPC = IntPtr.Zero;
     IntPtr _hPipeIn = IntPtr.Zero;   // 写给子进程
     IntPtr _hPipeOut = IntPtr.Zero;  // 从子进程读
@@ -147,8 +147,8 @@ public class ConPtyConnection : ITerminalConnection, IDisposable
         var psa = new SECURITY_ATTRIBUTES { nLength = Marshal.SizeOf<SECURITY_ATTRIBUTES>() };
         var tsa = new SECURITY_ATTRIBUTES { nLength = Marshal.SizeOf<SECURITY_ATTRIBUTES>() };
 
-        CreateProcess(null, _commandLine, ref psa, ref tsa, false,
-            EXTENDED_STARTUPINFO_PRESENT, IntPtr.Zero, null,
+        CreateProcess(null!, _commandLine, ref psa, ref tsa, false,
+            EXTENDED_STARTUPINFO_PRESENT, IntPtr.Zero, null!,
             ref siEx, out _pi);
 
         DeleteProcThreadAttributeList(siEx.lpAttributeList);

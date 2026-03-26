@@ -6,7 +6,7 @@ namespace FreeWPFShell.UserForm
 {
     public partial class RenameDialog : MicaWindow
     {
-        public string NewName { get; private set; }
+        public string NewName { get; private set; } = string.Empty;
 
         public RenameDialog(string oldName)
         {

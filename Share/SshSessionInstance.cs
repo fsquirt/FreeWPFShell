@@ -16,9 +16,9 @@ namespace FreeWPFShell.Share
         public string DisplayName { get; }
         
         // Network Clients
-        public SshClient MasterClient { get; private set; }
-        public SftpClient SftpClient { get; private set; }
-        public ConPtyConnection TerminalConnection { get; private set; }
+        public SshClient? MasterClient { get; private set; }
+        public SftpClient? SftpClient { get; private set; }
+        public ConPtyConnection? TerminalConnection { get; private set; }
         
         // State
         public bool IsConnected { get; private set; }
@@ -61,7 +61,7 @@ namespace FreeWPFShell.Share
             
             // Auto login hook
             string outputBuffer = "";
-            EventHandler<Microsoft.Terminal.Wpf.TerminalOutputEventArgs> onOutput = null;
+            EventHandler<Microsoft.Terminal.Wpf.TerminalOutputEventArgs>? onOutput = null;
             onOutput = (s, args) =>
             {
                 if (args.Data != null)
@@ -82,6 +82,7 @@ namespace FreeWPFShell.Share
         {
             var sm = new SshManager.SshConnectionManager();
             if (!sm.Settings.UseLinuxMonitor) return;
+            if (MasterClient == null || SftpClient == null) return;
             
             try
             {
@@ -142,8 +143,8 @@ namespace FreeWPFShell.Share
             {
                 SshTunnelManager.Instance.UnregisterTunnel($"Mon_{SessionId}");
                 try {
-                    var cmdKill = MasterClient.CreateCommand($"pkill -9 -f linux-monitor_{LinuxMonitorLocalPort}");
-                    cmdKill.Execute(); 
+                    var cmdKill = MasterClient?.CreateCommand($"pkill -9 -f linux-monitor_{LinuxMonitorLocalPort}");
+                    cmdKill?.Execute(); 
                 } catch {}
             }
 

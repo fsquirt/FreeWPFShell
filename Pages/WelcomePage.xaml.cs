@@ -9,7 +9,7 @@ namespace FreeWPFShell.Pages
 {
     public partial class WelcomePage : UserControl
     {
-        private SshManager.SshConnectionManager _sshManager;
+        private SshManager.SshConnectionManager _sshManager = new();
 
         public WelcomePage()
         {

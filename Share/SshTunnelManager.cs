@@ -11,7 +11,7 @@ namespace FreeWPFShell.Share
         public string Id { get; set; } = Guid.NewGuid().ToString("N");
         public string HostId { get; set; } = string.Empty;
         public string HostName { get; set; } = string.Empty;
-        public ForwardedPort PortConfig { get; set; }
+        public ForwardedPort? PortConfig { get; set; }
         
         // Enum: "Local" or "Remote"
         public string Type { get; set; } = "Local"; 

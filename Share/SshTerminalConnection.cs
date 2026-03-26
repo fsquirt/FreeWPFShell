@@ -11,10 +11,10 @@ namespace FreeWPFShell
     public class SshTerminalConnection : ITerminalConnection, IDisposable
     {
         private SshClient _client;
-        private ShellStream _shellStream;
-        private CancellationTokenSource _cts;
+        private ShellStream? _shellStream;
+        private CancellationTokenSource? _cts;
 
-        public event EventHandler<TerminalOutputEventArgs> TerminalOutput;
+        public event EventHandler<TerminalOutputEventArgs>? TerminalOutput;
 
         public bool IsConnected => _client?.IsConnected ?? false;
         
