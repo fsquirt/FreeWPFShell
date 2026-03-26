@@ -4,7 +4,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
-using Renci.SshNet;
 using System.Collections.ObjectModel;
 using System.Linq;
 using FreeWPFShell.Share;
@@ -178,12 +177,6 @@ namespace FreeWPFShell
             SessionTabs.SelectedItem = tabItem;
         }
 
-        public IEnumerable<Pages.TerminalAndSFTP> GetActiveSessions()
-        {
-            return SessionTabs.Items.Cast<TabItem>()
-                .Select(t => t.Tag as Pages.TerminalAndSFTP)
-                .Where(t => t != null);
-        }
 
         private void SessionTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
@@ -278,8 +271,7 @@ namespace FreeWPFShell
 
             try
             {
-                var sm = new SshManager.SshConnectionManager();
-                if (sm.Settings.UseLinuxMonitor && _currentSession.LinuxMonitorLocalPort > 0)
+                if (_currentSession.LinuxMonitorLocalPort > 0)
                 {
                     using var hc = new System.Net.Http.HttpClient();
                     hc.Timeout = TimeSpan.FromSeconds(1);

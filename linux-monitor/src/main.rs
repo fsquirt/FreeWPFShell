@@ -2,8 +2,9 @@ use serde::Serialize;
 use sysinfo::{Disks, Networks, System};
 use tiny_http::{Response, Server};
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::env;
 
 #[derive(Serialize, Clone)]
@@ -66,42 +67,48 @@ fn format_uptime(secs: u64) -> String {
     }
 }
 
+fn now_secs() -> i64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as i64
+}
+
 fn main() {
     let port: u16 = env::args().nth(1).and_then(|p| p.parse().ok()).unwrap_or(45678);
     let server = Server::http(format!("127.0.0.1:{}", port)).expect("Binding failed");
     println!("Server running on 127.0.0.1:{}", port);
 
     let stats_ref = Arc::new(Mutex::new(None::<SysStats>));
+    let last_request = Arc::new(AtomicI64::new(now_secs()));
 
+    // Background stats collection + idle watchdog
     let stats_clone = stats_ref.clone();
+    let last_req_clone = last_request.clone();
     thread::spawn(move || {
         let mut sys = System::new_all();
         let mut networks = Networks::new_with_refreshed_list();
         let mut disks = Disks::new_with_refreshed_list();
 
         loop {
-            // Wait 1 second before next refresh to compute metrics
             thread::sleep(Duration::from_secs(1));
+
+            // Idle watchdog: exit if no request for 15 seconds
+            let idle_secs = now_secs() - last_req_clone.load(Ordering::Relaxed);
+            if idle_secs > 15 {
+                eprintln!("No requests for {}s, exiting.", idle_secs);
+                std::process::exit(0);
+            }
 
             sys.refresh_cpu_usage();
             sys.refresh_memory();
             sys.refresh_processes();
             networks.refresh();
-            
-            // Only refresh disks every 60 iterations (like C# tick count logic) can be complex, so let's refresh them every 10 seconds or so.
-            // But doing it every 1s is fine natively.
             disks.refresh();
 
-            // Computations
             let cpu_pct = sys.global_cpu_info().cpu_usage();
             let mem_total = sys.total_memory();
             let mem_used = sys.used_memory();
             let swap_total = sys.total_swap();
             let swap_used = sys.used_swap();
             let uptime = format_uptime(System::uptime());
-            
-            let load = format!("{:.2}", System::load_average().one); // sysinfo exposes loadavg directly via System.
-            // Use fallback "Unknown" for load if we don't have it.
             let load_str = System::load_average().one.to_string();
 
             // Network speeds
@@ -112,7 +119,6 @@ fn main() {
             for (iface, data) in &networks {
                 let rx = data.received();
                 let tx = data.transmitted();
-                // Find the active interface (non-loopback with highest traffic)
                 if !iface.contains("lo") && (rx > 0 || tx > 0) && rx + tx > best_rx + best_tx {
                     best_rx = rx;
                     best_tx = tx;
@@ -120,7 +126,7 @@ fn main() {
                 }
             }
 
-            // Processes
+            // Processes (deduplicated by truncated command string)
             let mut procs: Vec<_> = sys.processes().iter().collect();
             procs.sort_by(|a, b| b.1.cpu_usage().partial_cmp(&a.1.cpu_usage()).unwrap_or(std::cmp::Ordering::Equal));
             
@@ -171,7 +177,7 @@ fn main() {
                 swap_used,
                 swap_total,
                 uptime,
-                load: load_str, // Use system load average
+                load: load_str,
                 rx_speed: best_rx,
                 tx_speed: best_tx,
                 iface: best_iface,
@@ -179,7 +185,6 @@ fn main() {
                 disks: disk_list,
             };
 
-            // Atomically update
             if let Ok(mut g) = stats_clone.lock() {
                 *g = Some(new_stats);
             }
@@ -187,6 +192,9 @@ fn main() {
     });
 
     for request in server.incoming_requests() {
+        // Update last-request timestamp on every incoming request
+        last_request.store(now_secs(), Ordering::Relaxed);
+
         if request.url() == "/stats" {
             let data = {
                 let g = stats_ref.lock().unwrap();

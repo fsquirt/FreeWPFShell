@@ -485,7 +485,6 @@ namespace FreeWPFShell.Pages
             }
         }
 
-        public SshClient SshClient => _sshCmdClient;
         private void CtxGridDownload_Click(object sender, RoutedEventArgs e) => TriggerDownloadSelected();
 
         private void TriggerDownloadSelected()
