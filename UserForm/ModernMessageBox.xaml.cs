@@ -2,7 +2,7 @@ using System.Windows;
 using System.Windows.Input;
 using MicaWPF.Controls;
 
-namespace FreeWPFShell.Pages
+namespace FreeWPFShell.UserForm
 {
     public partial class ModernMessageBox : MicaWindow
     {

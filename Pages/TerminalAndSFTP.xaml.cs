@@ -11,6 +11,7 @@ using Renci.SshNet.Sftp;
 using FreeWPFShell.Share;
 using System.IO;
 using System.Threading.Tasks;
+using FreeWPFShell.UserForm;
 
 namespace FreeWPFShell.Pages
 {
@@ -29,10 +30,6 @@ namespace FreeWPFShell.Pages
 
     public partial class TerminalAndSFTP : UserControl
     {
-        private ConPtyConnection _connection;
-        private SftpClient _sftpClient;
-        private SshClient _sshCmdClient; // Used for cp remote-to-remote
-        
         private ObservableCollection<RemoteFile> _remoteFiles = new ObservableCollection<RemoteFile>();
         private string _currentPath = "/";
         private Stack<string> _backHistory = new Stack<string>();
@@ -48,17 +45,20 @@ namespace FreeWPFShell.Pages
         // Connection Cancellation
         private System.Threading.CancellationTokenSource _connectCts = new System.Threading.CancellationTokenSource();
 
-        public SshManager.SshConnectionInfo HostInfo { get; }
+        public Share.SshSessionInstance Session { get; }
+        public SshManager.SshConnectionInfo HostInfo => Session?.HostInfo;
+        
+        private SftpClient _sftpClient => Session?.SftpClient;
+        private SshClient _sshCmdClient => Session?.MasterClient;
 
-        public TerminalAndSFTP(SshManager.SshConnectionInfo hostInfo)
+        public TerminalAndSFTP(Share.SshSessionInstance session)
         {
             InitializeComponent();
-            HostInfo = hostInfo;
+            Session = session;
         }
 
-        private async void Terminal_Loaded(object sender, RoutedEventArgs e)
+        private void Terminal_Loaded(object sender, RoutedEventArgs e)
         {
-            if (_sftpClient != null) return; // Already connected or running
 
             uint[] colorTable = new uint[16]
             {
@@ -80,83 +80,38 @@ namespace FreeWPFShell.Pages
             Terminal.SetTheme(theme, "Cascadia Code", 10);
             TxtStatusIcon.Text = "⏳";
             TxtStatusIcon.ToolTip = "Connecting...";
+        }
 
-            try
+        public void BindSession()
+        {
+            if (Session == null || !Session.IsConnected)
             {
-                // Execute connections concurrently to save time, but safely in background
-                await Task.Run(() =>
-                {
-                    // 1. Establish Master Test/Cmd client
-                    var testClient = new SshClient(HostInfo.IpAddress, HostInfo.SshPort, HostInfo.SshUser, HostInfo.DecryptedSshSecret ?? "");
-                    testClient.Connect(); // This hangs if unreachable, or throws if bad password
-                    _sshCmdClient = testClient;
-
-                    if (_connectCts.Token.IsCancellationRequested) return;
-
-                    // 2. Establish SFTP client
-                    var sftp = new SftpClient(HostInfo.IpAddress, HostInfo.SshPort, HostInfo.SshUser, HostInfo.DecryptedSshSecret ?? "");
-                    sftp.Connect();
-                    _sftpClient = sftp;
-                }, _connectCts.Token);
-
-                if (_connectCts.Token.IsCancellationRequested) return;
-
-                // Connection successful, update UI
-                PnlLoading.Visibility = Visibility.Collapsed;
-                
-                _currentPath = _sftpClient.WorkingDirectory ?? "/";
-                FileGrid.ItemsSource = _remoteFiles;
-                LoadPath(_currentPath);
-
-                TxtStatusIcon.Text = "✅";
-                TxtStatusIcon.ToolTip = "当前没有传输任务";
-
-                // 3. Mount Terminal Control PTY
-                _connection = new ConPtyConnection($"ssh {HostInfo.SshUser}@{HostInfo.IpAddress} -p {HostInfo.SshPort}", 120, 40);
-                Terminal.Connection = _connection;
-                Terminal.Focus();
-            
-                // Auto login via Output Hook
-                string outputBuffer = "";
-                EventHandler<Microsoft.Terminal.Wpf.TerminalOutputEventArgs> onOutput = null;
-                onOutput = (s, args) =>
-                {
-                    if (args.Data != null)
-                    {
-                        outputBuffer += args.Data;
-                        if (outputBuffer.ToLower().Contains("password:"))
-                        {
-                            _connection.TerminalOutput -= onOutput;
-                            Task.Delay(50).ContinueWith(_ => _connection.WriteInput($"{HostInfo.DecryptedSshSecret}\n"));
-                        }
-                        if (outputBuffer.Length > 2048) outputBuffer = ""; 
-                    }
-                };
-                _connection.TerminalOutput += onOutput;
-            
-                // Auto resize hack to fix TUI rendering glitches
-                Dispatcher.InvokeAsync(async () => 
-                {
-                    await Task.Delay(600);
-                    Terminal.Margin = new Thickness(-1, 0, 0, 0);
-                    await Task.Delay(100);
-                    Terminal.Margin = new Thickness(-1);
-                }, System.Windows.Threading.DispatcherPriority.Background);
-
-                // 4. Trigger Sidebar connection AFTER we are completely verified and loaded
-                var mainForm = Window.GetWindow(this) as MainForm;
-                mainForm?.StartBackgroundMonitor(HostInfo);
+                TxtLoadingStatus.Text = "连接失败";
+                BtnCancelConnect.Visibility = Visibility.Collapsed;
+                TxtStatusIcon.Text = "❌";
+                return;
             }
-            catch (Exception ex)
+
+            PnlLoading.Visibility = Visibility.Collapsed;
+            
+            _currentPath = _sftpClient.WorkingDirectory ?? "/";
+            FileGrid.ItemsSource = _remoteFiles;
+            LoadPath(_currentPath);
+
+            TxtStatusIcon.Text = "✅";
+            TxtStatusIcon.ToolTip = "当前没有传输任务";
+
+            Terminal.Connection = Session.TerminalConnection;
+            Terminal.Focus();
+            
+            // Auto resize hack to fix TUI rendering glitches
+            Dispatcher.InvokeAsync(async () => 
             {
-                if (!_connectCts.Token.IsCancellationRequested)
-                {
-                    TxtLoadingStatus.Text = "连接失败";
-                    BtnCancelConnect.Visibility = Visibility.Collapsed; // Can't cancel if already failed
-                    TxtStatusIcon.Text = "❌";
-                    ModernMessageBox.Show("SSH连接失败: " + ex.Message, "连接错误", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-            }
+                await Task.Delay(60);
+                Terminal.Margin = new Thickness(-1, 0, 0, 0);
+                await Task.Delay(10);
+                Terminal.Margin = new Thickness(1, 0, 0, 0);
+            }, System.Windows.Threading.DispatcherPriority.Background);
         }
 
         private void BtnCancelConnect_Click(object sender, RoutedEventArgs e)
@@ -182,27 +137,27 @@ namespace FreeWPFShell.Pages
             if (e.Key == Key.Tab)
             {
                 e.Handled = true;
-                _connection?.WriteInput("\t");
+                Session?.TerminalConnection?.WriteInput("\t");
             }
             else if (e.Key == Key.Up)
             {
                 e.Handled = true;
-                _connection?.WriteInput("\x1b[A");
+                Session?.TerminalConnection?.WriteInput("\x1b[A");
             }
             else if (e.Key == Key.Down)
             {
                 e.Handled = true;
-                _connection?.WriteInput("\x1b[B");
+                Session?.TerminalConnection?.WriteInput("\x1b[B");
             }
             else if (e.Key == Key.Right)
             {
                 e.Handled = true;
-                _connection?.WriteInput("\x1b[C");
+                Session?.TerminalConnection?.WriteInput("\x1b[C");
             }
             else if (e.Key == Key.Left)
             {
                 e.Handled = true;
-                _connection?.WriteInput("\x1b[D");
+                Session?.TerminalConnection?.WriteInput("\x1b[D");
             }
         }
 
@@ -521,6 +476,16 @@ namespace FreeWPFShell.Pages
         }
 
         private void BtnDownload_Click(object sender, RoutedEventArgs e) => TriggerDownloadSelected();
+
+        private void BtnSshTunnel_Click(object sender, RoutedEventArgs e)
+        {
+            if (Application.Current.MainWindow is MainForm mainForm)
+            {
+                mainForm.OpenSshTunnelManager();
+            }
+        }
+
+        public SshClient SshClient => _sshCmdClient;
         private void CtxGridDownload_Click(object sender, RoutedEventArgs e) => TriggerDownloadSelected();
 
         private void TriggerDownloadSelected()
@@ -651,11 +616,6 @@ namespace FreeWPFShell.Pages
         public void Disconnect()
         {
             _connectCts.Cancel();
-            _sftpClient?.Disconnect();
-            _sftpClient?.Dispose();
-            _sshCmdClient?.Disconnect();
-            _sshCmdClient?.Dispose();
-            _connection?.Close();
         }
     }
 }

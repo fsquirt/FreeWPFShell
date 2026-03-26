@@ -30,6 +30,7 @@ namespace FreeWPFShell.Share
         public class AppSettings
         {
             public bool UseWindowsHello { get; set; } = false;
+            public bool UseLinuxMonitor { get; set; } = false;
         }
 
         public class SshConnectionInfo

@@ -3,7 +3,7 @@ using MicaWPF.Controls;
 using FreeWPFShell.Share;
 using System.Diagnostics;
 
-namespace FreeWPFShell.Pages
+namespace FreeWPFShell.UserForm
 {
     public partial class SettingsWindow : MicaWindow
     {
@@ -14,6 +14,7 @@ namespace FreeWPFShell.Pages
             InitializeComponent();
             _sshManager = new SshManager.SshConnectionManager();
             TogVault.IsChecked = _sshManager.Settings.UseWindowsHello;
+            TogLinuxMonitor.IsChecked = _sshManager.Settings.UseLinuxMonitor;
         }
 
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
@@ -21,8 +22,12 @@ namespace FreeWPFShell.Pages
             if (TogVault.IsChecked.HasValue)
             {
                 _sshManager.Settings.UseWindowsHello = TogVault.IsChecked.Value;
-                _sshManager.SaveSettings();
             }
+            if (TogLinuxMonitor.IsChecked.HasValue)
+            {
+                _sshManager.Settings.UseLinuxMonitor = TogLinuxMonitor.IsChecked.Value;
+            }
+            _sshManager.SaveSettings();
             base.OnClosing(e);
         }
 

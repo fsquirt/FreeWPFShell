@@ -25,12 +25,27 @@ namespace FreeWPFShell
         public string Size { get; set; }
     }
 
+    public class SysStats
+    {
+        public float cpu_pct { get; set; }
+        public ulong mem_used { get; set; }
+        public ulong mem_total { get; set; }
+        public ulong swap_used { get; set; }
+        public ulong swap_total { get; set; }
+        public string uptime { get; set; }
+        public string load { get; set; }
+        public ulong rx_speed { get; set; }
+        public ulong tx_speed { get; set; }
+        public string iface { get; set; }
+        public List<ProcessItem> processes { get; set; }
+        public List<DiskItem> disks { get; set; }
+    }
+
     public partial class MainForm
     {
         private System.Windows.Threading.DispatcherTimer _timer;
-        private Dictionary<string, SshClient> _activeMonitors = new Dictionary<string, SshClient>();
-        private SshClient _currentMonitorClient;
-        private SshManager.SshConnectionInfo _currentMonitorHost;
+        public ObservableCollection<SshSessionInstance> ActiveSessions { get; } = new ObservableCollection<SshSessionInstance>();
+        private SshSessionInstance _currentSession;
         
         private ObservableCollection<ProcessItem> _processes = new ObservableCollection<ProcessItem>();
         private ObservableCollection<DiskItem> _disks = new ObservableCollection<DiskItem>();
@@ -58,16 +73,19 @@ namespace FreeWPFShell
             _timer.Start();
         }
 
-        public void OpenSession(SshManager.SshConnectionInfo hostInfo)
+        public async void OpenSession(SshManager.SshConnectionInfo hostInfo)
         {
-            var terminalPage = new Pages.TerminalAndSFTP(hostInfo);
+            var session = new SshSessionInstance(hostInfo);
+            ActiveSessions.Add(session);
+            
+            var terminalPage = new Pages.TerminalAndSFTP(session);
             
             string tabHeader = string.IsNullOrEmpty(hostInfo.HostName) 
                 ? hostInfo.IpAddress 
                 : hostInfo.HostName;
 
             var headerPanel = new StackPanel { Orientation = Orientation.Horizontal };
-            headerPanel.Children.Add(new TextBlock { Text = tabHeader, VerticalAlignment = VerticalAlignment.Center });
+            headerPanel.Children.Add(new TextBlock { Text = session.DisplayName, VerticalAlignment = VerticalAlignment.Center });
             
             var btnClose = new Button
             {
@@ -86,47 +104,85 @@ namespace FreeWPFShell
                 Tag = terminalPage
             };
 
-            btnClose.Click += (s, e) => CloseSessionTab(tabItem, hostInfo.Id);
+            btnClose.Click += (s, e) => CloseSessionTab(tabItem, session);
             headerPanel.Children.Add(btnClose);
 
             PagesContainer.Children.Add(terminalPage);
             SessionTabs.Items.Add(tabItem);
             SessionTabs.SelectedItem = tabItem;
+
+            // Initialize the network concurrently in the background
+            await session.ConnectAsync();
+            terminalPage.BindSession();
         }
 
-        private async void CloseSessionTab(TabItem tabItem, string hostId)
+        private void CloseSessionTab(TabItem tabItem, SshSessionInstance session)
         {
             if (tabItem.Tag is Pages.TerminalAndSFTP terminalPage)
             {
                 PagesContainer.Children.Remove(terminalPage);
-                // Disconnect in background
-                await System.Threading.Tasks.Task.Run(() => terminalPage.Disconnect());
             }
 
-            // Remove background monitor connection
-            if (_activeMonitors.ContainsKey(hostId))
+            ActiveSessions.Remove(session);
+            
+            System.Threading.Tasks.Task.Run(() =>
             {
-                var client = _activeMonitors[hostId];
-                _activeMonitors.Remove(hostId);
-                
-                System.Threading.Tasks.Task.Run(() =>
+                try
                 {
-                    try
-                    {
-                        client.Disconnect();
-                        client.Dispose();
-                    }
-                    catch { }
-                });
-            }
+                    session.Dispose();
+                }
+                catch { }
+            });
 
-            if (_currentMonitorHost?.Id == hostId)
+            if (_currentSession == session)
             {
-                _currentMonitorHost = null;
-                _currentMonitorClient = null;
+                _currentSession = null;
             }
 
             SessionTabs.Items.Remove(tabItem);
+        }
+
+        public void OpenSshTunnelManager()
+        {
+            var tunnelPage = new Pages.SshTunnelPage();
+            
+            var headerPanel = new StackPanel { Orientation = Orientation.Horizontal };
+            headerPanel.Children.Add(new TextBlock { Text = "SSH隧道管理", VerticalAlignment = VerticalAlignment.Center });
+            
+            var btnClose = new Button
+            {
+                Content = "×",
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Margin = new Thickness(10, 0, 0, 0),
+                Foreground = Brushes.Gray,
+                Cursor = System.Windows.Input.Cursors.Hand,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            
+            var tabItem = new TabItem
+            {
+                Header = headerPanel,
+                Tag = tunnelPage
+            };
+
+            btnClose.Click += (s, e) => {
+                PagesContainer.Children.Remove(tunnelPage);
+                SessionTabs.Items.Remove(tabItem);
+            };
+
+            headerPanel.Children.Add(btnClose);
+
+            PagesContainer.Children.Add(tunnelPage);
+            SessionTabs.Items.Add(tabItem);
+            SessionTabs.SelectedItem = tabItem;
+        }
+
+        public IEnumerable<Pages.TerminalAndSFTP> GetActiveSessions()
+        {
+            return SessionTabs.Items.Cast<TabItem>()
+                .Select(t => t.Tag as Pages.TerminalAndSFTP)
+                .Where(t => t != null);
         }
 
         private void SessionTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -141,61 +197,31 @@ namespace FreeWPFShell
 
                 if (activeView is Pages.TerminalAndSFTP terminalPage)
                 {
-                    SwitchMonitorToHost(terminalPage.HostInfo);
+                    SwitchMonitorToSession(terminalPage.Session);
                 }
                 else
                 {
                     // Must be WelcomePage
-                    _currentMonitorHost = null;
-                    _currentMonitorClient = null;
+                    _currentSession = null;
                     ResetSidebar();
                 }
             }
         }
 
-        private void SwitchMonitorToHost(SshManager.SshConnectionInfo hostInfo)
+        private void SwitchMonitorToSession(SshSessionInstance session)
         {
-            if (_currentMonitorHost != null && _currentMonitorHost.Id == hostInfo.Id)
-                return; // Already monitoring this host
+            if (_currentSession != null && _currentSession == session)
+                return;
 
-            _currentMonitorHost = hostInfo;
-            TxtHostIp.Text = $"IP {hostInfo.IpAddress}";
+            _currentSession = session;
+            TxtHostIp.Text = $"IP {session.HostInfo.IpAddress}";
             ResetMonitorState();
-
-            // Check if background monitor is already up
-            if (_activeMonitors.ContainsKey(hostInfo.Id) && _activeMonitors[hostInfo.Id].IsConnected)
+            
+            // Immediate update if connected
+            if (session.IsConnected)
             {
-                _currentMonitorClient = _activeMonitors[hostInfo.Id];
-                MonitorTick(null, null); // Immediate update
+                MonitorTick(null, null);
             }
-            else
-            {
-                // Defer connection establishing to TerminalAndSFTP to avoid multiple simultaneous handshakes
-                _currentMonitorClient = null;
-            }
-        }
-
-        public void StartBackgroundMonitor(SshManager.SshConnectionInfo hostInfo)
-        {
-            if (_activeMonitors.ContainsKey(hostInfo.Id)) return;
-
-            System.Threading.Tasks.Task.Run(() => 
-            {
-                try {
-                    var client = new SshClient(hostInfo.IpAddress, hostInfo.SshPort, hostInfo.SshUser, hostInfo.DecryptedSshSecret ?? "");
-                    client.Connect();
-                    
-                    Dispatcher.InvokeAsync(() => {
-                        _activeMonitors[hostInfo.Id] = client;
-                        if (_currentMonitorHost?.Id == hostInfo.Id)
-                        {
-                            _currentMonitorClient = client;
-                            MonitorTick(null, null);
-                        }
-                    });
-                }
-                catch {}
-            });
         }
 
         private void ResetMonitorState()
@@ -237,26 +263,36 @@ namespace FreeWPFShell
 
         private void BtnCopyIp_Click(object sender, RoutedEventArgs e)
         {
-            if (_currentMonitorHost != null)
+            if (_currentSession != null)
             {
-                Clipboard.SetText(_currentMonitorHost.IpAddress);
+                Clipboard.SetText(_currentSession.HostInfo.IpAddress);
             }
         }
 
         private async void MonitorTick(object sender, EventArgs e)
         {
-            if (_currentMonitorClient == null || !_currentMonitorClient.IsConnected) return;
+            if (_currentSession == null || !_currentSession.IsConnected || _currentSession.MasterClient == null || !_currentSession.MasterClient.IsConnected) return;
             
             _tickCount++;
             PingCheckAsync();
 
             try
             {
+                var sm = new SshManager.SshConnectionManager();
+                if (sm.Settings.UseLinuxMonitor && _currentSession.LinuxMonitorLocalPort > 0)
+                {
+                    using var hc = new System.Net.Http.HttpClient();
+                    hc.Timeout = TimeSpan.FromSeconds(1);
+                    string json = await hc.GetStringAsync($"http://127.0.0.1:{_currentSession.LinuxMonitorLocalPort}/stats");
+                    ParseLinuxMonitorJson(json);
+                    return; // Skip legacy command execution
+                }
+
                 string cmdStr = "echo \"==STAT==\"; head -n 1 /proc/stat; echo \"==TOP==\"; top -b -n 1 | head -n 5; echo \"==PROC==\"; ps axo %mem,%cpu,command --sort=-%cpu | head -n 11; echo \"==NET==\"; cat /proc/net/dev";
                 if (_tickCount % 60 == 1) {
                     cmdStr += "; echo \"==DISK==\"; df -h --output=target,avail,size";
                 }
-                var cmd = _currentMonitorClient.CreateCommand(cmdStr);
+                var cmd = _currentSession.MasterClient.CreateCommand(cmdStr);
                 var result = await System.Threading.Tasks.Task.Run(() => cmd.Execute());
                 ParseTopOutput(result);
             }
@@ -265,10 +301,10 @@ namespace FreeWPFShell
 
         private async void PingCheckAsync()
         {
-            if (_currentMonitorHost == null) return;
+            if (_currentSession == null) return;
             try {
                 using (var ping = new System.Net.NetworkInformation.Ping()) {
-                    var reply = await ping.SendPingAsync(_currentMonitorHost.IpAddress, 2000);
+                    var reply = await ping.SendPingAsync(_currentSession.HostInfo.IpAddress, 2000);
                     if (reply.Status == System.Net.NetworkInformation.IPStatus.Success) {
                         TxtPing.Text = $"{reply.RoundtripTime}ms";
                     } else {
@@ -385,7 +421,7 @@ namespace FreeWPFShell
 
                 // Parse Processes from section 3
                 if (sections.Length > 3) {
-                    _processes.Clear();
+                    var newProcesses = new List<ProcessItem>();
                     var procLines = sections[3].Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
                     for (int i = 1; i < procLines.Length; i++) {
                         var parts = procLines[i].Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
@@ -394,8 +430,12 @@ namespace FreeWPFShell
                             string cpu = parts[1] + "%";
                             string cmd = string.Join(" ", parts.Skip(2));
                             if (cmd.Length > 30) cmd = cmd.Substring(0, 30) + "...";
-                            _processes.Add(new ProcessItem { Mem = mem, Cpu = cpu, Cmd = cmd });
+                            newProcesses.Add(new ProcessItem { Mem = mem, Cpu = cpu, Cmd = cmd });
                         }
+                    }
+                    if (newProcesses.Count > 0) {
+                        _processes = new ObservableCollection<ProcessItem>(newProcesses);
+                        ProcessGrid.ItemsSource = _processes;
                     }
                 }
                 
@@ -438,7 +478,7 @@ namespace FreeWPFShell
 
                 // Parse Disk from section 5
                 if (sections.Length > 5) {
-                    _disks.Clear();
+                    var newDisks = new List<DiskItem>();
                     var diskLines = sections[5].Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
                     for (int i = 1; i < diskLines.Length; i++) {
                         var parts = diskLines[i].Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
@@ -446,12 +486,63 @@ namespace FreeWPFShell
                             string target = parts[0];
                             string avail = parts[1];
                             string size = parts[2];
-                            _disks.Add(new DiskItem { Path = target, Avail = avail, Size = size });
+                            newDisks.Add(new DiskItem { Path = target, Avail = avail, Size = size });
                         }
+                    }
+                    if (newDisks.Count > 0) {
+                        _disks = new ObservableCollection<DiskItem>(newDisks);
+                        DiskGrid.ItemsSource = _disks;
                     }
                 }
             }
             catch {}
+        }
+
+        private void ParseLinuxMonitorJson(string json)
+        {
+            var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var stats = System.Text.Json.JsonSerializer.Deserialize<SysStats>(json, options);
+            if (stats == null) return;
+
+            ProgCpu.Value = stats.cpu_pct;
+            TxtCpuPct.Text = $"{stats.cpu_pct:F1}%";
+            TxtCpuText.Text = TxtCpuPct.Text;
+            
+            if (stats.mem_total > 0)
+            {
+                double memPct = (stats.mem_used * 100.0) / stats.mem_total;
+                ProgMem.Value = memPct;
+                TxtMemPct.Text = $"{memPct:F1}%";
+                TxtMemText.Text = $"{stats.mem_used / 1024.0 / 1024.0 / 1024.0:F1}G / {stats.mem_total / 1024.0 / 1024.0 / 1024.0:F1}G";
+            }
+            
+            if (stats.swap_total > 0)
+            {
+                double swapPct = (stats.swap_used * 100.0) / stats.swap_total;
+                ProgSwap.Value = swapPct;
+                TxtSwapPct.Text = $"{swapPct:F1}%";
+                TxtSwapText.Text = $"{stats.swap_used / 1024.0 / 1024.0 / 1024.0:F1}G / {stats.swap_total / 1024.0 / 1024.0 / 1024.0:F1}G";
+            }
+
+            TxtUptime.Text = $"运行 {stats.uptime}";
+            TxtLoad.Text = $"负载 {stats.load}";
+            TxtNetUp.Text = FormatNetSpeed(stats.tx_speed) + "/s";
+            TxtNetDown.Text = FormatNetSpeed(stats.rx_speed) + "/s";
+            TxtNetIface.Text = stats.iface;
+            
+            DrawNetChart(stats.rx_speed, stats.tx_speed);
+
+            if (stats.processes != null && stats.processes.Count > 0)
+            {
+                _processes = new ObservableCollection<ProcessItem>(stats.processes);
+                ProcessGrid.ItemsSource = _processes;
+            }
+
+            if (stats.disks != null && stats.disks.Count > 0)
+            {
+                _disks = new ObservableCollection<DiskItem>(stats.disks);
+                DiskGrid.ItemsSource = _disks;
+            }
         }
 
         private void DrawNetChart(double rx, double tx)
@@ -524,22 +615,13 @@ namespace FreeWPFShell
         {
             _timer?.Stop();
             
-            foreach (var client in _activeMonitors.Values)
+            foreach (var session in ActiveSessions)
             {
                 try {
-                    client.Disconnect();
-                    client.Dispose();
+                    session.Dispose();
                 } catch {}
             }
-            _activeMonitors.Clear();
-
-            foreach (var item in SessionTabs.Items.OfType<TabItem>())
-            {
-                if (item.Tag is Pages.TerminalAndSFTP terminalPage)
-                {
-                    terminalPage.Disconnect();
-                }
-            }
+            ActiveSessions.Clear();
         }
     }
 }

@@ -2,7 +2,7 @@ using System;
 using System.Windows;
 using FreeWPFShell.Share;
 
-namespace FreeWPFShell.Pages
+namespace FreeWPFShell.UserForm
 {
     public partial class AddConnection 
     {
