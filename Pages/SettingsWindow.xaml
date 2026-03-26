@@ -17,14 +17,14 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0" Text="安全设置" FontSize="20" FontWeight="Bold" Foreground="White" Margin="0,0,0,15"/>
+        <TextBlock Grid.Row="0" Text="安全设置" FontSize="20" FontWeight="Bold" Margin="0,0,0,15"/>
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,10">
             <mica:ToggleSwitch x:Name="TogVault" VerticalAlignment="Center" Margin="0,0,10,0"/>
-            <TextBlock Text="新建连接时使用 Windows Hello 保护密码" Foreground="White" FontSize="14" VerticalAlignment="Center" ToolTip="启用后，新保存的凭据将强制要求通过本机 PIN 或生物识别才能解锁。"/>
+            <TextBlock Text="使用 Windows Hello 保护密码" FontSize="14" VerticalAlignment="Center" ToolTip="启用后，新保存的凭据将强制要求通过本机 PIN 或生物识别才能解锁。"/>
         </StackPanel>
         
-        <TextBlock Grid.Row="2" Text="注：开启此选项后，密码将存入 Windows 凭据保险箱。如果你的电脑未设置开机密码或 PIN，请不要勾选，否则会导致密码无法保存。" TextWrapping="Wrap" Foreground="#909090" FontSize="12" Margin="0,5,0,0"/>
+        <TextBlock Grid.Row="2" Text="注：开启此选项后，密码将存入 Windows 凭据保险箱。如果你的电脑未设置开机密码或 PIN，请不要勾选，否则会导致无法连接。" TextWrapping="Wrap" Foreground="#909090" FontSize="12" Margin="0,5,0,0"/>
 
         <!-- Footer -->
         <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">

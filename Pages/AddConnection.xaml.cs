@@ -51,12 +51,6 @@ namespace FreeWPFShell.Pages
             }
         }
 
-        private void ChkProxy_Changed(object sender, RoutedEventArgs e)
-        {
-            if (pnlProxy != null)
-                pnlProxy.IsEnabled = chkProxy.IsChecked == true;
-        }
-
         private void BtnBrowseKey_Click(object sender, RoutedEventArgs e)
         {
             var dlg = new Microsoft.Win32.OpenFileDialog
@@ -216,6 +210,12 @@ namespace FreeWPFShell.Pages
             {
                 ModernMessageBox.Show("保存失败: " + ex.Message, "错误", MessageBoxButton.OK, MessageBoxImage.Error);
             }
+        }
+
+        private void chkProxy_Checked(object sender, RoutedEventArgs e)
+        {
+            if (pnlProxy != null)
+                pnlProxy.IsEnabled = chkProxy.IsChecked == true;
         }
     }
 }
