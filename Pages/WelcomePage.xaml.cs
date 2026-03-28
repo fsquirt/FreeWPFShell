@@ -31,6 +31,11 @@ namespace FreeWPFShell.Pages
             {
                 _sshManager = new SshManager.SshConnectionManager(); // Force reload from JSON to sync memory instances
                 var hosts = _sshManager.GetAllHosts();
+                foreach (var host in hosts)
+                {
+                    try { host.SimpleIpGEO = IpGeoService.Instance.Query(host.IpAddress).SimpleGeo; }
+                    catch { }
+                }
                 HostsList.ItemsSource = hosts;
             }
             catch (Exception ex)

@@ -22,6 +22,11 @@
     <PackageReference Include="MicaWPF" Version="6.3.2" />
     <PackageReference Include="Microsoft.Terminal.Wpf" Version="0.1.0" />
     <PackageReference Include="SSH.NET" Version="2025.1.0" />
+    <PackageReference Include="MaxMind.Db" Version="4.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="IPDataBase\**\*.mmdb" CopyToOutputDirectory="PreserveNewest" LinkBase="IPDataBase" />
   </ItemGroup>
 
   <Target Name="PreBuild" BeforeTargets="PreBuildEvent">

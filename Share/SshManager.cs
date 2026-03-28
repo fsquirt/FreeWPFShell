@@ -30,7 +30,8 @@ namespace FreeWPFShell.Share
         public class AppSettings
         {
             public bool UseWindowsHello { get; set; } = false;
-            public bool UseLinuxMonitor { get; set; } = false;
+            public bool UseLinuxMonitor { get; set; } = true;
+            public string BackdropType { get; set; } = "Acrylic";
         }
 
         public class SshConnectionInfo
@@ -52,6 +53,9 @@ namespace FreeWPFShell.Share
 
             [JsonIgnore]
             public string? DecryptedSshSecret { get; set; }
+
+            [JsonIgnore]
+            public string? SimpleIpGEO { get; set; }
         }
 
         public class SshConnectionManager

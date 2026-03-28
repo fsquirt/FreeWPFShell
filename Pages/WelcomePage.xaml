@@ -45,6 +45,7 @@
                                     <TextBlock Text="{Binding HostName}" FontWeight="Bold" FontSize="16" Foreground="White" VerticalAlignment="Center"/>
                                 </StackPanel>
                                 <TextBlock Text="{Binding IpAddress}" FontSize="13" Foreground="#B0BEC5"/>
+                                <TextBlock Text="{Binding SimpleIpGEO}" FontSize="11" Foreground="#78909C" Margin="0,2,0,0"/>
                                 <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
                                     <TextBlock Text="{Binding SshUser}" FontSize="12" Foreground="#78909C"/>
                                     <TextBlock Text=" : " FontSize="12" Foreground="#78909C"/>

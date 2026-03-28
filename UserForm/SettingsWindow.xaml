@@ -30,9 +30,21 @@
 
         <TextBlock Grid.Row="3" Text="性能设置" FontSize="20" FontWeight="Bold" Margin="0,0,0,15"/>
 
-        <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,0,0,10">
-            <mica:ToggleSwitch x:Name="TogLinuxMonitor" VerticalAlignment="Center" Margin="0,0,10,0"/>
-            <TextBlock Text="使用 Linux Monitor 代理进程监视" FontSize="14" VerticalAlignment="Center" ToolTip="启用后将自动建立SSH端口转发并挂载Native探针，大幅优化监控性能。"/>
+        <StackPanel Grid.Row="4" Margin="0,0,0,10">
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                <mica:ToggleSwitch x:Name="TogLinuxMonitor" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <TextBlock Text="使用 Linux Monitor 代理进程监视" FontSize="14" VerticalAlignment="Center" ToolTip="启用后将自动建立SSH端口转发并挂载Native探针，大幅优化监控性能。"/>
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="窗口背景：" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <ComboBox x:Name="CmbBackdrop" Width="140" VerticalAlignment="Center" SelectionChanged="CmbBackdrop_SelectionChanged">
+                    <ComboBoxItem Content="None" Tag="None"/>
+                    <ComboBoxItem Content="Mica" Tag="Mica"/>
+                    <ComboBoxItem Content="Acrylic" Tag="Acrylic"/>
+                    <ComboBoxItem Content="Tabbed" Tag="Tabbed"/>
+                </ComboBox>
+            </StackPanel>
         </StackPanel>
 
         <!-- Footer -->

@@ -6,13 +6,10 @@
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0" Text="SSH 隧道管理器" FontSize="20" FontWeight="Bold" Margin="0,0,0,15" />
-
-        <GroupBox Grid.Row="1" Header="手动添加隧道" Margin="0,0,0,15">
+        <GroupBox Grid.Row="0" Header="手动添加隧道" Margin="0,0,0,15">
             <StackPanel Margin="10">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -73,7 +70,7 @@
             </StackPanel>
         </GroupBox>
 
-        <DataGrid x:Name="TunnelGrid" Grid.Row="2" AutoGenerateColumns="False" IsReadOnly="True" 
+        <DataGrid x:Name="TunnelGrid" Grid.Row="1" AutoGenerateColumns="False" IsReadOnly="True" 
                   Background="#1AFFFFFF" RowBackground="Transparent" AlternatingRowBackground="#0DFFFFFF"
                   HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#33FFFFFF">
             <DataGrid.Columns>

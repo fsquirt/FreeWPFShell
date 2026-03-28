@@ -33,15 +33,14 @@
                 </Grid.RowDefinitions>
 
                 <Border Grid.Row="0" BorderBrush="Transparent" BorderThickness="1" CornerRadius="3" Padding="4" Margin="0,0,0,10">
-                    <Grid>
+                    <StackPanel>
                         <StackPanel Orientation="Horizontal">
                             <TextBlock x:Name="TxtHostIp" Text="未连接" />
                             <Button Content="复制" Margin="10,0,0,0" Padding="5,1" Background="Transparent" Click="BtnCopyIp_Click" />
                         </StackPanel>
-                    </Grid>
+                        <TextBlock x:Name="TxtHostGeo" Text="" Margin="0,3,0,0" FontSize="12" />
+                    </StackPanel>
                 </Border>
-
-                <Button Grid.Row="1" Content="系统信息" Height="20" Margin="0,0,0,10" Background="Transparent" BorderBrush="#81D4FA"  />
 
                 <StackPanel Orientation="Horizontal" Grid.Row="2">
                     <TextBlock x:Name="TxtUptime" Text="运行 -- 天..."/>

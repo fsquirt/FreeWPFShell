@@ -485,6 +485,14 @@ namespace FreeWPFShell.Pages
             }
         }
 
+        private void BtnTraceroute_Click(object sender, RoutedEventArgs e)
+        {
+            if (Application.Current.MainWindow is MainForm mainForm)
+            {
+                mainForm.OpenTraceroutePage(Session?.HostInfo?.IpAddress);
+            }
+        }
+
         private void CtxGridDownload_Click(object sender, RoutedEventArgs e) => TriggerDownloadSelected();
 
         private void TriggerDownloadSelected()
