@@ -3,7 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:FreeWPFShell"
              xmlns:mica="clr-namespace:MicaWPF.Styles;assembly=MicaWPF"
-             StartupUri="MainForm.xaml">
+             StartupUri="Views/MainForm.xaml">
     <Application.Resources>
         <ResourceDictionary>
             <Style TargetType="{x:Type Control}">

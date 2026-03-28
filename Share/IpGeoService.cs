@@ -6,6 +6,8 @@ using System.IO;
 using System.Net;
 using MaxMind.Db;
 
+using FreeWPFShell.Models;
+
 namespace FreeWPFShell.Share
 {
     public class IpGeoResult

@@ -2,30 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using FreeWPFShell.Models;
 using Renci.SshNet;
 
 namespace FreeWPFShell.Share
 {
-    public class SshTunnelInfo
-    {
-        public string Id { get; set; } = Guid.NewGuid().ToString("N");
-        public string HostId { get; set; } = string.Empty;
-        public string HostName { get; set; } = string.Empty;
-        public ForwardedPort? PortConfig { get; set; }
-        
-        // Enum: "Local" or "Remote"
-        public string Type { get; set; } = "Local"; 
-        
-        public string BindAddress { get; set; } = string.Empty;
-        public uint BindPort { get; set; }
-        public string DestAddress { get; set; } = string.Empty;
-        public uint DestPort { get; set; }
-        public string Remark { get; set; } = string.Empty;
-
-        // Visual properties for UI binding
-        public string PortMapping => $"{BindAddress}:{BindPort} -> {DestAddress}:{DestPort}";
-    }
-
     public class SshTunnelManager
     {
         private static Lazy<SshTunnelManager> _instance = new Lazy<SshTunnelManager>(() => new SshTunnelManager());
