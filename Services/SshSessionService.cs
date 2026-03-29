@@ -58,14 +58,17 @@ namespace FreeWPFShell.Services
         {
             await Task.Run(() =>
             {
+                // SSH 客户端连接
                 MasterClient = new SshClient(HostInfo.IpAddress, HostInfo.SshPort, HostInfo.SshUser, HostInfo.DecryptedSshSecret ?? "");
                 MasterClient.Connect();
                 if (_cts.IsCancellationRequested) return;
 
+                // SFTP 客户端连接
                 SftpClient = new SftpClient(HostInfo.IpAddress, HostInfo.SshPort, HostInfo.SshUser, HostInfo.DecryptedSshSecret ?? "");
                 SftpClient.Connect();
 
-                DeployLinuxMonitor();
+                // 部署监控
+                try { DeployLinuxMonitor(); } catch { /* 监控部署失败不应中断会话 */ }
 
                 IsConnected = true;
             }, _cts.Token);

@@ -34,10 +34,24 @@ namespace FreeWPFShell.Views
             ActiveSessions.Add(session);
 
             var terminalPage = new TerminalAndSFTP(session);
-            AddTab(session.DisplayName, terminalPage);
+            var tabItem = AddTab(session.DisplayName, terminalPage);
 
-            await session.ConnectAsync();
-            terminalPage.BindSession();
+            try
+            {
+                await session.ConnectAsync();
+                terminalPage.BindSession();
+            }
+            catch (Exception ex)
+            {
+                string msg = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
+                UserForm.ModernMessageBox.Show($"无法连接到 {hostInfo.HostName} ({hostInfo.IpAddress})\n\n错误信息: {msg}", "连接失败", MessageBoxButton.OK, MessageBoxImage.Error);
+                
+                // 自动关闭失败的 Tab
+                PagesContainer.Children.Remove(terminalPage);
+                SessionTabs.Items.Remove(tabItem);
+                ActiveSessions.Remove(session);
+                session.Dispose();
+            }
         }
 
         public void OpenSshTunnelManager()
