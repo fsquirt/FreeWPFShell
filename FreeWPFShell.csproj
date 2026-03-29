@@ -9,6 +9,7 @@
     <Platforms>AnyCPU;x64</Platforms>
     <UseWindowsForms>False</UseWindowsForms>
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <ApplicationIcon>favicon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -49,6 +50,10 @@
 
   <ItemGroup>
     <None Include="IPDataBase\**\*.mmdb" CopyToOutputDirectory="PreserveNewest" LinkBase="IPDataBase" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="favicon.ico" />
   </ItemGroup>
 
   <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
