@@ -16,7 +16,7 @@
                         <ColumnDefinition Width="60"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="60"/>
-                        <ColumnDefinition Width="120"/>
+                        <ColumnDefinition Width="140"/>
                     </Grid.ColumnDefinitions>
                     
                     <TextBlock Text="目标主机:" VerticalAlignment="Center"/>
@@ -24,8 +24,8 @@
                     
                     <TextBlock Grid.Column="2" Text="隧道类型:" VerticalAlignment="Center"/>
                     <ComboBox x:Name="CmbTunnelType" Grid.Column="3" Margin="5,0,0,0" SelectedIndex="0">
-                        <ComboBoxItem Content="本地端口转发" />
-                        <ComboBoxItem Content="远程端口转发" />
+                        <ComboBoxItem Content="服务器 -> 本机" />
+                        <ComboBoxItem Content="本机 -> 服务器" />
                     </ComboBox>
                 </Grid>
 
@@ -33,7 +33,7 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="60"/>
                         <ColumnDefinition Width="100"/>
-                        <ColumnDefinition Width="15"/>
+                        <ColumnDefinition Width="40"/>
                         <ColumnDefinition Width="60"/>
                         <ColumnDefinition Width="120"/>
                         <ColumnDefinition Width="15"/>
@@ -43,17 +43,17 @@
                         <ColumnDefinition Width="100"/>
                     </Grid.ColumnDefinitions>
 
-                    <TextBlock Text="绑定端口:" VerticalAlignment="Center"/>
+                    <TextBlock Text="本机端口:" VerticalAlignment="Center"/>
                     <mica:TextBox x:Name="TxtBindPort" Grid.Column="1" Text="8080" />
                     
-                    <TextBlock Text="->" Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                    <TextBlock Text="&lt;-&gt;" Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Center" />
                     
-                    <TextBlock Text="目标地址:" Grid.Column="3" VerticalAlignment="Center" />
+                    <TextBlock Text="服务器地址:" Grid.Column="3" VerticalAlignment="Center" />
                     <mica:TextBox x:Name="TxtDestAddr" Grid.Column="4" Text="127.0.0.1" />
 
                     <TextBlock Text=":" Grid.Column="5" VerticalAlignment="Center" HorizontalAlignment="Center" />
                     
-                    <TextBlock Text="目标端口:" Grid.Column="6" VerticalAlignment="Center" />
+                    <TextBlock Text="服务器端口:" Grid.Column="6" VerticalAlignment="Center" />
                     <mica:TextBox x:Name="TxtDestPort" Grid.Column="7" Text="80" />
                     
                     <mica:Button x:Name="BtnAddTunnel" Grid.Column="9" Content="添加隧道" Click="BtnAddTunnel_Click" Height="30"/>

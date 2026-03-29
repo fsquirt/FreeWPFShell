@@ -81,20 +81,20 @@ namespace FreeWPFShell.UserForm
 
         private string GetSecret() => rbPassword.IsChecked == true ? txtPassword.Text : txtKeyPath.Text;
 
-        private void BtnSave_Click(object sender, RoutedEventArgs e)
+        private async void BtnSave_Click(object sender, RoutedEventArgs e)
         {
             if (!ValidateInputs()) return;
             try
             {
                 var host = BuildHostInfo(); string secret = GetSecret();
-                if (string.IsNullOrEmpty(_editingHostId)) _hostRepo.Add(host, secret);
-                else _hostRepo.Update(_editingHostId, host, string.IsNullOrEmpty(secret) ? null : secret);
+                if (string.IsNullOrEmpty(_editingHostId)) await _hostRepo.AddAsync(host, secret);
+                else await _hostRepo.UpdateAsync(_editingHostId, host, string.IsNullOrEmpty(secret) ? null : secret);
                 ConnectAfterSave = false; DialogResult = true;
             }
             catch (Exception ex) { ModernMessageBox.Show("保存失败: " + ex.Message, "错误"); }
         }
 
-        private void BtnConnect_Click(object sender, RoutedEventArgs e)
+        private async void BtnConnect_Click(object sender, RoutedEventArgs e)
         {
             if (!ValidateInputs()) return;
             try
@@ -102,14 +102,17 @@ namespace FreeWPFShell.UserForm
                 var host = BuildHostInfo(); string secret = GetSecret();
                 if (string.IsNullOrEmpty(_editingHostId))
                 {
-                    _hostRepo.Add(host, secret);
+                    await _hostRepo.AddAsync(host, secret);
                     host.DecryptedSshSecret = secret;
                 }
                 else
                 {
-                    _hostRepo.Update(_editingHostId, host, string.IsNullOrEmpty(secret) ? null : secret);
+                    await _hostRepo.UpdateAsync(_editingHostId, host, string.IsNullOrEmpty(secret) ? null : secret);
                     if (string.IsNullOrEmpty(secret))
-                        host.DecryptedSshSecret = System.Threading.Tasks.Task.Run(() => _hostRepo.GetAndDecryptAsync(_editingHostId)).GetAwaiter().GetResult().DecryptedSshSecret;
+                    {
+                        var decrypted = await _hostRepo.GetAndDecryptAsync(_editingHostId);
+                        host.DecryptedSshSecret = decrypted.DecryptedSshSecret;
+                    }
                     else
                         host.DecryptedSshSecret = secret;
                 }

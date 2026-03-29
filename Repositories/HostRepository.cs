@@ -24,10 +24,10 @@ namespace FreeWPFShell.Repositories
         {
             _settingsRepo = settingsRepo;
             _filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "hosts.json");
-            Load();
+            Reload();
         }
 
-        private void Load()
+        public void Reload()
         {
             if (File.Exists(_filePath))
             {
@@ -48,27 +48,33 @@ namespace FreeWPFShell.Repositories
 
         public SshConnectionInfo? FindById(string id) => _hosts.FirstOrDefault(h => h.Id == id);
 
-        public void Add(SshConnectionInfo host, string sshSecret)
+        public async Task AddAsync(SshConnectionInfo host, string sshSecret)
         {
-            do { host.Id = GenerateShortId(); } while (_hosts.Any(h => h.Id == host.Id));
-            SaveSecret(host, sshSecret);
-            _hosts.Add(host);
-            Save();
+            await Task.Run(() =>
+            {
+                do { host.Id = GenerateShortId(); } while (_hosts.Any(h => h.Id == host.Id));
+                SaveSecret(host, sshSecret);
+                _hosts.Add(host);
+                Save();
+            });
         }
 
-        public void Update(string id, SshConnectionInfo updated, string? newSecret = null)
+        public async Task UpdateAsync(string id, SshConnectionInfo updated, string? newSecret = null)
         {
-            var existing = FindById(id) ?? throw new Exception("未找到指定的主机 ID");
-            existing.HostName = updated.HostName;
-            existing.IpAddress = updated.IpAddress;
-            existing.SshPort = updated.SshPort;
-            existing.SshUser = updated.SshUser;
-            existing.AuthMethod = updated.AuthMethod;
-            existing.UseProxy = updated.UseProxy;
-            existing.Proxy = updated.Proxy;
-            if (!string.IsNullOrEmpty(newSecret))
-                SaveSecret(existing, newSecret);
-            Save();
+            await Task.Run(() =>
+            {
+                var existing = FindById(id) ?? throw new Exception("未找到指定的主机 ID");
+                existing.HostName = updated.HostName;
+                existing.IpAddress = updated.IpAddress;
+                existing.SshPort = updated.SshPort;
+                existing.SshUser = updated.SshUser;
+                existing.AuthMethod = updated.AuthMethod;
+                existing.UseProxy = updated.UseProxy;
+                existing.Proxy = updated.Proxy;
+                if (!string.IsNullOrEmpty(newSecret))
+                    SaveSecret(existing, newSecret);
+                Save();
+            });
         }
 
         public void Delete(string id)

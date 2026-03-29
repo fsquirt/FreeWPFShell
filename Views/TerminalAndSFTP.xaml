@@ -6,7 +6,8 @@
              xmlns:term="clr-namespace:Microsoft.Terminal.Wpf;assembly=Microsoft.Terminal.Wpf"
              xmlns:mica="clr-namespace:MicaWPF.Controls;assembly=MicaWPF"
              mc:Ignorable="d" 
-             d:DesignHeight="800" d:DesignWidth="800">
+             d:DesignHeight="800" d:DesignWidth="800"
+             FontFamily="Microsoft Yahei">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="2.0*"/>
@@ -18,7 +19,7 @@
         <Grid Grid.Row="0" Margin="10">
             <term:TerminalControl x:Name="Terminal" Focusable="True" Loaded="Terminal_Loaded" PreviewKeyDown="Terminal_PreviewKeyDown" KeyboardNavigation.DirectionalNavigation="None" KeyboardNavigation.TabNavigation="None" KeyboardNavigation.ControlTabNavigation="None" Background="#1E3047" />
             
-            <Border x:Name="PnlLoading" Background="#CC1E3047" Visibility="Visible">
+            <Border x:Name="PnlLoading" Background="Transparent" Visibility="Visible">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                     <TextBlock x:Name="TxtLoadingStatus" Text="正在连接服务器..." Foreground="White" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"/>
                     <mica:Button x:Name="BtnCancelConnect" Content="取消连接" Margin="0,15,0,0" Width="100" Height="30" Click="BtnCancelConnect_Click"/>

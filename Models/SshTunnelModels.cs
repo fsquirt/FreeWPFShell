@@ -14,6 +14,22 @@ namespace FreeWPFShell.Models
         public uint DestPort { get; set; }
         public string Remark { get; set; } = string.Empty;
         public ForwardedPort? PortConfig { get; set; }
-        public string PortMapping => $"{BindAddress}:{BindPort} -> {DestAddress}:{DestPort}";
+        public string PortMapping
+        {
+            get
+            {
+                if (Type == "服务器->本机")
+                {
+                    // 把远程服务器上的资源映射到本地
+                    return $"{DestAddress}:{DestPort} -> 127.0.0.1:{BindPort}";
+                }
+                else if (Type == "本机->服务器")
+                {
+                    // 把本机的资源映射到远程服务器端口
+                    return $"{DestAddress}:{BindPort} -> 服务器监听:{DestPort}";
+                }
+                return $"{BindAddress}:{BindPort} -> {DestAddress}:{DestPort}";
+            }
+        }
     }
 }

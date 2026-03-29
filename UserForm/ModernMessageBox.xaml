@@ -15,7 +15,7 @@
 
             <!-- Message -->
             <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" Margin="20,15,20,5">
-                <TextBlock x:Name="TxtMessage" Text="Message" TextWrapping="Wrap" VerticalAlignment="Center" FontSize="14"/>
+                <TextBlock x:Name="TxtMessage" Text="Message" TextWrapping="Wrap" FontSize="14"/>
             </ScrollViewer>
             
             <!-- Buttons -->

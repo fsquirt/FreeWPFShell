@@ -363,3 +363,5 @@ MigrationBackup/
 FodyWeavers.xsd
 
 linux-monitor/target
+
+linux-monitor/linux-monitor

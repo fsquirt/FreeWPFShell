@@ -7,7 +7,8 @@
         mc:Ignorable="d"
         Title="设置" Height="350" Width="400"
         SystemBackdropType="Acrylic"
-        WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        FontFamily="Microsoft YaHei">
     
     <Grid Margin="20">
         <Grid.RowDefinitions>

@@ -36,9 +36,36 @@ namespace FreeWPFShell.Views
             try
             {
                 ForwardedPort port;
-                if (isLocal) { port = new ForwardedPortLocal("127.0.0.1", bindPort, TxtDestAddr.Text, destPort); client.AddForwardedPort(port); port.Start(); }
-                else { port = new ForwardedPortRemote(bindPort, TxtDestAddr.Text, destPort); client.AddForwardedPort(port); port.Start(); }
-                SshTunnelManager.Instance.RegisterTunnel(new SshTunnelInfo { HostId = session.HostInfo.Id, HostName = session.DisplayName, PortConfig = port, Type = isLocal ? "本地转发" : "远程转发", BindAddress = isLocal ? "127.0.0.1" : "*", BindPort = bindPort, DestAddress = TxtDestAddr.Text, DestPort = destPort, Remark = TxtRemark.Text });
+                if (isLocal)
+                {
+                    // 服务器 -> 本机 (Local Port Forwarding)
+                    // 在本机 127.0.0.1:bindPort 监听，转发到服务器能访问的 destAddr:destPort
+                    port = new ForwardedPortLocal("127.0.0.1", bindPort, TxtDestAddr.Text, destPort);
+                    client.AddForwardedPort(port);
+                    port.Start();
+                }
+                else
+                {
+                    // 本机 -> 服务器 (Remote Port Forwarding)
+                    // 在服务器上监听 destPort，转发到本机能访问的 destAddr:bindPort
+                    // 常见的需求是将本机的 bindPort 映射到服务器的 destPort
+                    port = new ForwardedPortRemote(destPort, TxtDestAddr.Text, bindPort);
+                    client.AddForwardedPort(port);
+                    port.Start();
+                }
+
+                SshTunnelManager.Instance.RegisterTunnel(new SshTunnelInfo
+                {
+                    HostId = session.HostInfo.Id,
+                    HostName = session.DisplayName,
+                    PortConfig = port,
+                    Type = isLocal ? "服务器->本机" : "本机->服务器",
+                    BindAddress = isLocal ? "127.0.0.1" : "*",
+                    BindPort = bindPort,
+                    DestAddress = TxtDestAddr.Text,
+                    DestPort = destPort,
+                    Remark = TxtRemark.Text
+                });
                 MessageBox.Show("隧道创建成功并在后台运行！", "成功", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex) { MessageBox.Show($"创建隧道失败:\n{ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error); }

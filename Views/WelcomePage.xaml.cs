@@ -22,16 +22,43 @@ namespace FreeWPFShell.Views
             LoadHosts();
         }
 
-        public void LoadHosts()
+        public async void LoadHosts()
         {
             try
             {
+                // 强制同步内存和磁盘数据
+                _hostRepo.Reload();
+
+                // 先获取基础列表
                 var hosts = _hostRepo.GetAll();
-                foreach (var host in hosts)
-                    try { host.SimpleIpGEO = IpGeoService.Instance.Query(host.IpAddress).SimpleGeo; } catch { }
+
+                // 强制刷新：先断开连接，再重新绑定
+                HostsList.ItemsSource = null;
                 HostsList.ItemsSource = hosts;
+
+                // 异步获取地理位置，不阻塞 UI 渲染，也不引发 COM 异常冲突
+                await Task.Run(() =>
+                {
+                    foreach (var host in hosts)
+                    {
+                        try 
+                        { 
+                            var geo = IpGeoService.Instance.Query(host.IpAddress);
+                            // 由于 SshConnectionInfo 不是 ObservableObject，我们在这里静默更新
+                            // 但后续如果需要实时变动，建议也将 SshConnectionInfo 改为 ObservableObject
+                            host.SimpleIpGEO = geo.SimpleGeo; 
+                        } 
+                        catch { }
+                    }
+                });
+
+                // 再次刷新以显示获取到的地理位置
+                HostsList.Items.Refresh();
             }
-            catch (Exception ex) { ModernMessageBox.Show("加载主机列表失败: " + ex.Message); }
+            catch (Exception ex) 
+            { 
+                System.Diagnostics.Debug.WriteLine("LoadHosts Error: " + ex.Message);
+            }
         }
 
         private void BtnAddConnection_Click(object sender, RoutedEventArgs e)
