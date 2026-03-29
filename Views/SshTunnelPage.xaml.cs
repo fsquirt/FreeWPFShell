@@ -54,7 +54,7 @@ namespace FreeWPFShell.Views
                     port.Start();
                 }
 
-                SshTunnelManager.Instance.RegisterTunnel(new SshTunnelInfo
+                session.RegisterTunnel(new SshTunnelInfo
                 {
                     HostId = session.HostInfo.Id,
                     HostName = session.DisplayName,

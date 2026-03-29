@@ -14,7 +14,7 @@ using FreeWPFShell.Share;
 
 namespace FreeWPFShell.Views
 {
-    public partial class TraceroutePage : UserControl
+    public partial class TraceroutePage : UserControl, IDisposable
     {
         private readonly ObservableCollection<TracerouteHop> _hops = new();
         private CancellationTokenSource? _cts;
@@ -25,6 +25,13 @@ namespace FreeWPFShell.Views
             InitializeComponent();
             HopsGrid.ItemsSource = _hops;
             HopsGrid.SelectionChanged += HopsGrid_SelectionChanged;
+        }
+
+        public void Dispose()
+        {
+            _cts?.Cancel();
+            _cts?.Dispose();
+            _isTracing = false;
         }
 
         private void HopsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -61,7 +68,6 @@ namespace FreeWPFShell.Views
 
                 const int maxHops = 30;
                 const int parallelLimit = 8; // 并发探测的跳数
-                var hopTasks = new List<Task>();
                 var foundDest = false;
 
                 // 预先填充 UI 占位

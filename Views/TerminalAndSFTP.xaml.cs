@@ -169,6 +169,7 @@ namespace FreeWPFShell.Views
         private void BtnDownload_Click(object sender, RoutedEventArgs e) => TriggerDownloadSelected();
         private void BtnSshTunnel_Click(object sender, RoutedEventArgs e) { (Application.Current.MainWindow as Views.MainForm)?.OpenSshTunnelManager(); }
         private void BtnTraceroute_Click(object sender, RoutedEventArgs e) { (Application.Current.MainWindow as Views.MainForm)?.OpenTraceroutePage(Session?.HostInfo?.IpAddress); }
+        private void BtnProcess_Click(object sender, RoutedEventArgs e) { (Application.Current.MainWindow as Views.MainForm)?.OpenProcessPage(Session); }
         private void CtxGridDownload_Click(object sender, RoutedEventArgs e) => TriggerDownloadSelected();
 
         private void TriggerDownloadSelected()

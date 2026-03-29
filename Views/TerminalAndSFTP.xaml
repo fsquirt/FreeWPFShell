@@ -61,6 +61,7 @@
 
                         <mica:Button x:Name="BtnSshTunnel" Content="📡" Margin="0,0,10,0" Width="30" Click="BtnSshTunnel_Click" ToolTip="SSH隧道管理" />
                         <mica:Button x:Name="BtnTraceroute" Content="🔭" Margin="0,0,10,0" Width="30" Click="BtnTraceroute_Click" ToolTip="路由追踪" />
+                        <mica:Button x:Name="BtnProcess" Content="📊" Margin="0,0,10,0" Width="30" Click="BtnProcess_Click" ToolTip="进程管理" />
                     </StackPanel>
                 </Grid>
             </Border>

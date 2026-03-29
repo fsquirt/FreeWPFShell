@@ -31,6 +31,7 @@ namespace FreeWPFShell.Services
 
         public bool IsConnected { get; private set; }
         public uint LinuxMonitorLocalPort { get; private set; } = 0;
+        private readonly List<SshTunnelInfo> _associatedTunnels = new();
 
         public ViewModels.MonitorData Monitor { get; } = new();
 
@@ -58,17 +59,14 @@ namespace FreeWPFShell.Services
         {
             await Task.Run(() =>
             {
-                // SSH 客户端连接
                 MasterClient = new SshClient(HostInfo.IpAddress, HostInfo.SshPort, HostInfo.SshUser, HostInfo.DecryptedSshSecret ?? "");
                 MasterClient.Connect();
                 if (_cts.IsCancellationRequested) return;
 
-                // SFTP 客户端连接
                 SftpClient = new SftpClient(HostInfo.IpAddress, HostInfo.SshPort, HostInfo.SshUser, HostInfo.DecryptedSshSecret ?? "");
                 SftpClient.Connect();
 
-                // 部署监控
-                try { DeployLinuxMonitor(); } catch { /* 监控部署失败不应中断会话 */ }
+                try { DeployLinuxMonitor(); } catch { }
 
                 IsConnected = true;
             }, _cts.Token);
@@ -318,15 +316,17 @@ namespace FreeWPFShell.Services
                 MasterClient.AddForwardedPort(port);
                 port.Start();
 
-                SshTunnelManager.Instance.RegisterTunnel(new SshTunnelInfo
+                var tunnelInfo = new SshTunnelInfo
                 {
                     Id = $"Mon_{SessionId}", HostId = HostInfo.Id,
                     HostName = HostInfo.HostName ?? HostInfo.IpAddress,
-                    Type = "Local", BindAddress = "127.0.0.1",
+                    Type = "本地(监控)", BindAddress = "127.0.0.1",
                     BindPort = LinuxMonitorLocalPort, DestAddress = "127.0.0.1",
-                    DestPort = LinuxMonitorLocalPort, Remark = "自动创建 - Linux Monitor",
+                    DestPort = LinuxMonitorLocalPort, Remark = "自动创建 - Linux Monitor探针",
                     PortConfig = port
-                });
+                };
+
+                RegisterTunnel(tunnelInfo);
 
                 string binPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "linux-monitor");
                 if (System.IO.File.Exists(binPath))
@@ -341,20 +341,92 @@ namespace FreeWPFShell.Services
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine("Monitor Deploy Failed: " + ex.Message); }
         }
 
+        public void RegisterTunnel(SshTunnelInfo tunnel)
+        {
+            lock (_associatedTunnels) { _associatedTunnels.Add(tunnel); }
+            SshTunnelManager.Instance.RegisterTunnel(tunnel);
+        }
+
+        public async Task<ProcessDetail?> GetProcessDetailAsync(uint pid)
+        {
+            if (LinuxMonitorLocalPort == 0) return null;
+            try
+            {
+                using var hc = new System.Net.Http.HttpClient();
+                hc.Timeout = TimeSpan.FromSeconds(2);
+                string json = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/process_detail?pid={pid}");
+                return JsonSerializer.Deserialize<ProcessDetail>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            }
+            catch { return null; }
+        }
+
+        public async Task<bool> KillProcessAsync(uint pid, int signal)
+        {
+            if (LinuxMonitorLocalPort == 0) return false;
+            try
+            {
+                using var hc = new System.Net.Http.HttpClient();
+                string result = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/kill?pid={pid}&sig={signal}");
+                return result.ToLower() == "true";
+            }
+            catch { return false; }
+        }
+
+        public async Task<List<ProcessItem>> GetAllProcessesAsync()
+        {
+            if (LinuxMonitorLocalPort == 0) return new List<ProcessItem>();
+            try
+            {
+                using var hc = new System.Net.Http.HttpClient();
+                hc.Timeout = TimeSpan.FromSeconds(3);
+                string json = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/all_processes");
+                return JsonSerializer.Deserialize<List<ProcessItem>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<ProcessItem>();
+            }
+            catch { return new List<ProcessItem>(); }
+        }
+
+        public async Task<bool> KillAllProcessesAsync(string fullPath, int signal)
+        {
+            if (LinuxMonitorLocalPort == 0) return false;
+            try
+            {
+                using var hc = new System.Net.Http.HttpClient();
+                string encodedPath = System.Net.WebUtility.UrlEncode(fullPath);
+                string result = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/killall?path={encodedPath}&sig={signal}");
+                return result.ToLower() == "true";
+            }
+            catch { return false; }
+        }
+
         public void Disconnect()
         {
             _cts.Cancel();
             _monitorTimer?.Stop();
             _monitorTimer?.Dispose();
             _monitorTimer = null;
+
+            lock (_associatedTunnels)
+            {
+                foreach (var tunnel in _associatedTunnels)
+                {
+                    try 
+                    { 
+                        if (tunnel.PortConfig != null && tunnel.PortConfig.IsStarted) tunnel.PortConfig.Stop();
+                        SshTunnelManager.Instance.UnregisterTunnel(tunnel.Id);
+                    } catch { }
+                }
+                _associatedTunnels.Clear();
+            }
+
             if (LinuxMonitorLocalPort > 0)
             {
-                SshTunnelManager.Instance.UnregisterTunnel($"Mon_{SessionId}");
                 try { MasterClient?.CreateCommand($"pkill -9 -f linux-monitor_{LinuxMonitorLocalPort}")?.Execute(); } catch { }
             }
+
             SftpClient?.Disconnect(); SftpClient?.Dispose();
             MasterClient?.Disconnect(); MasterClient?.Dispose();
             TerminalConnection?.Close();
+            IsConnected = false;
         }
 
         public void Dispose() => Disconnect();

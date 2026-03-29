@@ -67,6 +67,12 @@ namespace FreeWPFShell.Views
             if (!string.IsNullOrEmpty(initialTarget)) page.TxtTarget.Text = initialTarget;
         }
 
+        public void OpenProcessPage(SshSessionService session)
+        {
+            var page = new ProcessPage(session);
+            AddTab($"进程-{session.DisplayName}", page);
+        }
+
         private TabItem AddTab(string header, UIElement content)
         {
             var headerPanel = new StackPanel { Orientation = Orientation.Horizontal };
@@ -84,7 +90,19 @@ namespace FreeWPFShell.Views
             {
                 PagesContainer.Children.Remove(content);
                 SessionTabs.Items.Remove(tabItem);
-                if (content is FrameworkElement fe && fe.DataContext is IDisposable disposable)
+                
+                // 处理 SSH 会话资源的彻底释放
+                if (content is TerminalAndSFTP termPage)
+                {
+                    if (termPage.Session != null)
+                    {
+                        ActiveSessions.Remove(termPage.Session);
+                        termPage.Session.Dispose();
+                    }
+                }
+
+                if (content is IDisposable d) d.Dispose();
+                else if (content is FrameworkElement fe && fe.DataContext is IDisposable disposable)
                     disposable.Dispose();
             };
             headerPanel.Children.Add(btnClose);
