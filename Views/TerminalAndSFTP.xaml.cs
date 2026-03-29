@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using FreeWPFShell.Models;
 using FreeWPFShell.Services;
 using FreeWPFShell.Share;
@@ -37,9 +38,22 @@ namespace FreeWPFShell.Views
 
         private void Terminal_Loaded(object sender, RoutedEventArgs e)
         {
+            var settings = new Repositories.SettingsRepository().Load();
+            var bgColorStr = settings.TerminalBackground ?? "#1E3047";
+            uint bgColorUint = 0x0047301E; // Default #1E3047 in terminal uint format (0x00BBGGRR)
+
+            try
+            {
+                var color = (Color)ColorConverter.ConvertFromString(bgColorStr);
+                Terminal.Background = new SolidColorBrush(color);
+                // Terminal theme uses 0x00BBGGRR
+                bgColorUint = (uint)((color.B << 16) | (color.G << 8) | color.R);
+            }
+            catch { Terminal.Background = new SolidColorBrush(Color.FromRgb(0x1E, 0x30, 0x47)); }
+
             Terminal.SetTheme(new()
             {
-                DefaultBackground = 0x0047301E, DefaultForeground = 0x00ffffff,
+                DefaultBackground = bgColorUint, DefaultForeground = 0x00ffffff,
                 DefaultSelectionBackground = 0x00ffffff, CursorStyle = CursorStyle.BlinkingBar,
                 ColorTable = new uint[16] { 0x000c0c0c,0x001f0fc5,0x000ea113,0x00009cc1,0x00da3700,0x00981788,0x00dd963a,0x00cccccc,0x00767676,0x005648e7,0x000cc616,0x00a5f1f9,0x00ff783b,0x009e00b4,0x00d6d661,0x00f2f2f2 }
             }, "Cascadia Code", 10);

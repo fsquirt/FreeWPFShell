@@ -19,6 +19,7 @@ namespace FreeWPFShell.Views
             var settings = _settingsRepo.Load();
             TogVault.IsChecked = settings.UseWindowsHello;
             TogLinuxMonitor.IsChecked = settings.UseLinuxMonitor;
+            TxtTerminalBg.Text = settings.TerminalBackground;
 
             foreach (ComboBoxItem item in CmbBackdrop.Items)
                 if (item.Tag?.ToString() == settings.BackdropType) { CmbBackdrop.SelectedItem = item; break; }
@@ -30,6 +31,7 @@ namespace FreeWPFShell.Views
             {
                 var settings = _settingsRepo.Load();
                 settings.BackdropType = tag;
+                settings.TerminalBackground = TxtTerminalBg?.Text ?? "#1E3047";
                 _settingsRepo.Save(settings);
                 Services.BackdropService.ApplyToAllWindows(tag);
             }
@@ -40,6 +42,7 @@ namespace FreeWPFShell.Views
             var settings = _settingsRepo.Load();
             if (TogVault.IsChecked.HasValue) settings.UseWindowsHello = TogVault.IsChecked.Value;
             if (TogLinuxMonitor.IsChecked.HasValue) settings.UseLinuxMonitor = TogLinuxMonitor.IsChecked.Value;
+            settings.TerminalBackground = TxtTerminalBg.Text.Trim();
             _settingsRepo.Save(settings);
             base.OnClosing(e);
         }

@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:mica="clr-namespace:MicaWPF.Controls;assembly=MicaWPF"
         mc:Ignorable="d"
-        Title="设置" Height="350" Width="400"
+        Title="设置" Height="400" Width="400"
         SystemBackdropType="Acrylic"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
         FontFamily="Microsoft YaHei">
@@ -16,7 +16,8 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
@@ -37,9 +38,9 @@
                 <TextBlock Text="使用 Linux Monitor 代理进程监视" FontSize="14" VerticalAlignment="Center" ToolTip="启用后将自动建立SSH端口转发并挂载Native探针，大幅优化监控性能。"/>
             </StackPanel>
 
-            <StackPanel Orientation="Horizontal">
+            <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                 <TextBlock Text="窗口背景：" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                <ComboBox x:Name="CmbBackdrop" Width="140" VerticalAlignment="Center" SelectionChanged="CmbBackdrop_SelectionChanged">
+                <ComboBox x:Name="CmbBackdrop" Width="120" VerticalAlignment="Center" SelectionChanged="CmbBackdrop_SelectionChanged" Height="34">
                     <ComboBoxItem Content="None" Tag="None"/>
                     <ComboBoxItem Content="Mica" Tag="Mica"/>
                     <ComboBoxItem Content="Acrylic" Tag="Acrylic"/>
@@ -48,8 +49,13 @@
             </StackPanel>
         </StackPanel>
 
+        <StackPanel Grid.Row="5" Orientation="Horizontal" >
+            <TextBlock Text="终端背景：" FontSize="14" VerticalAlignment="Center" />
+            <mica:TextBox x:Name="TxtTerminalBg" Width="200" ToolTip="例如: #1E3047 或 Red" />
+        </StackPanel>
+
         <!-- Footer -->
-        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
+        <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
             <TextBlock Foreground="#707070" FontSize="11">
                 <Run Text="Under "/>
                 <Hyperlink NavigateUri="https://opensource.org/licenses/MIT" RequestNavigate="Hyperlink_RequestNavigate" Foreground="#44A8FF">MIT License</Hyperlink>

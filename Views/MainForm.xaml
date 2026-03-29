@@ -35,8 +35,8 @@
                 <Border Grid.Row="0" BorderBrush="Transparent" BorderThickness="1" CornerRadius="3" Padding="4" Margin="0,0,0,10">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock x:Name="TxtHostIp" Text="未连接" />
-                            <Button Content="复制" Margin="10,0,0,0" Padding="5,1" Background="Transparent" Click="BtnCopyIp_Click" />
+                            <TextBlock x:Name="TxtHostIp" Text="未连接" VerticalAlignment="Center"/>
+                            <mica:Button Content="复制" Margin="10,0,0,0" Padding="5,1" Background="Transparent" Click="BtnCopyIp_Click" />
                         </StackPanel>
                         <TextBlock x:Name="TxtHostGeo" Text="" Margin="0,3,0,0" FontSize="12" />
                     </StackPanel>

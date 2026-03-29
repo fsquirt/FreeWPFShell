@@ -18,9 +18,9 @@
         </StackPanel>
 
         <DataGrid Grid.Row="1" x:Name="HopsGrid" AutoGenerateColumns="False" IsReadOnly="True"
-                  Background="Transparent" RowHeaderWidth="0" GridLinesVisibility="Horizontal"
+                  Background="Transparent" RowHeaderWidth="0" GridLinesVisibility="None" 
                   HeadersVisibility="Column" SelectionMode="Single" AlternatingRowBackground="#1A2A3A">
-            <DataGrid.Columns>
+            <DataGrid.Columns >
                 <DataGridTextColumn Header="#" Binding="{Binding Hop}" Width="45"/>
                 <DataGridTextColumn Header="IP 地址" Binding="{Binding Ip}" Width="*"/>
                 <DataGridTextColumn Header="归属地" Binding="{Binding SimpleGeo}" Width="2.5*"/>
