@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
@@ -46,7 +47,6 @@ namespace FreeWPFShell.Views
             {
                 var color = (Color)ColorConverter.ConvertFromString(bgColorStr);
                 Terminal.Background = new SolidColorBrush(color);
-                // Terminal theme uses 0x00BBGGRR
                 bgColorUint = (uint)((color.B << 16) | (color.G << 8) | color.R);
             }
             catch { Terminal.Background = new SolidColorBrush(Color.FromRgb(0x1E, 0x30, 0x47)); }
@@ -63,9 +63,8 @@ namespace FreeWPFShell.Views
         public void BindSession()
         {
             if (Session == null || !Session.IsConnected)
-            { TxtLoadingStatus.Text = "连接失败"; BtnCancelConnect.Visibility = Visibility.Collapsed; TxtStatusIcon.Text = "❌"; return; }
+            { TxtStatusIcon.Text = "❌"; return; }
 
-            PnlLoading.Visibility = Visibility.Collapsed;
             _currentPath = Sftp.WorkingDirectory ?? "/";
             FileGrid.ItemsSource = _remoteFiles;
             LoadPath(_currentPath);
@@ -73,13 +72,6 @@ namespace FreeWPFShell.Views
             Terminal.Connection = Session.TerminalConnection;
             Terminal.Focus();
             Dispatcher.InvokeAsync(async () => { await Task.Delay(60); Terminal.Margin = new Thickness(-1, 0, 0, 0); await Task.Delay(10); Terminal.Margin = new Thickness(1, 0, 0, 0); }, System.Windows.Threading.DispatcherPriority.Background);
-        }
-
-        private void BtnCancelConnect_Click(object sender, RoutedEventArgs e)
-        {
-            TxtLoadingStatus.Text = "正在取消..."; BtnCancelConnect.IsEnabled = false;
-            if (Window.GetWindow(this) is Views.MainForm mf && mf.SessionTabs.SelectedItem is TabItem tab && tab.Header is StackPanel sp && sp.Children.Count > 1 && sp.Children[1] is Button btn)
-                btn.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
         }
 
         private void Terminal_PreviewKeyDown(object sender, KeyEventArgs e)

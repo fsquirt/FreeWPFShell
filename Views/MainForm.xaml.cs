@@ -46,11 +46,14 @@ namespace FreeWPFShell.Views
                 string msg = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
                 UserForm.ModernMessageBox.Show($"无法连接到 {hostInfo.HostName} ({hostInfo.IpAddress})\n\n错误信息: {msg}", "连接失败", MessageBoxButton.OK, MessageBoxImage.Error);
                 
-                // 自动关闭失败的 Tab
-                PagesContainer.Children.Remove(terminalPage);
-                SessionTabs.Items.Remove(tabItem);
-                ActiveSessions.Remove(session);
-                session.Dispose();
+                // 检查 Tab 是否已被用户手动关闭，防止二次移除导致崩溃
+                if (SessionTabs.Items.Contains(tabItem))
+                {
+                    PagesContainer.Children.Remove(terminalPage);
+                    SessionTabs.Items.Remove(tabItem);
+                    ActiveSessions.Remove(session);
+                    session.Dispose();
+                }
             }
         }
 

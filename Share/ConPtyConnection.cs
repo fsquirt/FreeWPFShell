@@ -69,6 +69,9 @@ public class ConPtyConnection : ITerminalConnection, IDisposable
         int nNumberOfBytesToRead, out int lpNumberOfBytesRead,
         IntPtr lpOverlapped);
 
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool TerminateProcess(IntPtr hProcess, uint uExitCode);
+
     [StructLayout(LayoutKind.Sequential)]
     struct COORD { public short X, Y; }
 
@@ -125,15 +128,12 @@ public class ConPtyConnection : ITerminalConnection, IDisposable
             bInheritHandle = true
         };
 
-        // 创建两对管道
         CreatePipe(out _hPipeInRead, out _hPipeIn, ref sa, 0);
         CreatePipe(out _hPipeOut, out _hPipeOutWrite, ref sa, 0);
 
-        // 创建 ConPTY
         var size = new COORD { X = (short)_cols, Y = (short)_rows };
         CreatePseudoConsole(size, _hPipeInRead, _hPipeOutWrite, 0, out _hPC);
 
-        // 设置扩展启动信息（把 ConPTY 塞进去）
         var siEx = new STARTUPINFOEX();
         siEx.StartupInfo.cb = Marshal.SizeOf<STARTUPINFOEX>();
         IntPtr size2 = IntPtr.Zero;
@@ -154,7 +154,6 @@ public class ConPtyConnection : ITerminalConnection, IDisposable
         DeleteProcThreadAttributeList(siEx.lpAttributeList);
         Marshal.FreeHGlobal(siEx.lpAttributeList);
 
-        // 启动读取线程，把子进程输出源源不断发给控件
         Task.Run(() => ReadLoop(_cts.Token));
     }
 
@@ -188,7 +187,19 @@ public class ConPtyConnection : ITerminalConnection, IDisposable
     public void Close()
     {
         _cts.Cancel();
+        // 1. 先强行杀死子进程 (ssh.exe)，防止 IO 挂起导致的死锁
+        if (_pi.hProcess != IntPtr.Zero)
+        {
+            TerminateProcess(_pi.hProcess, 0);
+            CloseHandle(_pi.hProcess);
+            _pi.hProcess = IntPtr.Zero;
+        }
+        if (_pi.hThread != IntPtr.Zero) { CloseHandle(_pi.hThread); _pi.hThread = IntPtr.Zero; }
+
+        // 2. 关闭 ConPTY 句柄
         if (_hPC != IntPtr.Zero) { ClosePseudoConsole(_hPC); _hPC = IntPtr.Zero; }
+
+        // 3. 关闭所有管道句柄
         if (_hPipeIn != IntPtr.Zero) { CloseHandle(_hPipeIn); _hPipeIn = IntPtr.Zero; }
         if (_hPipeOut != IntPtr.Zero) { CloseHandle(_hPipeOut); _hPipeOut = IntPtr.Zero; }
         if (_hPipeInRead != IntPtr.Zero) { CloseHandle(_hPipeInRead); _hPipeInRead = IntPtr.Zero; }
