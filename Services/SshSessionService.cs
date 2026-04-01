@@ -73,7 +73,12 @@ namespace FreeWPFShell.Services
 
             if (_cts.IsCancellationRequested) return;
 
-            TerminalConnection = new ConPtyConnection($"ssh {HostInfo.SshUser}@{HostInfo.IpAddress} -p {HostInfo.SshPort}", 120, 40);
+            Environment.SetEnvironmentVariable("TERM", "xterm-256color");
+            Environment.SetEnvironmentVariable("COLORTERM", "truecolor");
+            Environment.SetEnvironmentVariable("LC_COLORTERM", "truecolor");
+
+            string sshArgs = $"-o SendEnv=COLORTERM -o SendEnv=LC_COLORTERM {HostInfo.SshUser}@{HostInfo.IpAddress} -p {HostInfo.SshPort}";
+            TerminalConnection = new ConPtyConnection($"ssh {sshArgs}", 120, 40);
 
             string outputBuffer = "";
             EventHandler<Microsoft.Terminal.Wpf.TerminalOutputEventArgs>? onOutput = null;
