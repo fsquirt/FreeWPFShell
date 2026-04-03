@@ -1,0 +1,25 @@
+﻿<mica:MicaWindow x:Class="FreeWPFShell.DebugForm.TerminalWithOther"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:FreeWPFShell.DebugForm"
+        xmlns:term="clr-namespace:Microsoft.Terminal.Wpf;assembly=Microsoft.Terminal.Wpf"
+        xmlns:mica="clr-namespace:MicaWPF.Controls;assembly=MicaWPF"
+        mc:Ignorable="d"
+        Title="TerminalWithOther" Height="450" Width="800"
+        KeyboardNavigation.TabNavigation="None"
+        KeyboardNavigation.DirectionalNavigation="None">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="5.0*"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <Grid Grid.Row="0">
+            <term:TerminalControl x:Name="Terminal" Focusable="True" Loaded="Terminal_Loaded" />
+        </Grid>
+        <Grid Grid.Row="1" Margin="10" >
+            <Button Content="点击我" Margin="0,0,0,5"/>
+        </Grid>
+    </Grid>
+</mica:MicaWindow>

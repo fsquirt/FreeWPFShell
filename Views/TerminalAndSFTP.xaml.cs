@@ -69,9 +69,16 @@ namespace FreeWPFShell.Views
             FileGrid.ItemsSource = _remoteFiles;
             LoadPath(_currentPath);
             TxtStatusIcon.Text = "✅"; TxtStatusIcon.ToolTip = "当前没有传输任务";
+            
             Terminal.Connection = Session.TerminalConnection;
+
+            // 强制同步一次 PTY 尺寸，弥补线程池饥饿可能吞掉的首次 WM_SIZE
+            Dispatcher.InvokeAsync(() => {
+                Session.TerminalConnection?.Resize(
+                    (uint)Terminal.Rows, (uint)Terminal.Columns);
+            }, System.Windows.Threading.DispatcherPriority.Loaded);
+
             Terminal.Focus();
-            Dispatcher.InvokeAsync(async () => { await Task.Delay(60); Terminal.Margin = new Thickness(-1, 0, 0, 0); await Task.Delay(10); Terminal.Margin = new Thickness(1, 0, 0, 0); }, System.Windows.Threading.DispatcherPriority.Background);
         }
 
         private void Terminal_PreviewKeyDown(object sender, KeyEventArgs e)

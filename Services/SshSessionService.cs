@@ -57,22 +57,45 @@ namespace FreeWPFShell.Services
 
         public async Task ConnectAsync()
         {
-            await Task.Run(() =>
+            var tcs = new TaskCompletionSource<bool>();
+            var thread = new Thread(() =>
             {
-                MasterClient = new SshClient(HostInfo.IpAddress, HostInfo.SshPort, HostInfo.SshUser, HostInfo.DecryptedSshSecret ?? "");
-                MasterClient.Connect();
-                if (_cts.IsCancellationRequested) return;
+                try
+                {
+                    MasterClient = new SshClient(HostInfo.IpAddress, HostInfo.SshPort, HostInfo.SshUser, HostInfo.DecryptedSshSecret ?? "");
+                    MasterClient.Connect();
 
-                SftpClient = new SftpClient(HostInfo.IpAddress, HostInfo.SshPort, HostInfo.SshUser, HostInfo.DecryptedSshSecret ?? "");
-                SftpClient.Connect();
+                    if (_cts.IsCancellationRequested)
+                    {
+                        tcs.SetResult(false);
+                        return;
+                    }
 
-                try { DeployLinuxMonitor(); } catch { }
+                    SftpClient = new SftpClient(HostInfo.IpAddress, HostInfo.SshPort, HostInfo.SshUser, HostInfo.DecryptedSshSecret ?? "");
+                    SftpClient.Connect();
 
-                IsConnected = true;
-            }, _cts.Token);
+                    try { DeployLinuxMonitor(); } catch { }
 
-            if (_cts.IsCancellationRequested) return;
+                    IsConnected = true;
+                    tcs.SetResult(true);
+                }
+                catch (Exception ex)
+                {
+                    tcs.SetException(ex);
+                }
+            })
+            {
+                IsBackground = true,
+                Name = "SshConnectThread"
+            };
 
+            thread.Start();
+
+            // 等待 SSH.NET 握手彻底完成并释放线程池资源
+            bool success = await tcs.Task;
+            if (!success || _cts.IsCancellationRequested) return;
+
+            // 握手完成后再初始化终端连接
             Environment.SetEnvironmentVariable("TERM", "xterm-256color");
             Environment.SetEnvironmentVariable("COLORTERM", "truecolor");
             Environment.SetEnvironmentVariable("LC_COLORTERM", "truecolor");
