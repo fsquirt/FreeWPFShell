@@ -53,5 +53,7 @@ namespace FreeWPFShell.Models
         public int ImageStretchMode { get; set; } = 3; // 默认 UniformToFill
         public int TracerouteTimeout { get; set; } = 2; // 默认 2 秒
         public int TracerouteMaxHops { get; set; } = 30; // 默认 30 跳
+        public string TerminalFont { get; set; } = "Cascadia Code";
+        public int TerminalFontSize { get; set; } = 10;
     }
 }

@@ -72,6 +72,13 @@
             </StackPanel>
 
             <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                <TextBlock Text="终端字体：" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <mica:TextBox x:Name="TxtTerminalFont" Width="140" ToolTip="例如: Cascadia Code" />
+                <TextBlock Text="字号：" FontSize="14" VerticalAlignment="Center" Margin="15,0,8,0"/>
+                <mica:TextBox x:Name="TxtTerminalFontSize" Width="40" />
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
                 <mica:ToggleSwitch x:Name="TogImageBg" VerticalAlignment="Center" Margin="0,0,10,0"/>
                 <TextBlock Text="启用图片背景" FontSize="14" VerticalAlignment="Center"/>
             </StackPanel>

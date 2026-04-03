@@ -34,6 +34,13 @@ namespace FreeWPFShell.Services
 
         public bool IsConnected { get; private set; }
 
+        private string _connectionStatus = "准备连接...";
+        public string ConnectionStatus
+        {
+            get => _connectionStatus;
+            set { if (_connectionStatus != value) { _connectionStatus = value; OnPropertyChanged(); } }
+        }
+
         private bool _isAppCursorMode;
         public bool IsAppCursorMode
         {
@@ -54,6 +61,7 @@ namespace FreeWPFShell.Services
         private ulong _lastRx, _lastTx;
         private DateTime _lastNetTime = DateTime.MinValue;
         private int _tickCount;
+        private bool _passwordSent = false;
         private readonly SettingsRepository _settingsRepo;
 
         public SshSessionService(SshConnectionInfo hostInfo, SettingsRepository? settingsRepo = null)
@@ -73,6 +81,7 @@ namespace FreeWPFShell.Services
             {
                 try
                 {
+                    ConnectionStatus = "SSH.NET 测试身份验证...";
                     MasterClient = new SshClient(HostInfo.IpAddress, HostInfo.SshPort, HostInfo.SshUser, HostInfo.DecryptedSshSecret ?? "");
                     MasterClient.Connect();
 
@@ -82,6 +91,7 @@ namespace FreeWPFShell.Services
                         return;
                     }
 
+                    ConnectionStatus = "SFTP 建立连接...";
                     SftpClient = new SftpClient(HostInfo.IpAddress, HostInfo.SshPort, HostInfo.SshUser, HostInfo.DecryptedSshSecret ?? "");
                     SftpClient.Connect();
 
@@ -122,15 +132,26 @@ namespace FreeWPFShell.Services
                 {
                     outputBuffer += args.Data;
                     
-                    // 检测 DECCKM 模式切换
-                    if (outputBuffer.Contains("\x1b[?1h")) IsAppCursorMode = true;
-                    if (outputBuffer.Contains("\x1b[?1l")) IsAppCursorMode = false;
-
-                    if (outputBuffer.ToLower().Contains("password:"))
+                    if (outputBuffer.Contains("\x1b[?1h"))
                     {
-                        // 这里不移除 onOutput，因为我们需要持续监听模式切换
-                        // 但我们需要确保只发送一次密码
-                        Task.Delay(50).ContinueWith(_ => TerminalConnection.WriteInput($"{HostInfo.DecryptedSshSecret}\n"));
+                        IsAppCursorMode = true;
+                        outputBuffer = outputBuffer.Replace("\x1b[?1h", "");
+                    }
+                    if (outputBuffer.Contains("\x1b[?1l"))
+                    {
+                        IsAppCursorMode = false;
+                        outputBuffer = outputBuffer.Replace("\x1b[?1l", "");
+                    }
+
+                    if (!_passwordSent && outputBuffer.ToLower().Contains("password:"))
+                    {
+                        _passwordSent = true;
+                        ConnectionStatus = "在终端中输入密码...";
+                        Task.Delay(50).ContinueWith(_ => 
+                        {
+                            TerminalConnection.WriteInput($"{HostInfo.DecryptedSshSecret}\n");
+                            Task.Delay(1000).ContinueWith(__ => ConnectionStatus = "已连接");
+                        });
                         outputBuffer = outputBuffer.Replace("password:", "", StringComparison.OrdinalIgnoreCase);
                     }
                     if (outputBuffer.Length > 2048) outputBuffer = outputBuffer.Substring(outputBuffer.Length - 512);
@@ -140,6 +161,8 @@ namespace FreeWPFShell.Services
 
             _monitorTimer = new Timer(2000) { AutoReset = true, Enabled = true };
             _monitorTimer.Elapsed += OnMonitorTick;
+
+            ConnectionStatus = "已连接";
         }
 
         private async void OnMonitorTick(object? sender, ElapsedEventArgs e)
@@ -357,6 +380,7 @@ namespace FreeWPFShell.Services
             if (MasterClient == null || SftpClient == null) return;
             try
             {
+                ConnectionStatus = "建立 ssh 隧道...";
                 LinuxMonitorLocalPort = (uint)(new Random().Next(40000, 60000));
                 var port = new ForwardedPortLocal("127.0.0.1", LinuxMonitorLocalPort, "127.0.0.1", LinuxMonitorLocalPort);
                 MasterClient.AddForwardedPort(port);
@@ -377,6 +401,7 @@ namespace FreeWPFShell.Services
                 string binPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "linux-monitor");
                 if (System.IO.File.Exists(binPath))
                 {
+                    ConnectionStatus = "上传 Linux_Monitor...";
                     string remotePath = $"/tmp/linux-monitor_{LinuxMonitorLocalPort}";
                     MasterClient.CreateCommand($"pkill -9 -f {remotePath}").Execute();
                     using (var fs = System.IO.File.OpenRead(binPath)) SftpClient.UploadFile(fs, remotePath, true);
@@ -451,28 +476,40 @@ namespace FreeWPFShell.Services
             _monitorTimer?.Dispose();
             _monitorTimer = null;
 
-            lock (_associatedTunnels)
-            {
-                foreach (var tunnel in _associatedTunnels)
-                {
-                    try 
-                    { 
-                        if (tunnel.PortConfig != null && tunnel.PortConfig.IsStarted) tunnel.PortConfig.Stop();
-                        SshTunnelManager.Instance.UnregisterTunnel(tunnel.Id);
-                    } catch { }
-                }
-                _associatedTunnels.Clear();
-            }
-
-            if (LinuxMonitorLocalPort > 0)
-            {
-                try { MasterClient?.CreateCommand($"pkill -9 -f linux-monitor_{LinuxMonitorLocalPort}")?.Execute(); } catch { }
-            }
-
-            SftpClient?.Disconnect(); SftpClient?.Dispose();
-            MasterClient?.Disconnect(); MasterClient?.Dispose();
-            TerminalConnection?.Close();
+            // 立即标记为未连接，让 UI 得到即时反馈
             IsConnected = false;
+
+            // 将耗时的网络清理工作移至后台，避免阻塞 UI 线程（尤其是高延迟场景）
+            Task.Run(() =>
+            {
+                try
+                {
+                    lock (_associatedTunnels)
+                    {
+                        foreach (var tunnel in _associatedTunnels)
+                        {
+                            try
+                            {
+                                if (tunnel.PortConfig != null && tunnel.PortConfig.IsStarted) tunnel.PortConfig.Stop();
+                                SshTunnelManager.Instance.UnregisterTunnel(tunnel.Id);
+                            }
+                            catch { }
+                        }
+                        _associatedTunnels.Clear();
+                    }
+
+                    if (LinuxMonitorLocalPort > 0 && MasterClient != null && MasterClient.IsConnected)
+                    {
+                        try { MasterClient.CreateCommand($"pkill -9 -f linux-monitor_{LinuxMonitorLocalPort}")?.Execute(); } catch { }
+                    }
+
+                    SftpClient?.Disconnect(); SftpClient?.Dispose();
+                    MasterClient?.Disconnect(); MasterClient?.Dispose();
+                }
+                catch { } // 忽略后台清理过程中的任何异常
+            });
+
+            TerminalConnection?.Close();
         }
 
         public void Dispose() => Disconnect();

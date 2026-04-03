@@ -35,6 +35,23 @@ namespace FreeWPFShell.Views
         {
             InitializeComponent();
             Session = session;
+
+            // 监听连接状态和模式变更以更新 UI
+            Session.PropertyChanged += (s, e) =>
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    if (e.PropertyName == nameof(SshSessionService.ConnectionStatus))
+                    {
+                        TxtConnStatus.Text = Session.ConnectionStatus;
+                    }
+                    else if (e.PropertyName == nameof(SshSessionService.IsAppCursorMode))
+                    {
+                        TxtCursorMode.Text = Session.IsAppCursorMode ? "APP MODE" : "NORMAL MODE";
+                        //TxtCursorMode.Foreground = Session.IsAppCursorMode ? Brushes.Gold : Brushes.LightGray;
+                    }
+                });
+            };
         }
 
         private void Terminal_Loaded(object sender, RoutedEventArgs e)
@@ -69,7 +86,7 @@ namespace FreeWPFShell.Views
                 DefaultBackground = bgColorUint, DefaultForeground = 0x00ffffff,
                 DefaultSelectionBackground = 0x00ffffff, CursorStyle = CursorStyle.BlinkingBar,
                 ColorTable = new uint[16] { 0x000c0c0c,0x001f0fc5,0x000ea113,0x00009cc1,0x00da3700,0x00981788,0x00dd963a,0x00cccccc,0x00767676,0x005648e7,0x000cc616,0x00a5f1f9,0x00ff783b,0x009e00b4,0x00d6d661,0x00f2f2f2 }
-            }, "Cascadia Code", 10);
+            }, settings.TerminalFont ?? "Cascadia Code", (short)(settings.TerminalFontSize > 0 ? settings.TerminalFontSize : 10));
             TxtStatusIcon.Text = "⏳"; TxtStatusIcon.ToolTip = "Connecting...";
         }
 
