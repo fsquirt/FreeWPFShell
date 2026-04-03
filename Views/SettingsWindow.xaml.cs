@@ -22,6 +22,8 @@ namespace FreeWPFShell.Views
             TxtTerminalBg.Text = settings.TerminalBackground;
             TogImageBg.IsChecked = settings.UseImageBackground;
             TxtImagePath.Text = settings.ImageBackgroundPath;
+            TxtTraceTimeout.Text = settings.TracerouteTimeout.ToString();
+            TxtTraceMaxHops.Text = settings.TracerouteMaxHops.ToString();
 
             foreach (ComboBoxItem item in CmbBackdrop.Items)
                 if (item.Tag?.ToString() == settings.BackdropType) { CmbBackdrop.SelectedItem = item; break; }
@@ -67,6 +69,10 @@ namespace FreeWPFShell.Views
             {
                 settings.ImageStretchMode = mode;
             }
+
+            if (int.TryParse(TxtTraceTimeout.Text, out int timeout)) settings.TracerouteTimeout = timeout;
+            if (int.TryParse(TxtTraceMaxHops.Text, out int hops)) settings.TracerouteMaxHops = hops;
+
             _settingsRepo.Save(settings);
             base.OnClosing(e);
         }

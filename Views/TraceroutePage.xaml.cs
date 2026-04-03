@@ -53,6 +53,10 @@ namespace FreeWPFShell.Views
             string target = TxtTarget.Text.Trim();
             if (string.IsNullOrEmpty(target)) return;
 
+            var settings = new Repositories.SettingsRepository().Load();
+            int maxHops = settings.TracerouteMaxHops > 0 ? settings.TracerouteMaxHops : 30;
+            int timeoutMs = (settings.TracerouteTimeout > 0 ? settings.TracerouteTimeout : 5) * 1000;
+
             _hops.Clear();
             BtnStart.IsEnabled = false;
             BtnCancel.Visibility = Visibility.Visible;
@@ -66,8 +70,7 @@ namespace FreeWPFShell.Views
                 if (destAddresses.Length == 0) { TxtDetail.Text = $"无法解析 {target}"; return; }
                 IPAddress destIp = destAddresses[0];
 
-                const int maxHops = 30;
-                const int parallelLimit = 8; // 并发探测的跳数
+                const int parallelLimit = 10; // 并发探测的跳数
                 var foundDest = false;
 
                 // 预先填充 UI 占位
@@ -84,7 +87,7 @@ namespace FreeWPFShell.Views
                     for (int ttl = startTtl; ttl < startTtl + parallelLimit && ttl <= maxHops; ttl++)
                     {
                         int currentTtl = ttl;
-                        batchTasks.Add(ProbeHopAsync(destIp, currentTtl, _cts.Token));
+                        batchTasks.Add(ProbeHopAsync(destIp, currentTtl, timeoutMs, _cts.Token));
                     }
 
                     var results = await Task.WhenAll(batchTasks);
@@ -113,7 +116,7 @@ namespace FreeWPFShell.Views
             }
         }
 
-        private async Task<bool> ProbeHopAsync(IPAddress destIp, int ttl, CancellationToken ct)
+        private async Task<bool> ProbeHopAsync(IPAddress destIp, int ttl, int timeoutMs, CancellationToken ct)
         {
             var hop = _hops[ttl - 1];
             try
@@ -126,7 +129,7 @@ namespace FreeWPFShell.Views
                 for (int i = 0; i < 3; i++)
                 {
                     if (ct.IsCancellationRequested) return false;
-                    var reply = await ping.SendPingAsync(destIp, 2000, buffer, options);
+                    var reply = await ping.SendPingAsync(destIp, timeoutMs, buffer, options);
                     
                     if (reply.Status == IPStatus.TtlExpired || reply.Status == IPStatus.Success)
                     {
@@ -143,7 +146,7 @@ namespace FreeWPFShell.Views
                         });
 
                         // 启动后台持续 Ping 任务
-                        _ = RunContinuousPingAsync(hop, ip, ct);
+                        _ = RunContinuousPingAsync(hop, ip, timeoutMs, ct);
                         
                         return isFinal;
                     }
@@ -155,7 +158,7 @@ namespace FreeWPFShell.Views
             return false;
         }
 
-        private async Task RunContinuousPingAsync(TracerouteHop hop, string ip, CancellationToken ct)
+        private async Task RunContinuousPingAsync(TracerouteHop hop, string ip, int timeoutMs, CancellationToken ct)
         {
             if (string.IsNullOrEmpty(ip) || ip == "*") return;
             
@@ -166,7 +169,7 @@ namespace FreeWPFShell.Views
             {
                 try
                 {
-                    var reply = await ping.SendPingAsync(ip, 2000, buffer);
+                    var reply = await ping.SendPingAsync(ip, timeoutMs, buffer);
                     if (reply.Status == IPStatus.Success)
                     {
                         Dispatcher.Invoke(() => hop.Latency = $"{reply.RoundtripTime}ms");

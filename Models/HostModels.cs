@@ -51,5 +51,7 @@ namespace FreeWPFShell.Models
         public bool UseImageBackground { get; set; } = false;
         public string? ImageBackgroundPath { get; set; }
         public int ImageStretchMode { get; set; } = 3; // 默认 UniformToFill
+        public int TracerouteTimeout { get; set; } = 2; // 默认 2 秒
+        public int TracerouteMaxHops { get; set; } = 30; // 默认 30 跳
     }
 }

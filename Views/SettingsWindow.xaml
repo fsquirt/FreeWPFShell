@@ -5,13 +5,15 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:mica="clr-namespace:MicaWPF.Controls;assembly=MicaWPF"
         mc:Ignorable="d"
-        Title="设置" Height="580" Width="420"
+        Title="设置" Height="700" Width="420"
         SystemBackdropType="Acrylic"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
         FontFamily="Microsoft YaHei">
     
     <Grid Margin="20">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -50,9 +52,20 @@
             </StackPanel>
         </StackPanel>
 
-        <TextBlock Grid.Row="5" Text="终端设置" FontSize="20" FontWeight="Bold" Margin="0,15,0,15"/>
+        <TextBlock Grid.Row="5" Text="路由追踪设置" FontSize="20" FontWeight="Bold" Margin="0,15,0,15"/>
 
         <StackPanel Grid.Row="6">
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                <TextBlock Text="路由追踪超时(秒)：" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <mica:TextBox x:Name="TxtTraceTimeout" Width="60" VerticalAlignment="Center" />
+                <TextBlock Text="最大跳数：" FontSize="14" VerticalAlignment="Center" Margin="20,0,8,0"/>
+                <mica:TextBox x:Name="TxtTraceMaxHops" Width="60" VerticalAlignment="Center" />
+            </StackPanel>
+        </StackPanel>
+
+        <TextBlock Grid.Row="7" Text="终端设置" FontSize="20" FontWeight="Bold" Margin="0,15,0,15"/>
+
+        <StackPanel Grid.Row="8">
             <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
                 <TextBlock Text="终端纯色背景：" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
                 <mica:TextBox x:Name="TxtTerminalBg" Width="200" ToolTip="例如: #1E3047 或 Red" />
@@ -82,7 +95,7 @@
         </StackPanel>
 
         <!-- Footer -->
-        <StackPanel Grid.Row="7" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
+        <StackPanel Grid.Row="9" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
             <TextBlock Foreground="#707070" FontSize="11">
                 <Run Text="Under "/>
                 <Hyperlink NavigateUri="https://opensource.org/licenses/MIT" RequestNavigate="Hyperlink_RequestNavigate" Foreground="#44A8FF">MIT License</Hyperlink>
