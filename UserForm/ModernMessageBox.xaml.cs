@@ -1,6 +1,7 @@
+using FreeWPFShell.Services;
+using MicaWPF.Controls;
 using System.Windows;
 using System.Windows.Input;
-using MicaWPF.Controls;
 
 namespace FreeWPFShell.UserForm
 {
@@ -11,6 +12,10 @@ namespace FreeWPFShell.UserForm
         public ModernMessageBox(string message, string title, MessageBoxButton button, MessageBoxImage image)
         {
             InitializeComponent();
+
+            var settingsRepo = new Repositories.SettingsRepository();
+            BackdropService.ApplyToAllWindows(settingsRepo.Load().BackdropType);
+
             TxtMessage.Text = message;
 
             if (button == MessageBoxButton.YesNo)

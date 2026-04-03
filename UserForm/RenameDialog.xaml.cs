@@ -1,6 +1,7 @@
+using FreeWPFShell.Services;
+using MicaWPF.Controls;
 using System.Windows;
 using System.Windows.Input;
-using MicaWPF.Controls;
 
 namespace FreeWPFShell.UserForm
 {
@@ -11,6 +12,10 @@ namespace FreeWPFShell.UserForm
         public RenameDialog(string oldName)
         {
             InitializeComponent();
+
+            var settingsRepo = new Repositories.SettingsRepository();
+            BackdropService.ApplyToAllWindows(settingsRepo.Load().BackdropType);
+
             TxtNewName.Text = oldName;
             TxtNewName.SelectAll();
             TxtNewName.Focus();

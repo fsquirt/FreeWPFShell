@@ -1,3 +1,4 @@
+using FreeWPFShell.Services;
 using System.Windows;
 
 namespace FreeWPFShell.UserForm
@@ -9,6 +10,10 @@ namespace FreeWPFShell.UserForm
         public PassphraseDialog()
         {
             InitializeComponent();
+
+            var settingsRepo = new Repositories.SettingsRepository();
+            BackdropService.ApplyToAllWindows(settingsRepo.Load().BackdropType);
+
             TxtPassphrase.Focus();
         }
 

@@ -1,10 +1,11 @@
+using FreeWPFShell.Models;
+using FreeWPFShell.Repositories;
+using FreeWPFShell.Services;
 using System;
 using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Data;
-using FreeWPFShell.Models;
-using FreeWPFShell.Repositories;
 
 namespace FreeWPFShell.UserForm
 {
@@ -23,6 +24,10 @@ namespace FreeWPFShell.UserForm
         public KeyManagerWindow()
         {
             InitializeComponent();
+
+            var settingsRepo = new Repositories.SettingsRepository();
+            BackdropService.ApplyToAllWindows(settingsRepo.Load().BackdropType);
+
             RefreshList();
         }
 

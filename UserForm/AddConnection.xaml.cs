@@ -1,7 +1,8 @@
-using System;
-using System.Windows;
 using FreeWPFShell.Models;
 using FreeWPFShell.Repositories;
+using FreeWPFShell.Services;
+using System;
+using System.Windows;
 
 namespace FreeWPFShell.UserForm
 {
@@ -17,6 +18,10 @@ namespace FreeWPFShell.UserForm
         public AddConnection()
         {
             InitializeComponent();
+
+            var settingsRepo = new Repositories.SettingsRepository();
+            BackdropService.ApplyToAllWindows(settingsRepo.Load().BackdropType);
+
             _hostRepo = new HostRepository(new SettingsRepository());
             LoadKeys();
         }
