@@ -72,6 +72,17 @@ namespace FreeWPFShell.Views
             
             Terminal.Connection = Session.TerminalConnection;
 
+            // 监听模式变更以更新 UI
+            Session.PropertyChanged += (s, e) =>
+            {
+                if (e.PropertyName == nameof(SshSessionService.IsAppCursorMode))
+                {
+                    Dispatcher.Invoke(() => {
+                        TxtCursorMode.Text = Session.IsAppCursorMode ? "APP MODE" : "NORMAL MODE";
+                    });
+                }
+            };
+
             // 强制同步一次 PTY 尺寸，弥补线程池饥饿可能吞掉的首次 WM_SIZE
             Dispatcher.InvokeAsync(() => {
                 Session.TerminalConnection?.Resize(
@@ -83,7 +94,16 @@ namespace FreeWPFShell.Views
 
         private void Terminal_PreviewKeyDown(object sender, KeyEventArgs e)
         {
-            string? input = e.Key switch { Key.Tab => "\t", Key.Up => "\x1b[A", Key.Down => "\x1b[B", Key.Right => "\x1b[C", Key.Left => "\x1b[D", _ => null };
+            bool isApp = Session?.IsAppCursorMode ?? false;
+            string? input = e.Key switch
+            {
+                Key.Tab => "\t",
+                Key.Up => isApp ? "\x1bOA" : "\x1b[A",
+                Key.Down => isApp ? "\x1bOB" : "\x1b[B",
+                Key.Right => isApp ? "\x1bOC" : "\x1b[C",
+                Key.Left => isApp ? "\x1bOD" : "\x1b[D",
+                _ => null
+            };
             if (input != null) { e.Handled = true; Session?.TerminalConnection?.WriteInput(input); }
         }
 

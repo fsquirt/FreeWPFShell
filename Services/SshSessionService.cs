@@ -16,9 +16,12 @@ using Timer = System.Timers.Timer;
 
 namespace FreeWPFShell.Services
 {
-    public class SshSessionService : IDisposable
+    public class SshSessionService : IDisposable, INotifyPropertyChanged
     {
         private static int _sessionCounter = 0;
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+        private void OnPropertyChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
         public string SessionId { get; }
         public int SessionIndex { get; }
@@ -30,6 +33,14 @@ namespace FreeWPFShell.Services
         public ConPtyConnection? TerminalConnection { get; private set; }
 
         public bool IsConnected { get; private set; }
+
+        private bool _isAppCursorMode;
+        public bool IsAppCursorMode
+        {
+            get => _isAppCursorMode;
+            set { if (_isAppCursorMode != value) { _isAppCursorMode = value; OnPropertyChanged(); } }
+        }
+
         public uint LinuxMonitorLocalPort { get; private set; } = 0;
         private readonly List<SshTunnelInfo> _associatedTunnels = new();
 
@@ -110,12 +121,19 @@ namespace FreeWPFShell.Services
                 if (args.Data != null)
                 {
                     outputBuffer += args.Data;
+                    
+                    // 检测 DECCKM 模式切换
+                    if (outputBuffer.Contains("\x1b[?1h")) IsAppCursorMode = true;
+                    if (outputBuffer.Contains("\x1b[?1l")) IsAppCursorMode = false;
+
                     if (outputBuffer.ToLower().Contains("password:"))
                     {
-                        TerminalConnection.TerminalOutput -= onOutput;
+                        // 这里不移除 onOutput，因为我们需要持续监听模式切换
+                        // 但我们需要确保只发送一次密码
                         Task.Delay(50).ContinueWith(_ => TerminalConnection.WriteInput($"{HostInfo.DecryptedSshSecret}\n"));
+                        outputBuffer = outputBuffer.Replace("password:", "", StringComparison.OrdinalIgnoreCase);
                     }
-                    if (outputBuffer.Length > 2048) outputBuffer = "";
+                    if (outputBuffer.Length > 2048) outputBuffer = outputBuffer.Substring(outputBuffer.Length - 512);
                 }
             };
             TerminalConnection.TerminalOutput += onOutput;
