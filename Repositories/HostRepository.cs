@@ -93,6 +93,12 @@ namespace FreeWPFShell.Repositories
             var host = FindById(id) ?? throw new Exception("未在配置文件中找到该主机。");
             var settings = _settingsRepo.Load();
 
+            // 密钥认证不需要解密主机密码（密钥密码由 KeyRepository 管理）
+            if (host.AuthMethod == SshAuthMethod.PrivateKey)
+            {
+                return host;
+            }
+
             if (host.UseVault)
             {
                 bool verified = await RequestAuthenticationAsync($"验证身份以解密并连接至 {host.HostName}");

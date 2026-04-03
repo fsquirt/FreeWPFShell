@@ -81,6 +81,13 @@ namespace FreeWPFShell.Views
             LoadHosts();
         }
 
+        private void BtnKeyManager_Click(object sender, RoutedEventArgs e)
+        {
+            var keyMgr = new UserForm.KeyManagerWindow();
+            keyMgr.Owner = Window.GetWindow(this);
+            keyMgr.ShowDialog();
+        }
+
         private void HostsList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
             if (HostsList.SelectedItem is SshConnectionInfo host) ConnectToHost(host);

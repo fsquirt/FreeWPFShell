@@ -73,11 +73,11 @@
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <mica:TextBox Grid.Column="0" x:Name="txtKeyPath" IsReadOnly="True" Margin="0,3"/>
-                    <mica:Button Grid.Column="1" Content="浏览..." Width="60" Height="30" Margin="5,3" Click="BtnBrowseKey_Click"/>
+                    <ComboBox x:Name="cmbKeySelect" Margin="0,3" Height="30"
+                              DisplayMemberPath="DisplayText" SelectedValuePath="Id"/>
                 </Grid>
+                <TextBlock Text="💡 请先在主界面的「密钥管理」中导入密钥" FontSize="11" Foreground="#78909C" Margin="0,2,0,0"/>
             </StackPanel>
         </StackPanel>
 

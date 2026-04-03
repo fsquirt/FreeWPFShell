@@ -14,6 +14,8 @@ namespace FreeWPFShell.Models
         public ProxyInfo? Proxy { get; set; }
         public bool UseVault { get; set; } = false;
         public string? ProtectedSecret { get; set; }
+        /// <summary>密钥登录时引用的 Key ID（来自 KeyRepository）</summary>
+        public string? SshKeyId { get; set; }
 
         [JsonIgnore] public string? DecryptedSshSecret { get; set; }
         [JsonIgnore] public string? SimpleIpGEO { get; set; }

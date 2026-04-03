@@ -77,13 +77,24 @@ namespace FreeWPFShell.Services
 
         public async Task ConnectAsync()
         {
+            // 密钥认证：在主线程加载密钥（可能需要 Windows Hello 验证）
+            PrivateKeyFile? preloadedKey = null;
+            if (HostInfo.AuthMethod == SshAuthMethod.PrivateKey)
+            {
+                if (string.IsNullOrEmpty(HostInfo.SshKeyId))
+                    throw new Exception("未配置 SSH 密钥，请在连接设置中选择一个已导入的密钥。");
+
+                var keyRepo = new Repositories.KeyRepository();
+                preloadedKey = await keyRepo.LoadPrivateKeyFileAsync(HostInfo.SshKeyId);
+            }
+
             var tcs = new TaskCompletionSource<bool>();
             var thread = new Thread(() =>
             {
                 try
                 {
                     ConnectionStatus = "SSH.NET 建立连接...";
-                    MasterClient = BuildSshClient();
+                    MasterClient = BuildSshClient(preloadedKey);
                     MasterClient.Connect();
 
                     if (_cts.IsCancellationRequested)
@@ -93,7 +104,7 @@ namespace FreeWPFShell.Services
                     }
 
                     ConnectionStatus = "SFTP 建立连接...";
-                    SftpClient = BuildSftpClient();
+                    SftpClient = BuildSftpClient(preloadedKey);
                     SftpClient.Connect();
 
                     try { DeployLinuxMonitor(); } catch { }
@@ -133,7 +144,7 @@ namespace FreeWPFShell.Services
             ConnectionStatus = "已连接";
         }
 
-        private ConnectionInfo BuildConnectionInfo()
+        private ConnectionInfo BuildConnectionInfo(PrivateKeyFile? preloadedKey = null)
         {
             var authMethods = new List<AuthenticationMethod>();
 
@@ -144,29 +155,9 @@ namespace FreeWPFShell.Services
             }
             else // PrivateKey
             {
-                // DecryptedSshSecret 存的是密钥文件路径
-                string keyPath = HostInfo.DecryptedSshSecret ?? "";
-                PrivateKeyFile keyFile;
-                try
-                {
-                    keyFile = new PrivateKeyFile(keyPath);
-                }
-                catch (Renci.SshNet.Common.SshPassPhraseNullOrEmptyException)
-                {
-                    // 密钥有密码保护，弹窗让用户输入
-                    string? passphrase = null;
-                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
-                    {
-                        var dlg = new UserForm.PassphraseDialog();
-                        dlg.Owner = System.Windows.Application.Current.MainWindow;
-                        if (dlg.ShowDialog() == true)
-                            passphrase = dlg.Passphrase;
-                    });
-                    if (passphrase == null)
-                        throw new OperationCanceledException("用户取消了密钥密码输入。");
-                    keyFile = new PrivateKeyFile(keyPath, passphrase);
-                }
-                authMethods.Add(new PrivateKeyAuthenticationMethod(HostInfo.SshUser, keyFile));
+                if (preloadedKey == null)
+                    throw new Exception("密钥未预加载，请确保在连接前已加载密钥。");
+                authMethods.Add(new PrivateKeyAuthenticationMethod(HostInfo.SshUser, preloadedKey));
             }
 
             if (HostInfo.UseProxy && HostInfo.Proxy != null)
@@ -190,14 +181,14 @@ namespace FreeWPFShell.Services
                 authMethods.ToArray());
         }
 
-        private SshClient BuildSshClient()
+        private SshClient BuildSshClient(PrivateKeyFile? preloadedKey = null)
         {
-            return new SshClient(BuildConnectionInfo());
+            return new SshClient(BuildConnectionInfo(preloadedKey));
         }
 
-        private SftpClient BuildSftpClient()
+        private SftpClient BuildSftpClient(PrivateKeyFile? preloadedKey = null)
         {
-            return new SftpClient(BuildConnectionInfo());
+            return new SftpClient(BuildConnectionInfo(preloadedKey));
         }
 
         private async void OnMonitorTick(object? sender, ElapsedEventArgs e)

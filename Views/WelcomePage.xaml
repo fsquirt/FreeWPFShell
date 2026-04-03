@@ -13,6 +13,7 @@
                 <TextBlock Text="已保存的主机列表:" FontSize="16" VerticalAlignment="Center" HorizontalAlignment="Left" />
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <mica:Button x:Name="BtnSettings" Content="⚙️ 设置" Margin="0,0,10,0" Padding="10,4" Click="BtnSettings_Click" />
+                    <mica:Button x:Name="BtnKeyManager" Content="🔑 密钥管理" Margin="0,0,10,0" Padding="10,4" Click="BtnKeyManager_Click" />
                     <mica:Button x:Name="BtnAddConnection" Content="＋ 新建连接" Padding="10,4" Click="BtnAddConnection_Click" />
                 </StackPanel>
             </Grid>

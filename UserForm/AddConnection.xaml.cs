@@ -8,6 +8,7 @@ namespace FreeWPFShell.UserForm
     public partial class AddConnection 
     {
         private readonly HostRepository _hostRepo;
+        private readonly KeyRepository _keyRepo = new();
         private string? _editingHostId;
 
         public bool ConnectAfterSave { get; private set; }
@@ -17,6 +18,14 @@ namespace FreeWPFShell.UserForm
         {
             InitializeComponent();
             _hostRepo = new HostRepository(new SettingsRepository());
+            LoadKeys();
+        }
+
+        private void LoadKeys()
+        {
+            var keys = _keyRepo.GetAll();
+            cmbKeySelect.ItemsSource = keys;
+            if (keys.Count > 0) cmbKeySelect.SelectedIndex = 0;
         }
 
         public AddConnection(SshConnectionInfo editHost) : this()
@@ -27,7 +36,22 @@ namespace FreeWPFShell.UserForm
             txtHost.Text = editHost.IpAddress;
             txtPort.Text = editHost.SshPort.ToString();
             txtUsername.Text = editHost.SshUser;
-            if (editHost.AuthMethod == SshAuthMethod.PrivateKey) rbKey.IsChecked = true;
+            if (editHost.AuthMethod == SshAuthMethod.PrivateKey)
+            {
+                rbKey.IsChecked = true;
+                // 选中对应的密钥
+                if (!string.IsNullOrEmpty(editHost.SshKeyId))
+                {
+                    for (int i = 0; i < cmbKeySelect.Items.Count; i++)
+                    {
+                        if (cmbKeySelect.Items[i] is SshKeyInfo k && k.Id == editHost.SshKeyId)
+                        {
+                            cmbKeySelect.SelectedIndex = i;
+                            break;
+                        }
+                    }
+                }
+            }
             if (editHost.UseProxy && editHost.Proxy != null)
             {
                 chkProxy.IsChecked = true;
@@ -41,11 +65,7 @@ namespace FreeWPFShell.UserForm
             }
         }
 
-        private void BtnBrowseKey_Click(object sender, RoutedEventArgs e)
-        {
-            var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "密钥文件|*.*", Title = "选择SSH密钥文件" };
-            if (dlg.ShowDialog() == true) txtKeyPath.Text = dlg.FileName;
-        }
+
 
         private bool ValidateInputs()
         {
@@ -55,8 +75,8 @@ namespace FreeWPFShell.UserForm
             if (string.IsNullOrEmpty(_editingHostId))
             {
                 if (rbPassword.IsChecked == true && string.IsNullOrEmpty(txtPassword.Text)) { ModernMessageBox.Show("请输入密码。", "提示"); txtPassword.Focus(); return false; }
-                if (rbKey.IsChecked == true && string.IsNullOrWhiteSpace(txtKeyPath.Text)) { ModernMessageBox.Show("请选择密钥文件。", "提示"); return false; }
             }
+            if (rbKey.IsChecked == true && cmbKeySelect.SelectedItem == null) { ModernMessageBox.Show("请选择一个已导入的 SSH 密钥。\n\n请先在主界面的「密钥管理」中导入密钥。", "提示"); return false; }
             return true;
         }
 
@@ -70,6 +90,11 @@ namespace FreeWPFShell.UserForm
                 AuthMethod = rbPassword.IsChecked == true ? SshAuthMethod.Password : SshAuthMethod.PrivateKey,
                 UseProxy = chkProxy.IsChecked == true
             };
+            // 密钥登录：保存选中的 Key ID
+            if (host.AuthMethod == SshAuthMethod.PrivateKey && cmbKeySelect.SelectedItem is SshKeyInfo selectedKey)
+            {
+                host.SshKeyId = selectedKey.Id;
+            }
             if (host.UseProxy)
             {
                 var pt = ProxyType.None;
@@ -81,7 +106,8 @@ namespace FreeWPFShell.UserForm
             return host;
         }
 
-        private string GetSecret() => rbPassword.IsChecked == true ? txtPassword.Text : txtKeyPath.Text;
+        /// <summary>密码模式返回密码，密钥模式返回空（密钥由 KeyRepository 管理）</summary>
+        private string GetSecret() => rbPassword.IsChecked == true ? txtPassword.Text : "";
 
         private async void BtnSave_Click(object sender, RoutedEventArgs e)
         {
