@@ -26,6 +26,11 @@ namespace FreeWPFShell.Views
             var welcomePage = new WelcomePage();
             WelcomeTab.Tag = welcomePage;
             PagesContainer.Children.Add(welcomePage);
+
+            if (System.Environment.OSVersion.Version.Build < 22000)
+            {
+                UserForm.ModernMessageBox.Show("你正在使用不支持的操作系统，你仍然可以使用此程序，但是部分现代功能如云母材质窗口会失效", "不支持的操作系统", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
 
         public async void OpenSession(SshConnectionInfo hostInfo)

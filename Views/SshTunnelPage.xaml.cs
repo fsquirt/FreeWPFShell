@@ -26,11 +26,11 @@ namespace FreeWPFShell.Views
 
         private void BtnAddTunnel_Click(object sender, RoutedEventArgs e)
         {
-            if (CmbHosts.SelectedItem == null) { MessageBox.Show("请选择一个活跃的主机连接。", "提示", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+            if (CmbHosts.SelectedItem == null) { UserForm.ModernMessageBox.Show("请选择一个活跃的主机连接。", "提示", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
             var session = (SshSessionService)CmbHosts.SelectedItem;
             var client = session.MasterClient;
-            if (client == null || !client.IsConnected) { MessageBox.Show("所选主机未连接或已断开。", "提示", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
-            if (!uint.TryParse(TxtBindPort.Text, out uint bindPort) || !uint.TryParse(TxtDestPort.Text, out uint destPort) || string.IsNullOrWhiteSpace(TxtDestAddr.Text)) { MessageBox.Show("请正确填写端口号和地址。", "提示", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+            if (client == null || !client.IsConnected) { UserForm.ModernMessageBox.Show("所选主机未连接或已断开。", "提示", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+            if (!uint.TryParse(TxtBindPort.Text, out uint bindPort) || !uint.TryParse(TxtDestPort.Text, out uint destPort) || string.IsNullOrWhiteSpace(TxtDestAddr.Text)) { UserForm.ModernMessageBox.Show("请正确填写端口号和地址。", "提示", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
 
             bool isLocal = CmbTunnelType.SelectedIndex == 0;
             try
@@ -66,9 +66,9 @@ namespace FreeWPFShell.Views
                     DestPort = destPort,
                     Remark = TxtRemark.Text
                 });
-                MessageBox.Show("隧道创建成功并在后台运行！", "成功", MessageBoxButton.OK, MessageBoxImage.Information);
+                UserForm.ModernMessageBox.Show("隧道创建成功并在后台运行！", "成功", MessageBoxButton.OK, MessageBoxImage.Information);
             }
-            catch (Exception ex) { MessageBox.Show($"创建隧道失败:\n{ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error); }
+            catch (Exception ex) { UserForm.ModernMessageBox.Show($"创建隧道失败:\n{ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
 
         private void BtnDeleteTunnel_Click(object sender, RoutedEventArgs e)

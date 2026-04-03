@@ -25,6 +25,22 @@ namespace FreeWPFShell.UserForm
                 BtnYes.Visibility = Visibility.Collapsed;
                 BtnNo.Visibility = Visibility.Collapsed;
             }
+
+            this.Title = title;
+
+            // 处理图标
+            if (image != MessageBoxImage.None)
+            {
+                TxtIcon.Visibility = Visibility.Visible;
+                TxtIcon.Text = image switch
+                {
+                    MessageBoxImage.Error => "❌",
+                    MessageBoxImage.Question => "❓",
+                    MessageBoxImage.Warning => "⚠️",
+                    MessageBoxImage.Information => "ℹ️",
+                    _ => "ℹ️"
+                };
+            }
         }
 
         private void Header_MouseDown(object sender, MouseButtonEventArgs e)
