@@ -20,9 +20,27 @@ namespace FreeWPFShell.Views
             TogVault.IsChecked = settings.UseWindowsHello;
             TogLinuxMonitor.IsChecked = settings.UseLinuxMonitor;
             TxtTerminalBg.Text = settings.TerminalBackground;
+            TogImageBg.IsChecked = settings.UseImageBackground;
+            TxtImagePath.Text = settings.ImageBackgroundPath;
 
             foreach (ComboBoxItem item in CmbBackdrop.Items)
                 if (item.Tag?.ToString() == settings.BackdropType) { CmbBackdrop.SelectedItem = item; break; }
+
+            foreach (ComboBoxItem item in CmbStretch.Items)
+                if (item.Tag?.ToString() == settings.ImageStretchMode.ToString()) { CmbStretch.SelectedItem = item; break; }
+        }
+
+        private void BtnSelectImage_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new Microsoft.Win32.OpenFileDialog
+            {
+                Filter = "图片文件|*.jpg;*.png;*.bmp;*.jpeg",
+                Title = "选择终端背景图片"
+            };
+            if (dlg.ShowDialog() == true)
+            {
+                TxtImagePath.Text = dlg.FileName;
+            }
         }
 
         private void CmbBackdrop_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -43,6 +61,12 @@ namespace FreeWPFShell.Views
             if (TogVault.IsChecked.HasValue) settings.UseWindowsHello = TogVault.IsChecked.Value;
             if (TogLinuxMonitor.IsChecked.HasValue) settings.UseLinuxMonitor = TogLinuxMonitor.IsChecked.Value;
             settings.TerminalBackground = TxtTerminalBg.Text.Trim();
+            settings.UseImageBackground = TogImageBg.IsChecked ?? false;
+            settings.ImageBackgroundPath = TxtImagePath.Text;
+            if (CmbStretch.SelectedItem is ComboBoxItem item && int.TryParse(item.Tag?.ToString(), out int mode))
+            {
+                settings.ImageStretchMode = mode;
+            }
             _settingsRepo.Save(settings);
             base.OnClosing(e);
         }

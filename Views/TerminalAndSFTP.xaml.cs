@@ -51,6 +51,19 @@ namespace FreeWPFShell.Views
             }
             catch { Terminal.Background = new SolidColorBrush(Color.FromRgb(0x1E, 0x30, 0x47)); }
 
+            if (settings.UseImageBackground && !string.IsNullOrEmpty(settings.ImageBackgroundPath))
+            {
+                Terminal.PixelShaderImagePath = settings.ImageBackgroundPath;
+                Terminal.PixelShaderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "background_blur.hlsl");
+                Terminal.PixelShaderImageStretchMode = (Microsoft.Terminal.Wpf.PixelShaderImageStretchMode)settings.ImageStretchMode;
+                Terminal.ShowScrollBar = false;
+            }
+            else
+            {
+                Terminal.ClearPixelShaderBackground();
+                Terminal.ShowScrollBar = true;
+            }
+
             Terminal.SetTheme(new()
             {
                 DefaultBackground = bgColorUint, DefaultForeground = 0x00ffffff,
