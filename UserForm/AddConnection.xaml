@@ -131,6 +131,7 @@
 
         <!-- 按钮 -->
         <StackPanel Grid.Row="7" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <mica:Button x:Name="BtnTestProxy" Content="🔌 测试代理" Width="90" Margin="0,0,10,0" Padding="5" Click="BtnTestProxy_Click"/>
             <mica:Button x:Name="BtnSave" Content="保存配置" Width="80" Margin="0,0,10,0" Padding="5" Click="BtnSave_Click"/>
             <mica:Button x:Name="BtnConnect" Content="保存并连接" Width="90" Padding="5" Click="BtnConnect_Click"/>
         </StackPanel>

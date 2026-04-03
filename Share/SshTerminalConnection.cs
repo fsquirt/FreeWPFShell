@@ -1,7 +1,7 @@
 using Microsoft.Terminal.Wpf;
 using Renci.SshNet;
-using Renci.SshNet.Common;
 using System;
+using System.Collections.Generic;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,46 +10,61 @@ namespace FreeWPFShell
 {
     public class SshTerminalConnection : ITerminalConnection, IDisposable
     {
-        private SshClient _client;
+        private readonly SshClient _client;
+        private readonly bool _ownsClient;
         private ShellStream? _shellStream;
         private CancellationTokenSource? _cts;
+        private uint _columns;
+        private uint _rows;
 
         public event EventHandler<TerminalOutputEventArgs>? TerminalOutput;
 
+        /// <summary>
+        /// 当检测到 Application Cursor Mode 切换时触发。
+        /// true = Application Mode, false = Normal Mode.
+        /// </summary>
+        public event Action<bool>? AppCursorModeChanged;
+
         public bool IsConnected => _client?.IsConnected ?? false;
-        
-        // Expose the raw SshClient so you can use it for SFTP and PortForwarding outside of the terminal
-        public SshClient Client => _client;
 
-        public SshTerminalConnection(string host, int port, string username, string password)
-        {
-            _client = new SshClient(host, port, username, password);
-        }
-
-        public SshTerminalConnection(SshClient existingClient)
+        /// <summary>
+        /// 使用已连接的 SshClient 创建终端连接（不拥有 client 生命周期）。
+        /// </summary>
+        public SshTerminalConnection(SshClient existingClient, uint initialColumns = 120, uint initialRows = 30)
         {
             _client = existingClient;
+            _ownsClient = false;
+            _columns = initialColumns;
+            _rows = initialRows;
         }
 
         public void Start()
         {
             if (!_client.IsConnected)
-            {
                 _client.Connect();
-            }
 
-            // Create the shell stream with xterm as terminal type
-            _shellStream = _client.CreateShellStream("xterm", 120, 30, 800, 600, 1024);
+            // xterm-256color 是支持真彩色终端的标准 TERM 值
+            // 真彩色由应用通过 COLORTERM=truecolor 协商，TERM 不需要改
+            var termModes = new Dictionary<Renci.SshNet.Common.TerminalModes, uint>();
+            _shellStream = _client.CreateShellStream(
+                "xterm-256color",
+                _columns, _rows,
+                _columns * 8, _rows * 16,  // 像素尺寸估算
+                65536,                       // 增大缓冲区
+                termModes);
 
             _cts = new CancellationTokenSource();
-
-            // Start a background task to read output from the SSH server
             Task.Run(() => ReadOutputAsync(_cts.Token));
         }
 
         private async Task ReadOutputAsync(CancellationToken token)
         {
-            var buffer = new byte[4096];
+            var buffer = new byte[8192];
+            // 用于检测 AppCursorMode 切换的 VT 序列
+            // \x1b[?1h = 启用 Application Cursor Keys (DECCKM)
+            // \x1b[?1l = 禁用 Application Cursor Keys
+            var scanBuffer = new StringBuilder(256);
+
             try
             {
                 while (!token.IsCancellationRequested && _shellStream != null && _shellStream.CanRead)
@@ -58,18 +73,32 @@ namespace FreeWPFShell
                     if (bytesRead > 0)
                     {
                         string data = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+
+                        // 检测 Application Cursor Mode 切换
+                        DetectCursorMode(data);
+
                         TerminalOutput?.Invoke(this, new TerminalOutputEventArgs(data));
                     }
                     else
                     {
-                        break; // Connection closed
+                        break;
                     }
                 }
             }
-            catch (Exception)
-            {
-                // The stream gets closed, ignore the error and cleanly exit
-            }
+            catch (OperationCanceledException) { }
+            catch (ObjectDisposedException) { }
+            catch (Exception) { }
+        }
+
+        private void DetectCursorMode(string data)
+        {
+            // 快速路径：大部分数据不包含 ESC 序列
+            if (!data.Contains('\x1b')) return;
+
+            if (data.Contains("\x1b[?1h"))
+                AppCursorModeChanged?.Invoke(true);
+            if (data.Contains("\x1b[?1l"))
+                AppCursorModeChanged?.Invoke(false);
         }
 
         public void WriteInput(string data)
@@ -84,22 +113,29 @@ namespace FreeWPFShell
 
         public void Resize(uint rows, uint columns)
         {
-            // SSH.NET's ShellStream might not expose SendWindowChange in all versions. 
-            // Often you just set the initial terminal size when calling CreateShellStream.
-            // If needed, you might have to reflect or use a custom channel.
+            _columns = columns;
+            _rows = rows;
+            // SSH.NET 2025.1.0 支持 ChangeWindowSize
+            try
+            {
+                _shellStream?.ChangeWindowSize(columns, rows, columns * 8, rows * 16);
+            }
+            catch { }
         }
 
         public void Close()
         {
             _cts?.Cancel();
-            _shellStream?.Dispose();
-            _client?.Disconnect();
-            _client?.Dispose();
+            try { _shellStream?.Dispose(); } catch { }
+            _shellStream = null;
+
+            if (_ownsClient)
+            {
+                try { _client?.Disconnect(); } catch { }
+                try { _client?.Dispose(); } catch { }
+            }
         }
 
-        public void Dispose()
-        {
-            Close();
-        }
+        public void Dispose() => Close();
     }
 }

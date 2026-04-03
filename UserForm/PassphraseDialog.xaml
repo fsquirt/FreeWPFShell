@@ -1,0 +1,25 @@
+<mica:MicaWindow x:Class="FreeWPFShell.UserForm.PassphraseDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mica="clr-namespace:MicaWPF.Controls;assembly=MicaWPF"
+        Title="密钥密码" Height="200" Width="400"
+        WindowStartupLocation="CenterOwner"
+        SystemBackdropType="Acrylic" FontFamily="Microsoft YaHei" FontSize="14"
+        ResizeMode="NoResize">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="请输入 SSH 密钥的密码 (Passphrase):" Margin="0,0,0,10"/>
+        <PasswordBox Grid.Row="1" x:Name="TxtPassphrase" FontSize="14" Padding="5" />
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
+            <mica:Button Content="取消" Width="70" Margin="0,0,10,0" Click="BtnCancel_Click"/>
+            <mica:Button Content="确定" Width="70" Click="BtnOk_Click"/>
+        </StackPanel>
+    </Grid>
+</mica:MicaWindow>

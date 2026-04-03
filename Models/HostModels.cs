@@ -30,7 +30,7 @@ namespace FreeWPFShell.Models
         public string Password { get; set; } = string.Empty;
     }
 
-    public enum ProxyType { None, Http, Socks5 }
+    public enum ProxyType { None, Http, Socks4, Socks5 }
 
     public enum PixelShaderImageStretchMode
     {

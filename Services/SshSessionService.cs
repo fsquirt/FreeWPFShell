@@ -10,6 +10,7 @@ using System.Timers;
 using FreeWPFShell.Models;
 using FreeWPFShell.Repositories;
 using FreeWPFShell.Share;
+using FreeWPFShell.UserForm;
 using SshTunnelInfo = FreeWPFShell.Models.SshTunnelInfo;
 using Renci.SshNet;
 using Timer = System.Timers.Timer;
@@ -30,7 +31,7 @@ namespace FreeWPFShell.Services
 
         public SshClient? MasterClient { get; private set; }
         public SftpClient? SftpClient { get; private set; }
-        public ConPtyConnection? TerminalConnection { get; private set; }
+        public SshTerminalConnection? TerminalConnection { get; private set; }
 
         public bool IsConnected { get; private set; }
 
@@ -61,7 +62,7 @@ namespace FreeWPFShell.Services
         private ulong _lastRx, _lastTx;
         private DateTime _lastNetTime = DateTime.MinValue;
         private int _tickCount;
-        private bool _passwordSent = false;
+
         private readonly SettingsRepository _settingsRepo;
 
         public SshSessionService(SshConnectionInfo hostInfo, SettingsRepository? settingsRepo = null)
@@ -81,8 +82,8 @@ namespace FreeWPFShell.Services
             {
                 try
                 {
-                    ConnectionStatus = "SSH.NET 测试身份验证...";
-                    MasterClient = new SshClient(HostInfo.IpAddress, HostInfo.SshPort, HostInfo.SshUser, HostInfo.DecryptedSshSecret ?? "");
+                    ConnectionStatus = "SSH.NET 建立连接...";
+                    MasterClient = BuildSshClient();
                     MasterClient.Connect();
 
                     if (_cts.IsCancellationRequested)
@@ -92,7 +93,7 @@ namespace FreeWPFShell.Services
                     }
 
                     ConnectionStatus = "SFTP 建立连接...";
-                    SftpClient = new SftpClient(HostInfo.IpAddress, HostInfo.SshPort, HostInfo.SshUser, HostInfo.DecryptedSshSecret ?? "");
+                    SftpClient = BuildSftpClient();
                     SftpClient.Connect();
 
                     try { DeployLinuxMonitor(); } catch { }
@@ -116,53 +117,87 @@ namespace FreeWPFShell.Services
             bool success = await tcs.Task;
             if (!success || _cts.IsCancellationRequested) return;
 
-            // 握手完成后再初始化终端连接
-            Environment.SetEnvironmentVariable("TERM", "xterm-256color");
-            Environment.SetEnvironmentVariable("COLORTERM", "truecolor");
-            Environment.SetEnvironmentVariable("LC_COLORTERM", "truecolor");
+            // 直接用 SSH.NET ShellStream 创建终端连接
+            // 初始尺寸会在 BindSession → Resize 中被 TerminalControl 同步为实际值
+            TerminalConnection = new SshTerminalConnection(MasterClient, 120, 30);
 
-            string sshArgs = $"-o SendEnv=COLORTERM -o SendEnv=LC_COLORTERM {HostInfo.SshUser}@{HostInfo.IpAddress} -p {HostInfo.SshPort}";
-            TerminalConnection = new ConPtyConnection($"ssh {sshArgs}", 120, 40);
-
-            string outputBuffer = "";
-            EventHandler<Microsoft.Terminal.Wpf.TerminalOutputEventArgs>? onOutput = null;
-            onOutput = (s, args) =>
+            // 监听 AppCursorMode 切换（通过检测 ShellStream 中的 VT 序列）
+            TerminalConnection.AppCursorModeChanged += (isApp) =>
             {
-                if (args.Data != null)
-                {
-                    outputBuffer += args.Data;
-                    
-                    if (outputBuffer.Contains("\x1b[?1h"))
-                    {
-                        IsAppCursorMode = true;
-                        outputBuffer = outputBuffer.Replace("\x1b[?1h", "");
-                    }
-                    if (outputBuffer.Contains("\x1b[?1l"))
-                    {
-                        IsAppCursorMode = false;
-                        outputBuffer = outputBuffer.Replace("\x1b[?1l", "");
-                    }
-
-                    if (!_passwordSent && outputBuffer.ToLower().Contains("password:"))
-                    {
-                        _passwordSent = true;
-                        ConnectionStatus = "在终端中输入密码...";
-                        Task.Delay(50).ContinueWith(_ => 
-                        {
-                            TerminalConnection.WriteInput($"{HostInfo.DecryptedSshSecret}\n");
-                            Task.Delay(1000).ContinueWith(__ => ConnectionStatus = "已连接");
-                        });
-                        outputBuffer = outputBuffer.Replace("password:", "", StringComparison.OrdinalIgnoreCase);
-                    }
-                    if (outputBuffer.Length > 2048) outputBuffer = outputBuffer.Substring(outputBuffer.Length - 512);
-                }
+                IsAppCursorMode = isApp;
             };
-            TerminalConnection.TerminalOutput += onOutput;
 
             _monitorTimer = new Timer(2000) { AutoReset = true, Enabled = true };
             _monitorTimer.Elapsed += OnMonitorTick;
 
             ConnectionStatus = "已连接";
+        }
+
+        private ConnectionInfo BuildConnectionInfo()
+        {
+            var authMethods = new List<AuthenticationMethod>();
+
+            if (HostInfo.AuthMethod == SshAuthMethod.Password)
+            {
+                authMethods.Add(new PasswordAuthenticationMethod(
+                    HostInfo.SshUser, HostInfo.DecryptedSshSecret ?? ""));
+            }
+            else // PrivateKey
+            {
+                // DecryptedSshSecret 存的是密钥文件路径
+                string keyPath = HostInfo.DecryptedSshSecret ?? "";
+                PrivateKeyFile keyFile;
+                try
+                {
+                    keyFile = new PrivateKeyFile(keyPath);
+                }
+                catch (Renci.SshNet.Common.SshPassPhraseNullOrEmptyException)
+                {
+                    // 密钥有密码保护，弹窗让用户输入
+                    string? passphrase = null;
+                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        var dlg = new UserForm.PassphraseDialog();
+                        dlg.Owner = System.Windows.Application.Current.MainWindow;
+                        if (dlg.ShowDialog() == true)
+                            passphrase = dlg.Passphrase;
+                    });
+                    if (passphrase == null)
+                        throw new OperationCanceledException("用户取消了密钥密码输入。");
+                    keyFile = new PrivateKeyFile(keyPath, passphrase);
+                }
+                authMethods.Add(new PrivateKeyAuthenticationMethod(HostInfo.SshUser, keyFile));
+            }
+
+            if (HostInfo.UseProxy && HostInfo.Proxy != null)
+            {
+                ProxyTypes proxyType = HostInfo.Proxy.Type switch
+                {
+                    ProxyType.Http => ProxyTypes.Http,
+                    ProxyType.Socks4 => ProxyTypes.Socks4,
+                    ProxyType.Socks5 => ProxyTypes.Socks5,
+                    _ => ProxyTypes.None
+                };
+                return new ConnectionInfo(
+                    HostInfo.IpAddress, HostInfo.SshPort, HostInfo.SshUser,
+                    proxyType, HostInfo.Proxy.ServerAddress, HostInfo.Proxy.Port,
+                    HostInfo.Proxy.Username, HostInfo.Proxy.Password,
+                    authMethods.ToArray());
+            }
+
+            return new ConnectionInfo(
+                HostInfo.IpAddress, HostInfo.SshPort, HostInfo.SshUser,
+                authMethods.ToArray());
+        }
+
+        private SshClient BuildSshClient()
+        {
+            return new SshClient(BuildConnectionInfo());
+        }
+
+        private SftpClient BuildSftpClient()
+        {
+            return new SftpClient(BuildConnectionInfo());
         }
 
         private async void OnMonitorTick(object? sender, ElapsedEventArgs e)
@@ -510,6 +545,7 @@ namespace FreeWPFShell.Services
             });
 
             TerminalConnection?.Close();
+            TerminalConnection = null;
         }
 
         public void Dispose() => Disconnect();
