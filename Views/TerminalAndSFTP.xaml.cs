@@ -87,18 +87,18 @@ namespace FreeWPFShell.Views
                 DefaultSelectionBackground = 0x00ffffff, CursorStyle = CursorStyle.BlinkingBar,
                 ColorTable = new uint[16] { 0x000c0c0c,0x001f0fc5,0x000ea113,0x00009cc1,0x00da3700,0x00981788,0x00dd963a,0x00cccccc,0x00767676,0x005648e7,0x000cc616,0x00a5f1f9,0x00ff783b,0x009e00b4,0x00d6d661,0x00f2f2f2 }
             }, settings.TerminalFont ?? "Cascadia Code", (short)(settings.TerminalFontSize > 0 ? settings.TerminalFontSize : 10));
-            TxtStatusIcon.Text = "⏳"; TxtStatusIcon.ToolTip = "Connecting...";
+            TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.Loader2Line; TxtStatusIcon.ToolTip = "Connecting...";
         }
 
         public void BindSession()
         {
             if (Session == null || !Session.IsConnected)
-            { TxtStatusIcon.Text = "❌"; return; }
+            { TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.CloseCircleLine; TxtStatusIcon.Foreground = Brushes.Red; return; }
 
             _currentPath = Sftp.WorkingDirectory ?? "/";
             FileGrid.ItemsSource = _remoteFiles;
             LoadPath(_currentPath);
-            TxtStatusIcon.Text = "✅"; TxtStatusIcon.ToolTip = "当前没有传输任务";
+            TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.CheckboxCircleLine; TxtStatusIcon.Foreground = Brushes.LimeGreen; TxtStatusIcon.ToolTip = "当前没有传输任务";
             
             Terminal.Connection = Session.TerminalConnection;
 
@@ -147,7 +147,7 @@ namespace FreeWPFShell.Views
                 _currentPath = path; TxtCurrentPath.Text = path;
                 _remoteFiles.Clear();
                 foreach (var f in files.Where(f => f.Name != "." && f.Name != "..").OrderByDescending(f => f.IsDirectory).ThenBy(f => f.Name))
-                    _remoteFiles.Add(new RemoteFile { Icon = f.IsDirectory ? "📁" : "📄", Name = f.Name, Size = f.IsDirectory ? "" : FormatSize(f.Length), Type = f.IsDirectory ? "文件夹" : "文件", Date = f.LastWriteTime.ToString("yyyy/MM/dd HH:mm"), Perms = GetPerms(f), Owner = $"{f.UserId}::{f.GroupId}", IsDirectory = f.IsDirectory, FullName = f.FullName });
+                    _remoteFiles.Add(new RemoteFile { Icon = f.IsDirectory ? "FolderFill" : "FileTextLine", Name = f.Name, Size = f.IsDirectory ? "" : FormatSize(f.Length), Type = f.IsDirectory ? "文件夹" : "文件", Date = f.LastWriteTime.ToString("yyyy/MM/dd HH:mm"), Perms = GetPerms(f), Owner = $"{f.UserId}::{f.GroupId}", IsDirectory = f.IsDirectory, FullName = f.FullName });
             }
             catch (Exception ex) { ModernMessageBox.Show("访问失败: " + ex.Message); }
         }
@@ -162,7 +162,7 @@ namespace FreeWPFShell.Views
         private void BtnNewFolder_Click(object sender, RoutedEventArgs e) { try { Sftp.CreateDirectory(_currentPath == "/" ? "/NewFolder" : _currentPath.TrimEnd('/') + "/NewFolder"); LoadPath(_currentPath, true); } catch (Exception ex) { ModernMessageBox.Show("新建文件夹失败: " + ex.Message); } }
         private void FileGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e) { if (FileGrid.SelectedItem is RemoteFile f && f.IsDirectory) LoadPath(f.FullName); }
 
-        private void UpdateStatus() => Dispatcher.InvokeAsync(() => { if (_activeTransfers > 0) { TxtStatusIcon.Text = "⏳"; TxtStatusIcon.ToolTip = $"传输中... ({_completedFiles}/{_totalFiles}) [{_currentTransferProgress:0}%] - {_currentTransferName}"; } else { TxtStatusIcon.Text = "✅"; TxtStatusIcon.ToolTip = "当前没有传输任务"; } });
+        private void UpdateStatus() => Dispatcher.InvokeAsync(() => { if (_activeTransfers > 0) { TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.Loader2Line; TxtStatusIcon.ToolTip = $"传输中... ({_completedFiles}/{_totalFiles}) [{_currentTransferProgress:0}%] - {_currentTransferName}"; } else { TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.CheckboxCircleLine; TxtStatusIcon.ToolTip = "当前没有传输任务"; } });
 
         private void DownloadItemAsync(RemoteFile item, string localDir)
         {
@@ -268,7 +268,7 @@ namespace FreeWPFShell.Views
                 string text = Clipboard.GetText() ?? "";
                 if (text.StartsWith($"FreeWPFRemoteCopy|{Session?.HostInfo?.Id}|"))
                 {
-                    _activeTransfers++; TxtStatusIcon.Text = "⏳"; TxtStatusIcon.ToolTip = "正在服务器端复制...";
+                    _activeTransfers++; TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.Loader2Line; TxtStatusIcon.ToolTip = "正在服务器端复制...";
                     await Task.Run(() =>
                     {
                         try { foreach (var src in text.Split('|').Skip(2)) Ssh.CreateCommand($"cp -a \"{src}\" \"{_currentPath}/\"").Execute(); }

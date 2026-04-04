@@ -2,21 +2,11 @@ using FreeWPFShell.Models;
 using FreeWPFShell.Repositories;
 using FreeWPFShell.Services;
 using System;
-using System.Globalization;
 using System.Linq;
 using System.Windows;
-using System.Windows.Data;
 
 namespace FreeWPFShell.UserForm
 {
-    public class BoolToLockConverter : IValueConverter
-    {
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-            => value is true ? "🔒" : "";
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-            => throw new NotImplementedException();
-    }
-
     public partial class KeyManagerWindow
     {
         private readonly KeyRepository _keyRepo = new();
@@ -53,7 +43,7 @@ namespace FreeWPFShell.UserForm
             try
             {
                 var key = _keyRepo.Import(filePath, defaultName, null);
-                ModernMessageBox.Show($"✅ 密钥 \"{key.Name}\" 导入成功！", "导入成功");
+                ModernMessageBox.Show($"密钥 \"{key.Name}\" 导入成功！", "导入成功", MessageBoxButton.OK, MessageBoxImage.Information);
                 RefreshList();
                 return;
             }
@@ -67,7 +57,7 @@ namespace FreeWPFShell.UserForm
             }
             catch (Exception ex)
             {
-                ModernMessageBox.Show($"❌ 导入失败: {ex.Message}", "错误");
+                ModernMessageBox.Show($"导入失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
 
@@ -79,12 +69,12 @@ namespace FreeWPFShell.UserForm
             try
             {
                 var key = _keyRepo.Import(filePath, defaultName, passphraseDlg.Passphrase);
-                ModernMessageBox.Show($"✅ 密钥 \"{key.Name}\" 导入成功！\n密钥密码已加密保存。", "导入成功");
+                ModernMessageBox.Show($"密钥 \"{key.Name}\" 导入成功！\n密钥密码已加密保存。", "导入成功", MessageBoxButton.OK, MessageBoxImage.Information);
                 RefreshList();
             }
             catch (Exception ex)
             {
-                ModernMessageBox.Show($"❌ 导入失败: {ex.Message}\n\n可能是密钥密码错误。", "错误");
+                ModernMessageBox.Show($"导入失败: {ex.Message}\n\n可能是密钥密码错误。", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 

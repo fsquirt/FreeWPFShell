@@ -3,13 +3,14 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:mica="clr-namespace:MicaWPF.Controls;assembly=MicaWPF"
         xmlns:local="clr-namespace:FreeWPFShell.UserForm"
+        xmlns:icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
         Title="SSH 密钥管理" Height="500" Width="550"
         WindowStartupLocation="CenterOwner"
         SystemBackdropType="Acrylic" FontFamily="Microsoft YaHei" FontSize="14"
         ResizeMode="CanResize" MinHeight="350" MinWidth="400">
 
     <mica:MicaWindow.Resources>
-        <local:BoolToLockConverter x:Key="BoolToLockConverter"/>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
     </mica:MicaWindow.Resources>
 
     <Grid Margin="15">
@@ -22,7 +23,12 @@
         <!-- 标题栏 -->
         <Grid Grid.Row="0" Margin="0,0,0,10">
             <TextBlock Text="已导入的 SSH 密钥" FontSize="16" VerticalAlignment="Center"/>
-            <mica:Button Content="📥 导入密钥" HorizontalAlignment="Right" Padding="10,4" Click="BtnImport_Click"/>
+            <mica:Button HorizontalAlignment="Right" Padding="10,4" Click="BtnImport_Click">
+                <StackPanel Orientation="Horizontal">
+                    <icon:PackIconRemixIcon Kind="DownloadCloud2Line" Foreground="#00BCFF" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                    <TextBlock Text="导入密钥" VerticalAlignment="Center"/>
+                </StackPanel>
+            </mica:Button>
         </Grid>
 
         <!-- 密钥列表 -->
@@ -38,10 +44,14 @@
             <DataGrid.Columns>
                 <DataGridTextColumn Header="名称" Binding="{Binding Name}" Width="1.5*"/>
                 <DataGridTextColumn Header="指纹" Binding="{Binding Fingerprint}" Width="*"/>
-                <DataGridTemplateColumn Header="🔒" Width="40">
+                <DataGridTemplateColumn Width="40">
+                    <DataGridTemplateColumn.Header>
+                        <icon:PackIconRemixIcon Kind="LockPasswordLine" Width="14" Height="14" HorizontalAlignment="Center"/>
+                    </DataGridTemplateColumn.Header>
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
-                            <TextBlock Text="{Binding HasPassphrase, Converter={StaticResource BoolToLockConverter}}" HorizontalAlignment="Center"/>
+                            <icon:PackIconRemixIcon Kind="LockPasswordLine" Foreground="#00BCFF" Width="14" Height="14" HorizontalAlignment="Center"
+                                                   Visibility="{Binding HasPassphrase, Converter={StaticResource BoolToVisibilityConverter}}"/>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>

@@ -2,6 +2,8 @@ using FreeWPFShell.Services;
 using MicaWPF.Controls;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media;
+using MahApps.Metro.IconPacks;
 
 namespace FreeWPFShell.UserForm
 {
@@ -37,14 +39,29 @@ namespace FreeWPFShell.UserForm
             if (image != MessageBoxImage.None)
             {
                 TxtIcon.Visibility = Visibility.Visible;
-                TxtIcon.Text = image switch
+                switch (image)
                 {
-                    MessageBoxImage.Error => "❌",
-                    MessageBoxImage.Question => "❓",
-                    MessageBoxImage.Warning => "⚠️",
-                    MessageBoxImage.Information => "ℹ️",
-                    _ => "ℹ️"
-                };
+                    case MessageBoxImage.Error:
+                        TxtIcon.Kind = PackIconRemixIconKind.CloseCircleFill;
+                        TxtIcon.Foreground = Brushes.Red;
+                        break;
+                    case MessageBoxImage.Question:
+                        TxtIcon.Kind = PackIconRemixIconKind.QuestionFill;
+                        TxtIcon.Foreground = Brushes.SkyBlue;
+                        break;
+                    case MessageBoxImage.Warning:
+                        TxtIcon.Kind = PackIconRemixIconKind.ErrorWarningFill;
+                        TxtIcon.Foreground = Brushes.Orange;
+                        break;
+                    case MessageBoxImage.Information:
+                        TxtIcon.Kind = PackIconRemixIconKind.InformationFill;
+                        TxtIcon.Foreground = Brushes.DeepSkyBlue;
+                        break;
+                    default:
+                        TxtIcon.Kind = PackIconRemixIconKind.InformationFill;
+                        TxtIcon.Foreground = Brushes.DeepSkyBlue;
+                        break;
+                }
             }
         }
 

@@ -5,6 +5,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:term="clr-namespace:Microsoft.Terminal.Wpf;assembly=Microsoft.Terminal.Wpf"
              xmlns:mica="clr-namespace:MicaWPF.Controls;assembly=MicaWPF"
+             xmlns:icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
              mc:Ignorable="d" 
              d:DesignHeight="800" d:DesignWidth="800"
              FontFamily="Microsoft Yahei">
@@ -32,15 +33,31 @@
             <Border Grid.Row="0" Height="35" Background="Transparent" Padding="5">
                 <Grid>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <mica:Button x:Name="BtnBack" Content="⬅️" Click="BtnBack_Click" Margin="0,0,5,0" Width="20" />
-                        <mica:Button x:Name="BtnForward" Content="➡️" Click="BtnForward_Click" Margin="0,0,5,0" Width="20" />
-                        <mica:Button x:Name="BtnRefresh" Content="🔄" Click="BtnRefresh_Click" Margin="0,0,5,0" Width="20" />
-                        <mica:Button x:Name="BtnUp" Content="⬆️" Click="BtnUp_Click" Margin="0,0,5,0" Width="20"/>
-                        <mica:Button x:Name="BtnNewFolder" Content="📁" Margin="0,0,10,0" Click="BtnNewFolder_Click" Width="20" />
+                        <mica:Button x:Name="BtnBack" Click="BtnBack_Click" Margin="0,0,5,0" Width="25" Height="22" >
+                            <icon:PackIconRemixIcon Kind="ArrowLeftSLine" Width="14" Height="14"/>
+                        </mica:Button>
+                        <mica:Button x:Name="BtnForward" Click="BtnForward_Click" Margin="0,0,5,0" Width="25" Height="22">
+                            <icon:PackIconRemixIcon Kind="ArrowRightSLine" Width="14" Height="14"/>
+                        </mica:Button>
+                        <mica:Button x:Name="BtnRefresh" Click="BtnRefresh_Click" Margin="0,0,5,0" Width="25" Height="22">
+                            <icon:PackIconRemixIcon Kind="RefreshLine" Width="14" Height="14"/>
+                        </mica:Button>
+                        <mica:Button x:Name="BtnUp" Click="BtnUp_Click" Margin="0,0,5,0" Width="25" Height="22" >
+                            <icon:PackIconRemixIcon Kind="ArrowUpLine" Width="14" Height="14"/>
+                        </mica:Button>
+                        <mica:Button x:Name="BtnNewFolder" Margin="0,0,10,0" Click="BtnNewFolder_Click" Width="30" Height="22">
+                            <icon:PackIconRemixIcon Kind="FolderAddLine" Foreground="#00BCFF" Width="14" Height="14"/>
+                        </mica:Button>
                         
                         <TextBlock x:Name="TxtCurrentPath" Text="/" VerticalAlignment="Center" Margin="0,0,15,0" />
 
-                        <mica:Button x:Name="BtnUpload" Content="↑ 上传" Margin="0,0,5,0" Click="BtnUpload_Click" Width="50">
+                        <mica:Button x:Name="BtnUpload" Margin="0,0,5,0" Click="BtnUpload_Click" Width="65" Height="22" >
+                            <mica:Button.Content>
+                                <StackPanel Orientation="Horizontal">
+                                    <icon:PackIconRemixIcon Kind="Upload2Line" Foreground="#00BCFF" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                    <TextBlock Text="上传" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </mica:Button.Content>
                             <mica:Button.ContextMenu>
                                 <ContextMenu>
                                     <MenuItem Header="上传文件" Click="CtxUploadFile_Click" />
@@ -48,13 +65,24 @@
                                 </ContextMenu>
                             </mica:Button.ContextMenu>
                         </mica:Button>
-                        <mica:Button x:Name="BtnDownload" Content="↓ 下载" Margin="0,0,15,0" Click="BtnDownload_Click" Width="50"/>
+                        <mica:Button x:Name="BtnDownload" Margin="0,0,15,0" Click="BtnDownload_Click" Width="65" Height="22">
+                            <StackPanel Orientation="Horizontal">
+                                <icon:PackIconRemixIcon Kind="Download2Line" Foreground="#4CAF50" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                <TextBlock Text="下载" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </mica:Button>
 
-                        <TextBlock x:Name="TxtStatusIcon" Text="✅" VerticalAlignment="Center" FontSize="16" Cursor="Help" ToolTip="当前没有传输任务" Margin="0,0,10,0"/>
+                        <icon:PackIconRemixIcon x:Name="TxtStatusIcon" Kind="CheckboxCircleLine" Foreground="LimeGreen" Width="16" Height="16" VerticalAlignment="Center" Margin="0,0,10,0" ToolTip="当前没有传输任务"/>
 
-                        <mica:Button x:Name="BtnSshTunnel" Content="📡" Margin="0,0,10,0" Width="30" Click="BtnSshTunnel_Click" ToolTip="SSH隧道管理" />
-                        <mica:Button x:Name="BtnTraceroute" Content="🔭" Margin="0,0,10,0" Width="30" Click="BtnTraceroute_Click" ToolTip="路由追踪" />
-                        <mica:Button x:Name="BtnProcess" Content="📊" Margin="0,0,10,0" Width="30" Click="BtnProcess_Click" ToolTip="进程管理" />
+                        <mica:Button x:Name="BtnSshTunnel" Margin="0,0,10,0" Width="35" Click="BtnSshTunnel_Click" ToolTip="SSH隧道管理">
+                            <icon:PackIconRemixIcon Kind="NodeTree" Foreground="#00BCFF" Width="14" Height="22" />
+                        </mica:Button>
+                        <mica:Button x:Name="BtnTraceroute" Margin="0,0,10,0" Width="35" Click="BtnTraceroute_Click" ToolTip="路由追踪">
+                            <icon:PackIconRemixIcon Kind="RouteLine" Foreground="#FF9800" Width="14" Height="22" />
+                        </mica:Button>
+                        <mica:Button x:Name="BtnProcess" Margin="0,0,10,0" Width="35" Click="BtnProcess_Click" ToolTip="进程管理">
+                            <icon:PackIconRemixIcon Kind="PulseLine" Foreground="#F44336" Width="14" Height="22" />
+                        </mica:Button>
                         <TextBlock x:Name="TxtConnStatus" Text="等待中..." VerticalAlignment="Center" FontSize="11" Margin="10,0,10,0"/>
                         <TextBlock x:Name="TxtCursorMode" Text="NORMAL MODE" VerticalAlignment="Center" Margin="5,0,0,0" Opacity="0.8"/>
                     </StackPanel>
@@ -76,8 +104,19 @@
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="{Binding Icon}" Margin="0,0,5,0"/>
-                                    <TextBlock Text="{Binding Name}"/>
+                                    <icon:PackIconRemixIcon Kind="{Binding Icon}" Width="16" Height="16" Margin="0,0,5,0" VerticalAlignment="Center">
+                                        <icon:PackIconRemixIcon.Style>
+                                            <Style TargetType="icon:PackIconRemixIcon">
+                                                <Setter Property="Foreground" Value="#00BCFF"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsDirectory}" Value="False">
+                                                        <Setter Property="Foreground" Value="#AEB5BD"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </icon:PackIconRemixIcon.Style>
+                                    </icon:PackIconRemixIcon>
+                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>

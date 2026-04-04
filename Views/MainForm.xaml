@@ -5,6 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:FreeWPFShell"
         xmlns:mica="clr-namespace:MicaWPF.Controls;assembly=MicaWPF"
+        xmlns:icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
         mc:Ignorable="d"
         Title="FreeWPFShell" Height="800" Width="1280"
         SystemBackdropType="Acrylic" TitleBarType="WinUI"
@@ -89,10 +90,10 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="↑ "/>
-                        <TextBlock x:Name="TxtNetUp" Text="0K" Margin="0,0,10,0"/>
-                        <TextBlock Text="↓ "/>
-                        <TextBlock x:Name="TxtNetDown" Text="0K"/>
+                        <icon:PackIconRemixIcon Kind="ArrowUpSLine" Foreground="#00BCFF" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,2,0"/>
+                        <TextBlock x:Name="TxtNetUp" Text="0K" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                        <icon:PackIconRemixIcon Kind="ArrowDownSLine" Foreground="#4CAF50" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,2,0"/>
+                        <TextBlock x:Name="TxtNetDown" Text="0K" VerticalAlignment="Center"/>
                     </StackPanel>
                     <TextBlock x:Name="TxtNetIface" Text="eth0" Grid.Column="1"/>
                 </Grid>
@@ -138,7 +139,14 @@
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
                 <TabControl x:Name="SessionTabs" Grid.Row="0" BorderThickness="0" Background="Transparent" SelectionChanged="SessionTabs_SelectionChanged" KeyboardNavigation.DirectionalNavigation="None" KeyboardNavigation.TabNavigation="None">
-                    <TabItem x:Name="WelcomeTab" Header="🏠 首页" />
+                    <TabItem x:Name="WelcomeTab">
+                        <TabItem.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <icon:PackIconRemixIcon Kind="Home4Line" Foreground="#00BCFF" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                <TextBlock Text="首页" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </TabItem.Header>
+                    </TabItem>
                 </TabControl>
                 
                 <Grid x:Name="PagesContainer" Grid.Row="1" />

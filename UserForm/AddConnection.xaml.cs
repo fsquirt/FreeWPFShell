@@ -2,6 +2,7 @@ using FreeWPFShell.Models;
 using FreeWPFShell.Repositories;
 using FreeWPFShell.Services;
 using System;
+using System.Threading.Tasks;
 using System.Windows;
 
 namespace FreeWPFShell.UserForm
@@ -74,14 +75,14 @@ namespace FreeWPFShell.UserForm
 
         private bool ValidateInputs()
         {
-            if (string.IsNullOrWhiteSpace(txtHost.Text)) { ModernMessageBox.Show("请输入主机IP地址。", "提示"); txtHost.Focus(); return false; }
-            if (string.IsNullOrWhiteSpace(txtUsername.Text)) { ModernMessageBox.Show("请输入用户名。", "提示"); txtUsername.Focus(); return false; }
-            if (!int.TryParse(txtPort.Text, out int port) || port < 1 || port > 65535) { ModernMessageBox.Show("端口号无效。", "提示"); txtPort.Focus(); return false; }
+            if (string.IsNullOrWhiteSpace(txtHost.Text)) { ModernMessageBox.Show("请输入主机IP地址。", "提示", MessageBoxButton.OK, MessageBoxImage.Information); txtHost.Focus(); return false; }
+            if (string.IsNullOrWhiteSpace(txtUsername.Text)) { ModernMessageBox.Show("请输入用户名。", "提示", MessageBoxButton.OK, MessageBoxImage.Information); txtUsername.Focus(); return false; }
+            if (!int.TryParse(txtPort.Text, out int port) || port < 1 || port > 65535) { ModernMessageBox.Show("端口号无效。", "提示", MessageBoxButton.OK, MessageBoxImage.Warning); txtPort.Focus(); return false; }
             if (string.IsNullOrEmpty(_editingHostId))
             {
-                if (rbPassword.IsChecked == true && string.IsNullOrEmpty(txtPassword.Text)) { ModernMessageBox.Show("请输入密码。", "提示"); txtPassword.Focus(); return false; }
+                if (rbPassword.IsChecked == true && string.IsNullOrEmpty(txtPassword.Text)) { ModernMessageBox.Show("请输入密码。", "提示", MessageBoxButton.OK, MessageBoxImage.Information); txtPassword.Focus(); return false; }
             }
-            if (rbKey.IsChecked == true && cmbKeySelect.SelectedItem == null) { ModernMessageBox.Show("请选择一个已导入的 SSH 密钥。\n\n请先在主界面的「密钥管理」中导入密钥。", "提示"); return false; }
+            if (rbKey.IsChecked == true && cmbKeySelect.SelectedItem == null) { ModernMessageBox.Show("请选择一个已导入的 SSH 密钥。\n\n请先在主界面的「密钥管理」中导入密钥。", "提示", MessageBoxButton.OK, MessageBoxImage.Information); return false; }
             return true;
         }
 
@@ -124,7 +125,7 @@ namespace FreeWPFShell.UserForm
                 else await _hostRepo.UpdateAsync(_editingHostId, host, string.IsNullOrEmpty(secret) ? null : secret);
                 ConnectAfterSave = false; DialogResult = true;
             }
-            catch (Exception ex) { ModernMessageBox.Show("保存失败: " + ex.Message, "错误"); }
+            catch (Exception ex) { ModernMessageBox.Show("保存失败: " + ex.Message, "错误", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
 
         private async void BtnConnect_Click(object sender, RoutedEventArgs e)
@@ -151,7 +152,7 @@ namespace FreeWPFShell.UserForm
                 }
                 SavedHostInfo = host; ConnectAfterSave = true; DialogResult = true;
             }
-            catch (Exception ex) { ModernMessageBox.Show("保存失败: " + ex.Message, "错误"); }
+            catch (Exception ex) { ModernMessageBox.Show("保存失败: " + ex.Message, "错误", MessageBoxButton.OK, MessageBoxImage.Error); }
         }
 
         private void chkProxy_Checked(object sender, RoutedEventArgs e) { if (pnlProxy != null) pnlProxy.IsEnabled = chkProxy.IsChecked == true; }
@@ -160,25 +161,26 @@ namespace FreeWPFShell.UserForm
         {
             if (chkProxy.IsChecked != true)
             {
-                ModernMessageBox.Show("请先启用代理设置。", "提示");
+                ModernMessageBox.Show("请先启用代理设置。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
             string proxyHost = txtProxyHost.Text.Trim();
             if (string.IsNullOrEmpty(proxyHost))
             {
-                ModernMessageBox.Show("请填写代理服务器地址。", "提示");
+                ModernMessageBox.Show("请填写代理服务器地址。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
             if (!int.TryParse(txtProxyPort.Text, out int proxyPort) || proxyPort < 1 || proxyPort > 65535)
             {
-                ModernMessageBox.Show("代理端口无效。", "提示");
+                ModernMessageBox.Show("代理端口无效。", "提示", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
             BtnTestProxy.IsEnabled = false;
-            BtnTestProxy.Content = "⏳ 测试中...";
+            IconTestProxy.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.Loader2Line;
+            TxtTestProxy.Text = "测试中...";
 
             try
             {
@@ -202,7 +204,7 @@ namespace FreeWPFShell.UserForm
 
                 if (!reachable)
                 {
-                    ModernMessageBox.Show($"❌ 无法连接到代理服务器 {proxyHost}:{proxyPort}\n\n请检查代理地址和端口是否正确，以及代理服务是否正在运行。", "代理测试失败");
+                    ModernMessageBox.Show($"无法连接到代理服务器 {proxyHost}:{proxyPort}\n\n请检查代理地址和端口是否正确，以及代理服务是否正在运行。", "代理测试失败", MessageBoxButton.OK, MessageBoxImage.Error);
                     return;
                 }
 
@@ -255,22 +257,23 @@ namespace FreeWPFShell.UserForm
                     });
 
                     if (tunnelOk)
-                        ModernMessageBox.Show($"✅ 代理服务器可达，且成功通过代理连接到 {targetHost}:{targetPort}", "代理测试成功");
+                        ModernMessageBox.Show($"代理服务器可达，且成功通过代理连接到 {targetHost}:{targetPort}", "代理测试成功", MessageBoxButton.OK, MessageBoxImage.Information);
                     else
-                        ModernMessageBox.Show($"⚠️ 代理服务器可达，但无法通过代理连接到 {targetHost}:{targetPort}\n\n可能原因：代理类型选择错误、代理认证失败、或远程主机不可达。", "代理测试部分成功");
+                        ModernMessageBox.Show($"代理服务器可达，但无法通过代理连接到 {targetHost}:{targetPort}\n\n可能原因：代理类型选择错误、代理认证失败、或远程主机不可达。", "代理测试部分成功", MessageBoxButton.OK, MessageBoxImage.Warning);
                 }
                 else
                 {
-                    ModernMessageBox.Show($"✅ 代理服务器 {proxyHost}:{proxyPort} 可达！\n\n提示：填写目标主机 IP 和端口后可进一步测试代理隧道连通性。", "代理测试成功");
+                    ModernMessageBox.Show($"代理服务器 {proxyHost}:{proxyPort} 可达！\n\n提示：填写目标主机 IP 和端口后可进一步测试代理隧道连通性。", "代理测试成功", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
             }
             catch (Exception ex)
             {
-                ModernMessageBox.Show($"❌ 测试失败: {ex.Message}", "代理测试错误");
+                ModernMessageBox.Show($"测试失败: {ex.Message}", "代理测试错误", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             finally
             {
-                BtnTestProxy.Content = "🔌 测试代理";
+                IconTestProxy.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.PlugLine;
+                TxtTestProxy.Text = "测试代理";
                 BtnTestProxy.IsEnabled = true;
             }
         }

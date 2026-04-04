@@ -27,7 +27,7 @@ namespace FreeWPFShell.Models
 
         [JsonIgnore]
         public string DisplayText => string.IsNullOrEmpty(Fingerprint)
-            ? $"{Name}{(HasPassphrase ? " 🔒" : "")}"
-            : $"{Name} ({Fingerprint}){(HasPassphrase ? " 🔒" : "")}";
+            ? $"{Name}"
+            : $"{Name} ({Fingerprint})";
     }
 }
