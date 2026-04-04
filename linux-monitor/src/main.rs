@@ -155,7 +155,18 @@ fn get_process_detail(pid_val: u32) -> Option<ProcessDetail> {
 }
 
 fn main() {
-    let port: u16 = env::args().nth(1).and_then(|p| p.parse().ok()).unwrap_or(45678);
+    let args: Vec<String> = env::args().collect();
+    let port: u16 = args.get(1).and_then(|p| p.parse().ok()).unwrap_or(45678);
+    let token_file = args.get(2);
+    
+    let token = if let Some(path) = token_file {
+        let t = fs::read_to_string(path).unwrap_or_default().trim().to_string();
+        let _ = fs::remove_file(path);
+        if t.is_empty() { None } else { Some(t) }
+    } else {
+        None
+    };
+
     let server = Server::http(format!("127.0.0.1:{}", port)).expect("Binding failed");
     
     let stats_ref = Arc::new(Mutex::new(None::<SysStats>));
@@ -243,8 +254,21 @@ fn main() {
         }
     });
 
-    for request in server.incoming_requests() {
+    for mut request in server.incoming_requests() {
         last_request.store(now_secs(), Ordering::Relaxed);
+        
+        // Token Verification
+        if let Some(ref t) = token {
+            let header_token = request.headers().iter()
+                .find(|h| h.field.as_str() == "X-Monitor-Token")
+                .map(|h| h.value.as_str());
+            
+            if header_token != Some(t) {
+                let _ = request.respond(Response::from_string("Unauthorized").with_status_code(401));
+                continue;
+            }
+        }
+
         let url = request.url().to_string();
         
         let response = if url == "/stats" {

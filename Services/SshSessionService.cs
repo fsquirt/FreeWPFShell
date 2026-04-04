@@ -200,7 +200,7 @@ namespace FreeWPFShell.Services
             {
                 if (LinuxMonitorLocalPort > 0)
                 {
-                    using var hc = new System.Net.Http.HttpClient();
+                    using var hc = CreateMonitorHttpClient();
                     hc.Timeout = TimeSpan.FromSeconds(1);
                     string json = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/stats");
                     ParseLinuxMonitorJson(json);
@@ -399,6 +399,7 @@ namespace FreeWPFShell.Services
             total *= multiplier; used *= multiplier;
         }
 
+        private string _monitorToken = "";
         private void DeployLinuxMonitor()
         {
             var settings = _settingsRepo.Load();
@@ -429,10 +430,19 @@ namespace FreeWPFShell.Services
                 {
                     ConnectionStatus = "上传 Linux_Monitor...";
                     string remotePath = $"/tmp/linux-monitor_{LinuxMonitorLocalPort}";
+                    string tokenPath = $"/tmp/.mon_token_{LinuxMonitorLocalPort}";
+                    _monitorToken = Guid.NewGuid().ToString("N");
+
                     MasterClient.CreateCommand($"pkill -9 -f {remotePath}").Execute();
                     using (var fs = System.IO.File.OpenRead(binPath)) SftpClient.UploadFile(fs, remotePath, true);
+                    
+                    // 写入 Token 文件并设置 600 权限 (仅所有者可读)
+                    using (var ms = new System.IO.MemoryStream(System.Text.Encoding.UTF8.GetBytes(_monitorToken)))
+                        SftpClient.UploadFile(ms, tokenPath, true);
+                    
+                    MasterClient.CreateCommand($"chmod 600 {tokenPath}").Execute();
                     MasterClient.CreateCommand($"chmod +x {remotePath}").Execute();
-                    MasterClient.CreateCommand($"nohup {remotePath} {LinuxMonitorLocalPort} >/dev/null 2>&1 &").Execute();
+                    MasterClient.CreateCommand($"nohup {remotePath} {LinuxMonitorLocalPort} {tokenPath} >/dev/null 2>&1 &").Execute();
                 }
             }
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine("Monitor Deploy Failed: " + ex.Message); }
@@ -444,12 +454,20 @@ namespace FreeWPFShell.Services
             SshTunnelManager.Instance.RegisterTunnel(tunnel);
         }
 
+        private System.Net.Http.HttpClient CreateMonitorHttpClient()
+        {
+            var hc = new System.Net.Http.HttpClient();
+            if (!string.IsNullOrEmpty(_monitorToken))
+                hc.DefaultRequestHeaders.Add("X-Monitor-Token", _monitorToken);
+            return hc;
+        }
+
         public async Task<ProcessDetail?> GetProcessDetailAsync(uint pid)
         {
             if (LinuxMonitorLocalPort == 0) return null;
             try
             {
-                using var hc = new System.Net.Http.HttpClient();
+                using var hc = CreateMonitorHttpClient();
                 hc.Timeout = TimeSpan.FromSeconds(2);
                 string json = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/process_detail?pid={pid}");
                 return JsonSerializer.Deserialize<ProcessDetail>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
@@ -462,7 +480,7 @@ namespace FreeWPFShell.Services
             if (LinuxMonitorLocalPort == 0) return false;
             try
             {
-                using var hc = new System.Net.Http.HttpClient();
+                using var hc = CreateMonitorHttpClient();
                 string result = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/kill?pid={pid}&sig={signal}");
                 return result.ToLower() == "true";
             }
@@ -474,7 +492,7 @@ namespace FreeWPFShell.Services
             if (LinuxMonitorLocalPort == 0) return new List<ProcessItem>();
             try
             {
-                using var hc = new System.Net.Http.HttpClient();
+                using var hc = CreateMonitorHttpClient();
                 hc.Timeout = TimeSpan.FromSeconds(3);
                 string json = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/all_processes");
                 return JsonSerializer.Deserialize<List<ProcessItem>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<ProcessItem>();
@@ -487,7 +505,7 @@ namespace FreeWPFShell.Services
             if (LinuxMonitorLocalPort == 0) return false;
             try
             {
-                using var hc = new System.Net.Http.HttpClient();
+                using var hc = CreateMonitorHttpClient();
                 string encodedPath = System.Net.WebUtility.UrlEncode(fullPath);
                 string result = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/killall?path={encodedPath}&sig={signal}");
                 return result.ToLower() == "true";
