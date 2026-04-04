@@ -424,7 +424,7 @@ namespace FreeWPFShell.Services
 
                 RegisterTunnel(tunnelInfo);
 
-                string binPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "linux-monitor");
+                string binPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "linux-monitor\\linux-monitor");
                 if (System.IO.File.Exists(binPath))
                 {
                     ConnectionStatus = "上传 Linux_Monitor...";

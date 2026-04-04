@@ -60,10 +60,13 @@
     <None Update="background_blur.hlsl">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Update="linux-monitor\linux-monitor">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
-    <Exec Command="echo &quot;正在运行Rust编译批处理...&quot;&#xD;&#xA;call &quot;$(ProjectDir)linux-monitor\compile.bat&quot; &quot;$(ProjectDir)linux-monitor&quot;&#xD;&#xA;if %25errorlevel%25 neq 0 (&#xD;&#xA;    echo &quot;Rust编译失败,退出生成解决方案...&quot;&#xD;&#xA;    exit /b %25errorlevel%25&#xD;&#xA;)&#xD;&#xA;echo &quot;Rust编译成功&quot;&#xD;&#xA;&#xD;&#xA;echo &quot;拷贝Rust Linux程序到输出目录...&quot;&#xD;&#xA;copy /Y &quot;$(ProjectDir)linux-monitor\linux-monitor&quot; &quot;$(TargetDir)&quot;" />
+    <Exec Command="echo &quot;正在运行Rust编译批处理...&quot;&#xD;&#xA;call &quot;$(ProjectDir)linux-monitor\compile.bat&quot; &quot;$(ProjectDir)linux-monitor&quot;&#xD;&#xA;if %25errorlevel%25 neq 0 (&#xD;&#xA;    echo &quot;Rust编译失败,退出生成解决方案...&quot;&#xD;&#xA;    exit /b %25errorlevel%25&#xD;&#xA;)&#xD;&#xA;echo &quot;Rust编译成功&quot;&#xD;&#xA;" />
   </Target>
 
 </Project>
