@@ -228,6 +228,13 @@ namespace FreeWPFShell.Views
 
         private void MicaWindow_Closed(object sender, EventArgs e)
         {
+            // 5秒后强制退出，防止 UnsubscribeMonitor 卡住残留进程
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(5000);
+                Environment.Exit(0);
+            });
+
             UnsubscribeMonitor();
             foreach (var s in ActiveSessions) try { s.Dispose(); } catch { }
             ActiveSessions.Clear();

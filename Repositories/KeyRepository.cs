@@ -24,7 +24,7 @@ namespace FreeWPFShell.Repositories
 
         public KeyRepository()
         {
-            _filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "keys.json");
+            _filePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "keys.json");
             _settingsRepo = new SettingsRepository();
             Reload();
         }

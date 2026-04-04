@@ -10,7 +10,7 @@ namespace FreeWPFShell.Repositories
 
         public SettingsRepository()
         {
-            _filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.json");
+            _filePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "settings.json");
         }
 
         public AppSettings Load()

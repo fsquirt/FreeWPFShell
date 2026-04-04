@@ -23,7 +23,7 @@ namespace FreeWPFShell.Repositories
         public HostRepository(SettingsRepository settingsRepo)
         {
             _settingsRepo = settingsRepo;
-            _filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "hosts.json");
+            _filePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "hosts.json");
             Reload();
         }
 
