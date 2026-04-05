@@ -7,7 +7,7 @@ using System.Windows;
 
 namespace FreeWPFShell.UserForm
 {
-    public partial class AddConnection 
+    public partial class AddConnection
     {
         private readonly HostRepository _hostRepo;
         private readonly KeyRepository _keyRepo = new();
@@ -91,7 +91,8 @@ namespace FreeWPFShell.UserForm
             var host = new SshConnectionInfo
             {
                 HostName = string.IsNullOrWhiteSpace(txtHostName.Text) ? txtHost.Text : txtHostName.Text,
-                IpAddress = txtHost.Text.Trim(), SshPort = int.Parse(txtPort.Text),
+                IpAddress = txtHost.Text.Trim(),
+                SshPort = int.Parse(txtPort.Text),
                 SshUser = txtUsername.Text.Trim(),
                 AuthMethod = rbPassword.IsChecked == true ? SshAuthMethod.Password : SshAuthMethod.PrivateKey,
                 UseProxy = chkProxy.IsChecked == true
@@ -156,6 +157,10 @@ namespace FreeWPFShell.UserForm
         }
 
         private void chkProxy_Checked(object sender, RoutedEventArgs e) { if (pnlProxy != null) pnlProxy.IsEnabled = chkProxy.IsChecked == true; }
+
+        private void rbPassword_Checked(object sender, RoutedEventArgs e) { if (rbKey != null) rbKey.IsChecked = false; }
+
+        private void rbKey_Checked(object sender, RoutedEventArgs e) { if (rbPassword != null) rbPassword.IsChecked = false; }
 
         private async void BtnTestProxy_Click(object sender, RoutedEventArgs e)
         {

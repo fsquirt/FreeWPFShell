@@ -13,7 +13,7 @@
                 <RowDefinition Height="60" />
             </Grid.RowDefinitions>
             
-            <mica:TextBox x:Name="TxtNewName" Grid.Row="0" Margin="20,15,20,10" VerticalAlignment="Center" Padding="5" FontSize="14" Foreground="White" Background="Transparent"/>
+            <mica:TextBox x:Name="TxtNewName" Grid.Row="0" Margin="20,15,20,10" VerticalAlignment="Center" Padding="5" FontSize="14" Background="Transparent"/>
             
             <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,20,0">
                 <mica:Button Content="取消" Width="80" Height="30" Margin="0,0,10,0" Click="BtnCancel_Click"/>

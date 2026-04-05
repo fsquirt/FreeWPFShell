@@ -43,7 +43,7 @@
 
   <ItemGroup>
     <PackageReference Include="MahApps.Metro.IconPacks.RemixIcon" Version="6.2.1" />
-    <PackageReference Include="MicaWPF" Version="6.3.2" />
+    <PackageReference Include="MicaWPF" Version="1.0.0" />
     <PackageReference Include="Microsoft.Terminal.Wpf" Version="0.1.0" />
     <PackageReference Include="SSH.NET" Version="2025.1.0" />
     <PackageReference Include="MaxMind.Db" Version="4.2.0" />

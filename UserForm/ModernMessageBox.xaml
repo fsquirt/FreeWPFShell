@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:mica="clr-namespace:MicaWPF.Controls;assembly=MicaWPF"
         xmlns:icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
-        Title="提示" MinHeight="220" MinWidth="400" MaxWidth="600"
+        Title="提示" MinHeight="200" MinWidth="400" MaxWidth="600"
         SizeToContent="WidthAndHeight"
         SystemBackdropType="Acrylic"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize" Topmost="True">
@@ -25,14 +25,14 @@
                 <icon:PackIconRemixIcon x:Name="TxtIcon" Grid.Column="0" Width="48" Height="48" VerticalAlignment="Top" Margin="0,0,15,0" Visibility="Collapsed"/>
 
                 <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                    <TextBlock x:Name="TxtMessage" Text="Message" TextWrapping="Wrap" FontSize="14" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="TxtMessage" Text="Message" TextWrapping="Wrap" FontSize="14"/>
                 </ScrollViewer>
             </Grid>
             
             <!-- Buttons -->
             <StackPanel x:Name="PnlButtons" Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,20,0">
-                <mica:Button x:Name="BtnYes" Content="是 (Yes)" Width="80" Height="30" Margin="0,0,10,0" Click="BtnYes_Click" Visibility="Collapsed"/>
-                <mica:Button x:Name="BtnNo" Content="否 (No)" Width="80" Height="30" Click="BtnNo_Click" Visibility="Collapsed"/>
+                <mica:Button x:Name="BtnYes" Content="是" Width="80" Height="30" Margin="0,0,10,0" Click="BtnYes_Click" Visibility="Collapsed"/>
+                <mica:Button x:Name="BtnNo" Content="否" Width="80" Height="30" Click="BtnNo_Click" Visibility="Collapsed"/>
                 <mica:Button x:Name="BtnOk" Content="确定" Width="80" Height="30" Click="BtnOk_Click" Visibility="Visible"/>
             </StackPanel>
         </Grid>

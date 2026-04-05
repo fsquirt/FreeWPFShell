@@ -57,7 +57,7 @@
 
         <!-- 认证方式区域 -->
         <StackPanel Grid.Row="1" Margin="5">
-            <RadioButton x:Name="rbPassword" Content="密码登录" IsChecked="True" Margin="0,5"/>
+            <mica:ToggleSwitch x:Name="rbPassword" Content="密码登录" IsChecked="True" Margin="0,5" Checked="rbPassword_Checked"/>
             <StackPanel x:Name="pnlPassword" Margin="20,0,0,5">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -69,7 +69,7 @@
                     <mica:TextBox Grid.Column="2" x:Name="txtPassword" Margin="0,3,0,3"/>
                 </Grid>
             </StackPanel>
-            <RadioButton x:Name="rbKey" Content="密钥登录" Margin="0,5"/>
+            <mica:ToggleSwitch x:Name="rbKey" Content="密钥登录" Margin="0,5" Checked="rbKey_Checked"/>
             <StackPanel x:Name="pnlKey" Margin="20,0,0,5">
                 <Grid>
                     <Grid.ColumnDefinitions>
