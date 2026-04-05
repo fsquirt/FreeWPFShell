@@ -53,7 +53,7 @@ FreeWPFShell 是一款基于 WPF 开发的Windows SSH 客户端。并集成了�
 
 ### 环境要求
 - 大于120G的磁盘空间和大于20G的内存
-- Visual Studio 2026，安装了C++ .NET WinUI桌面开发组件，v143生成工具
+- Visual Studio 2026，安装了C++ .NET WinUI桌面开发组件，v143生成工具，v145生成工具
 - Windows 11 SDK
 - Rust已安装并添加到环境变量
 - zig已安装并添加到环境变量
@@ -73,7 +73,7 @@ rustup target add x86_64-unknown-linux-musl
 
 > 因为原版的Microsoft Terminal不支持自定义图像背景，所以需要clone我这个分支版本
 
-```powershell
+```pwsh
 git clone https://github.com/fsquirt/terminal
 cd .\terminal\
 Import-Module .\tools\OpenConsole.psm1
@@ -94,7 +94,28 @@ nupkg文件会生成在 `.\bin\x64\Release\WpfTerminalControl` 目录下。
 dotnet add package Microsoft.Terminal.Wpf --source "Microsoft.Terminal.Wpf.0.1.0.nupkg所在路径"
 ```
 
-#### 4. 编译主程序
+#### 4. 编译MicaWPF
+> 因为原版MicaWPF的ComboBox图标是坏掉的，所以需要使用我这个分支版本
+```pwsh
+git clone https://github.com/fsquirt/MicaWPF
+cd .\MicaWPF\
+dotnet build --configuration Release
+mv .\src\MicaWPF\bin\Release\MicaWPF.1.0.0.nupkg .
+mv .\src\MicaWPF.Core\bin\Release\MicaWPF.Core.1.0.0.nupkg .
+cd ..
+git clone https://github.com/fsquirt/MicaWPFRuntimeComponent
+cd .\MicaWPFRuntimeComponent\
+msbuild .\MicaWPFRuntimeComponent.sln /p:Configuration=Release
+mv .\MicaWPF.Projection\nuget\MicaWPFRuntimeComponent.1.1.9.nupkg ..\MicaWPF\
+```
+
+#### 5.为项目还原 MicaWPF
+进入项目根目录，使用命令行：
+```pwsh
+dotnet add package MicaWPF --source "MicaWPF项目根目录"
+```
+
+#### 6. 编译主程序
 使用命令行：
 ```pwsh
 dotnet build
