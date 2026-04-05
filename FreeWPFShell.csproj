@@ -9,7 +9,7 @@
     <Platforms>AnyCPU;x64</Platforms>
     <UseWindowsForms>False</UseWindowsForms>
     <SupportedOSPlatformVersion>10.0.26100.0</SupportedOSPlatformVersion>
-    <ApplicationIcon>favicon.ico</ApplicationIcon>
+    <ApplicationIcon>MainIcon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -54,7 +54,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="favicon.ico" />
+    <Content Include="MainIcon.ico" />
   </ItemGroup>
 
   <ItemGroup>
@@ -64,6 +64,10 @@
     <None Update="linux-monitor\linux-monitor">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="程序图标\" />
   </ItemGroup>
 
   <Target Name="PreBuild" BeforeTargets="PreBuildEvent">

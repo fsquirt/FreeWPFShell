@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:mica="clr-namespace:MicaWPF.Controls;assembly=MicaWPF"
         mc:Ignorable="d"
-        Title="设置" Height="700" Width="420"
+        Title="设置" Height="740" Width="420"
         SystemBackdropType="Acrylic"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
         FontFamily="Microsoft YaHei">
