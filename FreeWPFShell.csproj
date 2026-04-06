@@ -10,36 +10,34 @@
     <UseWindowsForms>False</UseWindowsForms>
     <SupportedOSPlatformVersion>10.0.26100.0</SupportedOSPlatformVersion>
     <ApplicationIcon>MainIcon.ico</ApplicationIcon>
+
+	  <Optimize>true</Optimize>
+	  <TieredCompilation>true</TieredCompilation>
+	  <TieredPGO>true</TieredPGO>
+	  <SelfContained>false</SelfContained>
+
+	<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <GenerateAssemblyInfo>False</GenerateAssemblyInfo>
-    <Optimize>False</Optimize>
     <DebugType>none</DebugType>
+    <NoWarn>1701;1702;CA1416</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <GenerateAssemblyInfo>False</GenerateAssemblyInfo>
-    <Optimize>False</Optimize>
     <DebugType>none</DebugType>
+    <NoWarn>1701;1702;CA1416</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-    <GenerateAssemblyInfo>False</GenerateAssemblyInfo>
     <DebugType>none</DebugType>
+    <NoWarn>1701;1702;CA1416</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <GenerateAssemblyInfo>False</GenerateAssemblyInfo>
     <DebugType>none</DebugType>
+    <NoWarn>1701;1702;CA1416</NoWarn>
   </PropertyGroup>
-
-  <ItemGroup>
-    <Compile Remove="WpfTerminalControl\**" />
-    <EmbeddedResource Remove="WpfTerminalControl\**" />
-    <None Remove="WpfTerminalControl\**" />
-    <Page Remove="WpfTerminalControl\**" />
-  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="MahApps.Metro.IconPacks.RemixIcon" Version="6.2.1" />
@@ -64,10 +62,6 @@
     <None Update="linux-monitor\linux-monitor">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="程序图标\" />
   </ItemGroup>
 
   <Target Name="PreBuild" BeforeTargets="PreBuildEvent">

@@ -120,6 +120,10 @@ dotnet add package MicaWPF --source "MicaWPF项目根目录"
 ```pwsh
 dotnet build
 ```
+或者这样
+```pwsh
+dotnet publish FreeWPFShell.csproj -c Release -r win-x64 -o ./publish --self-contained true /p:PublishSingleFile=true /p:EnableCompressionInSingleFile=true /p:PublishTrimmed=false
+```
 
 ---
 
