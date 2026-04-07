@@ -10,6 +10,8 @@ FreeWPFShell 是一款基于 WPF 开发的Windows SSH 客户端。并集成了�
   <img src="https://get.microsoft.com/images/zh-cn%20dark.svg" width="200"/>
 </a>
 
+---
+
 ## 核心特性
 
 ### 1. 高性能自定义终端
