@@ -103,11 +103,31 @@
                             </MenuItem.Icon>
                         </MenuItem>
                         <Separator />
-                        <MenuItem Header="下载" Click="CtxGridDownload_Click" />
-                        <MenuItem Header="删除" Click="CtxGridDelete_Click" />
-                        <MenuItem Header="重命名" Click="CtxGridRename_Click" />
-                        <MenuItem Header="复制" Click="CtxGridCopy_Click" />
-                        <MenuItem Header="粘贴" Click="CtxGridPaste_Click" />
+                        <MenuItem Header="下载" Click="CtxGridDownload_Click">
+                            <MenuItem.Icon>
+                                <icon:PackIconRemixIcon Kind="Download2Line" Foreground="#4CAF50" Width="14" Height="14"/>
+                            </MenuItem.Icon>
+                        </MenuItem>
+                        <MenuItem Header="删除" Click="CtxGridDelete_Click">
+                            <MenuItem.Icon>
+                                <icon:PackIconRemixIcon Kind="DeleteBin6Line" Foreground="#F44336" Width="14" Height="14"/>
+                            </MenuItem.Icon>
+                        </MenuItem>
+                        <MenuItem Header="重命名" Click="CtxGridRename_Click">
+                            <MenuItem.Icon>
+                                <icon:PackIconRemixIcon Kind="EditLine" Foreground="#FF9800" Width="14" Height="14"/>
+                            </MenuItem.Icon>
+                        </MenuItem>
+                        <MenuItem Header="复制" Click="CtxGridCopy_Click">
+                            <MenuItem.Icon>
+                                <icon:PackIconRemixIcon Kind="FileCopyLine" Foreground="#AEB5BD" Width="14" Height="14"/>
+                            </MenuItem.Icon>
+                        </MenuItem>
+                        <MenuItem Header="粘贴" Click="CtxGridPaste_Click">
+                            <MenuItem.Icon>
+                                <icon:PackIconRemixIcon Kind="ClipboardLine" Foreground="#AEB5BD" Width="14" Height="14"/>
+                            </MenuItem.Icon>
+                        </MenuItem>
                     </ContextMenu>
                 </DataGrid.ContextMenu>
                 <DataGrid.Columns>

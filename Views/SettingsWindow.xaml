@@ -107,7 +107,7 @@
                 <Run Text="Under "/>
                 <Hyperlink NavigateUri="https://opensource.org/licenses/MIT" RequestNavigate="Hyperlink_RequestNavigate" Foreground="#44A8FF">MIT License</Hyperlink>
                 <Run Text=" | Code By "/>
-                <Hyperlink NavigateUri="https://github.com/fsquirt" RequestNavigate="Hyperlink_RequestNavigate" Foreground="#44A8FF">fsquirt</Hyperlink>
+                <Hyperlink NavigateUri="https://github.com/fsquirt" RequestNavigate="Hyperlink_RequestNavigate" Foreground="#44A8FF">关晓予</Hyperlink>
                 <Run Text=" | Powered By "/>
                 <Hyperlink NavigateUri="https://dotnet.microsoft.com" RequestNavigate="Hyperlink_RequestNavigate" Foreground="#44A8FF">.NET 10</Hyperlink>
             </TextBlock>

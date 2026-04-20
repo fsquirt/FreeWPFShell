@@ -48,7 +48,7 @@ namespace FreeWPFShell.Models
     {
         public bool UseWindowsHello { get; set; } = false;
         public bool UseLinuxMonitor { get; set; } = true;
-        public string BackdropType { get; set; } = "None";
+        public string BackdropType { get; set; } = "Mica";
         public string TerminalBackground { get; set; } = "#1E3047";
         public bool UseImageBackground { get; set; } = false;
         public string? ImageBackgroundPath { get; set; }
