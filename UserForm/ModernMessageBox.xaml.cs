@@ -93,7 +93,14 @@ namespace FreeWPFShell.UserForm
             return App.Current.Dispatcher.Invoke(() =>
             {
                 var msgBox = new ModernMessageBox(message, title, button, image);
-                msgBox.Owner = Application.Current.MainWindow;
+                
+                // 修复：仅当 MainWindow 已完全初始化并显示时才设置 Owner
+                var mainWin = Application.Current.MainWindow;
+                if (mainWin != null && mainWin.IsVisible)
+                {
+                    try { msgBox.Owner = mainWin; } catch { }
+                }
+                
                 msgBox.ShowDialog();
                 return msgBox.Result;
             });
