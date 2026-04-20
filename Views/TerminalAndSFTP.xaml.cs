@@ -160,7 +160,26 @@ namespace FreeWPFShell.Views
         private void BtnRefresh_Click(object sender, RoutedEventArgs e) => LoadPath(_currentPath, true);
         private void BtnUp_Click(object sender, RoutedEventArgs e) { if (_currentPath != "/") { int i = _currentPath.TrimEnd('/').LastIndexOf('/'); LoadPath(i > 0 ? _currentPath.Substring(0, i) : "/"); } }
         private void BtnNewFolder_Click(object sender, RoutedEventArgs e) { try { Sftp.CreateDirectory(_currentPath == "/" ? "/NewFolder" : _currentPath.TrimEnd('/') + "/NewFolder"); LoadPath(_currentPath, true); } catch (Exception ex) { ModernMessageBox.Show("新建文件夹失败: " + ex.Message); } }
-        private void FileGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e) { if (FileGrid.SelectedItem is RemoteFile f && f.IsDirectory) LoadPath(f.FullName); }
+        private void FileGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e) 
+        { 
+            if (FileGrid.SelectedItem is RemoteFile f)
+            {
+                if (f.IsDirectory) LoadPath(f.FullName);
+                else { _ = Session.EditRemoteFileAsync(f.FullName, "code"); }
+            }
+        }
+
+        private void CtxGridEditVSCode_Click(object sender, RoutedEventArgs e)
+        {
+            if (FileGrid.SelectedItem is RemoteFile f && !f.IsDirectory)
+                _ = Session.EditRemoteFileAsync(f.FullName, "code");
+        }
+
+        private void CtxGridEditNotepad_Click(object sender, RoutedEventArgs e)
+        {
+            if (FileGrid.SelectedItem is RemoteFile f && !f.IsDirectory)
+                _ = Session.EditRemoteFileAsync(f.FullName, "notepad");
+        }
 
         private void UpdateStatus() => Dispatcher.InvokeAsync(() => { if (_activeTransfers > 0) { TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.Loader2Line; TxtStatusIcon.ToolTip = $"传输中... ({_completedFiles}/{_totalFiles}) [{_currentTransferProgress:0}%] - {_currentTransferName}"; } else { TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.CheckboxCircleLine; TxtStatusIcon.ToolTip = "当前没有传输任务"; } });
 

@@ -92,6 +92,17 @@
             <DataGrid x:Name="FileGrid" Grid.Row="1" AutoGenerateColumns="False" HeadersVisibility="Column" Background="Transparent" RowHeaderWidth="0" GridLinesVisibility="None" BorderThickness="0" MouseDoubleClick="FileGrid_MouseDoubleClick" IsReadOnly="True" SelectionMode="Extended">
                 <DataGrid.ContextMenu>
                     <ContextMenu>
+                        <MenuItem Header="使用 VS Code 编辑" Click="CtxGridEditVSCode_Click">
+                            <MenuItem.Icon>
+                                <icon:PackIconRemixIcon Kind="CodeSSlashLine" Foreground="#007ACC" Width="14" Height="14"/>
+                            </MenuItem.Icon>
+                        </MenuItem>
+                        <MenuItem Header="使用记事本编辑" Click="CtxGridEditNotepad_Click">
+                            <MenuItem.Icon>
+                                <icon:PackIconRemixIcon Kind="FileTextLine" Foreground="#AEB5BD" Width="14" Height="14"/>
+                            </MenuItem.Icon>
+                        </MenuItem>
+                        <Separator />
                         <MenuItem Header="下载" Click="CtxGridDownload_Click" />
                         <MenuItem Header="删除" Click="CtxGridDelete_Click" />
                         <MenuItem Header="重命名" Click="CtxGridRename_Click" />

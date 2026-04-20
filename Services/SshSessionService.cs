@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Timers;
+using System.Diagnostics;
 using FreeWPFShell.Models;
 using FreeWPFShell.Repositories;
 using FreeWPFShell.Share;
@@ -64,6 +66,7 @@ namespace FreeWPFShell.Services
         private int _tickCount;
 
         private readonly SettingsRepository _settingsRepo;
+        private readonly Dictionary<string, FileSystemWatcher> _activeWatchers = new();
 
         public SshSessionService(SshConnectionInfo hostInfo, SettingsRepository? settingsRepo = null)
         {
@@ -73,6 +76,106 @@ namespace FreeWPFShell.Services
             SessionIndex = Interlocked.Increment(ref _sessionCounter) - 1;
             string baseName = string.IsNullOrEmpty(hostInfo.HostName) ? hostInfo.IpAddress : hostInfo.HostName;
             DisplayName = $"{baseName} #{SessionIndex}";
+        }
+
+        public async Task EditRemoteFileAsync(string remotePath, string editorCommand)
+        {
+            if (SftpClient == null || !SftpClient.IsConnected)
+            {
+                ModernMessageBox.Show("SFTP 未连接，无法编辑文件", "错误", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                return;
+            }
+
+            try
+            {
+                string fileName = Path.GetFileName(remotePath);
+                string localDir = Path.Combine(Path.GetTempPath(), "FreeWPFShell", SessionId);
+                if (!Directory.Exists(localDir)) Directory.CreateDirectory(localDir);
+                string localPath = Path.Combine(localDir, fileName);
+
+                // 1. 下载文件
+                using (var fs = File.Create(localPath))
+                {
+                    await Task.Run(() => SftpClient.DownloadFile(remotePath, fs));
+                }
+
+                // 2. 启动监听
+                StartFileWatcher(localPath, remotePath);
+
+                // 3. 启动指定的编辑器
+                try
+                {
+                    var psi = new ProcessStartInfo(editorCommand, $"\"{localPath}\"")
+                    {
+                        UseShellExecute = true // 必须为 true 以便从 PATH 寻找 code 或 notepad
+                    };
+                    Process.Start(psi);
+                    Debug.WriteLine($"[Editor] Started {editorCommand} for {remotePath}");
+                }
+                catch (Exception ex)
+                {
+                    ModernMessageBox.Show($"无法启动编辑器 '{editorCommand}':\n{ex.Message}\n\n请检查该程序是否已安装并已添加到系统环境变量 PATH 中。", "启动失败", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                ModernMessageBox.Show($"下载文件失败: {ex.Message}", "错误", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            }
+        }
+
+        private void StartFileWatcher(string localPath, string remotePath)
+        {
+            string localDir = Path.GetDirectoryName(localPath)!;
+            string fileName = Path.GetFileName(localPath);
+
+            if (_activeWatchers.ContainsKey(localPath))
+            {
+                _activeWatchers[localPath].Dispose();
+                _activeWatchers.Remove(localPath);
+            }
+
+            var watcher = new FileSystemWatcher(localDir, fileName)
+            {
+                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size,
+                EnableRaisingEvents = true
+            };
+
+            // 防抖：防止某些编辑器多次写入触发多次上传
+            DateTime lastUploadTime = DateTime.MinValue;
+
+            watcher.Changed += (s, e) =>
+            {
+                if ((DateTime.Now - lastUploadTime).TotalMilliseconds < 500) return;
+                lastUploadTime = DateTime.Now;
+
+                Task.Run(async () =>
+                {
+                    try
+                    {
+                        // 等待文件句柄释放
+                        int retry = 5;
+                        while (retry-- > 0)
+                        {
+                            try
+                            {
+                                using (var fs = new FileStream(localPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                                {
+                                    if (SftpClient != null && SftpClient.IsConnected)
+                                    {
+                                        SftpClient.UploadFile(fs, remotePath, true);
+                                        Debug.WriteLine($"[Editor] Auto-uploaded: {remotePath}");
+                                    }
+                                }
+                                break;
+                            }
+                            catch { await Task.Delay(200); }
+                        }
+                    }
+                    catch (Exception ex) { Debug.WriteLine($"[Editor] Upload Error: {ex.Message}"); }
+                });
+            };
+
+            _activeWatchers[localPath] = watcher;
         }
 
         public async Task ConnectAsync()
@@ -519,6 +622,21 @@ namespace FreeWPFShell.Services
             _monitorTimer?.Stop();
             _monitorTimer?.Dispose();
             _monitorTimer = null;
+
+            // 停止所有文件监听
+            lock (_activeWatchers)
+            {
+                foreach (var w in _activeWatchers.Values) w.Dispose();
+                _activeWatchers.Clear();
+            }
+
+            // 尝试删除会话临时文件夹
+            try
+            {
+                string localDir = Path.Combine(Path.GetTempPath(), "FreeWPFShell", SessionId);
+                if (Directory.Exists(localDir)) Directory.Delete(localDir, true);
+            }
+            catch { /* 如果文件被占用则忽略删除，等待下次启动或系统自动清理 */ }
 
             // 立即标记为未连接，让 UI 得到即时反馈
             IsConnected = false;
