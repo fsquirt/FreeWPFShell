@@ -616,6 +616,46 @@ namespace FreeWPFShell.Services
             catch { return new List<LoginRecord>(); }
         }
 
+        public async Task<List<ServiceItem>> GetServicesAsync()
+        {
+            if (LinuxMonitorLocalPort == 0) return new List<ServiceItem>();
+            try
+            {
+                using var hc = CreateMonitorHttpClient();
+                hc.Timeout = TimeSpan.FromSeconds(10);
+                string json = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/services");
+                return JsonSerializer.Deserialize<List<ServiceItem>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<ServiceItem>();
+            }
+            catch { return new List<ServiceItem>(); }
+        }
+
+        public async Task<bool> ServiceActionAsync(string serviceName, string action)
+        {
+            if (LinuxMonitorLocalPort == 0) return false;
+            try
+            {
+                using var hc = CreateMonitorHttpClient();
+                hc.Timeout = TimeSpan.FromSeconds(15);
+                string encodedName = System.Net.WebUtility.UrlEncode(serviceName);
+                string result = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/service_{action}?name={encodedName}");
+                return result.ToLower() == "true";
+            }
+            catch { return false; }
+        }
+
+        public async Task<string> GetServiceLogAsync(string serviceName)
+        {
+            if (LinuxMonitorLocalPort == 0) return "";
+            try
+            {
+                using var hc = CreateMonitorHttpClient();
+                hc.Timeout = TimeSpan.FromSeconds(5);
+                string encodedName = System.Net.WebUtility.UrlEncode(serviceName);
+                return await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/service_log?name={encodedName}");
+            }
+            catch { return ""; }
+        }
+
         public async Task<bool> KillAllProcessesAsync(string fullPath, int signal)
         {
             if (LinuxMonitorLocalPort == 0) return false;

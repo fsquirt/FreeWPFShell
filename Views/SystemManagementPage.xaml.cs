@@ -18,6 +18,8 @@ namespace FreeWPFShell.Views
         private readonly SshSessionService _session;
         private readonly ObservableCollection<LoginRecord> _wtmpRecords = new();
         private readonly ObservableCollection<LoginRecord> _btmpRecords = new();
+        private readonly ObservableCollection<ServiceItem> _serviceRecords = new();
+        private List<ServiceItem> _allServicesRaw = new();
 
         public SystemManagementPage(SshSessionService session)
         {
@@ -25,9 +27,11 @@ namespace FreeWPFShell.Views
             _session = session;
             WtmpGrid.ItemsSource = _wtmpRecords;
             BtmpGrid.ItemsSource = _btmpRecords;
+            ServiceGrid.ItemsSource = _serviceRecords;
 
             _ = LoadWtmpAsync();
             _ = LoadBtmpAsync();
+            _ = LoadServicesAsync();
         }
 
         private async Task LoadWtmpAsync()
@@ -83,6 +87,113 @@ namespace FreeWPFShell.Views
 
         private void BtnRefreshWtmp_Click(object sender, RoutedEventArgs e) => _ = LoadWtmpAsync();
         private void BtnRefreshBtmp_Click(object sender, RoutedEventArgs e) => _ = LoadBtmpAsync();
+
+        private async Task LoadServicesAsync()
+        {
+            try
+            {
+                _allServicesRaw = await _session.GetServicesAsync();
+                ApplyServiceFilter();
+            }
+            catch (Exception ex)
+            {
+                UserForm.ModernMessageBox.Show($"读取服务列表失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void ApplyServiceFilter()
+        {
+            string search = TxtServiceSearch.Text.Trim().ToLower();
+            bool onlyRunning = TogFilterInactive.IsChecked == true;
+            _serviceRecords.Clear();
+            foreach (var s in _allServicesRaw.Where(s =>
+            {
+                if (onlyRunning && (s.ActiveState != "active" || s.SubState != "running")) return false;
+                if (string.IsNullOrEmpty(search)) return true;
+                return s.Name.ToLower().Contains(search) ||
+                       s.Description.ToLower().Contains(search) ||
+                       s.ActiveState.ToLower().Contains(search);
+            }))
+            {
+                _serviceRecords.Add(s);
+            }
+        }
+
+        private void BtnRefreshServices_Click(object sender, RoutedEventArgs e) => _ = LoadServicesAsync();
+        private void TogFilterInactive_Click(object sender, RoutedEventArgs e) => ApplyServiceFilter();
+        private void TxtServiceSearch_TextChanged(object sender, TextChangedEventArgs e) => ApplyServiceFilter();
+
+        private async void CtxServiceStart_Click(object sender, RoutedEventArgs e)
+        {
+            if (ServiceGrid.SelectedItem is ServiceItem s)
+            {
+                if (UserForm.ModernMessageBox.Show($"确定要启动服务 {s.Name} 吗？", "启动服务", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+                {
+                    bool ok = await _session.ServiceActionAsync(s.Name, "start");
+                    if (ok) UserForm.ModernMessageBox.Show($"服务 {s.Name} 启动命令已发送。");
+                    else UserForm.ModernMessageBox.Show($"启动服务 {s.Name} 失败，可能权限不足。");
+                    await LoadServicesAsync();
+                }
+            }
+        }
+
+        private async void CtxServiceStop_Click(object sender, RoutedEventArgs e)
+        {
+            if (ServiceGrid.SelectedItem is ServiceItem s)
+            {
+                if (UserForm.ModernMessageBox.Show($"确定要停止服务 {s.Name} 吗？", "停止服务", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
+                {
+                    bool ok = await _session.ServiceActionAsync(s.Name, "stop");
+                    if (ok) UserForm.ModernMessageBox.Show($"服务 {s.Name} 停止命令已发送。");
+                    else UserForm.ModernMessageBox.Show($"停止服务 {s.Name} 失败，可能权限不足。");
+                    await LoadServicesAsync();
+                }
+            }
+        }
+
+        private async void CtxServiceRestart_Click(object sender, RoutedEventArgs e)
+        {
+            if (ServiceGrid.SelectedItem is ServiceItem s)
+            {
+                if (UserForm.ModernMessageBox.Show($"确定要重启服务 {s.Name} 吗？", "重启服务", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+                {
+                    bool ok = await _session.ServiceActionAsync(s.Name, "restart");
+                    if (ok) UserForm.ModernMessageBox.Show($"服务 {s.Name} 重启命令已发送。");
+                    else UserForm.ModernMessageBox.Show($"重启服务 {s.Name} 失败，可能权限不足。");
+                    await LoadServicesAsync();
+                }
+            }
+        }
+
+        private async void CtxServiceLog_Click(object sender, RoutedEventArgs e)
+        {
+            if (ServiceGrid.SelectedItem is ServiceItem s)
+            {
+                string log = await _session.GetServiceLogAsync(s.Name);
+                if (string.IsNullOrEmpty(log))
+                {
+                    UserForm.ModernMessageBox.Show($"无法获取服务 {s.Name} 的日志。", "日志", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+                try
+                {
+                    string localDir = Path.Combine(Path.GetTempPath(), "FreeWPFShell", _session.SessionId);
+                    if (!Directory.Exists(localDir)) Directory.CreateDirectory(localDir);
+                    string safeName = s.Name.Replace('/', '_').Replace('\\', '_');
+                    string localPath = Path.Combine(localDir, $"{safeName}.log");
+                    await File.WriteAllTextAsync(localPath, log, Encoding.UTF8);
+                    var psi = new System.Diagnostics.ProcessStartInfo("notepad", $"\"{localPath}\"")
+                    {
+                        UseShellExecute = true
+                    };
+                    System.Diagnostics.Process.Start(psi);
+                }
+                catch (Exception ex)
+                {
+                    UserForm.ModernMessageBox.Show($"打开日志失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
 
         private async void BtnExportWtmp_Click(object sender, RoutedEventArgs e) => await ExportCsvAsync("/wtmp", "登录记录");
         private async void BtnExportBtmp_Click(object sender, RoutedEventArgs e) => await ExportCsvAsync("/btmp", "登录失败记录");

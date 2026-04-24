@@ -178,6 +178,189 @@ fn parse_utmp_file(path: &str, filter_user_process: bool, max_count: Option<usiz
     records
 }
 
+// --- systemd service list via D-Bus (zbus) ---
+
+#[derive(Serialize, Clone)]
+struct ServiceItem {
+    name: String,
+    description: String,
+    active_state: String,
+    sub_state: String,
+    load_state: String,
+    pid: u32,
+    user: String,
+    group: String,
+}
+
+fn resolve_uid(uid: u32, passwd_cache: &std::collections::HashMap<u32, String>) -> String {
+    if uid == 0 { return "root".to_string(); }
+    if let Some(name) = passwd_cache.get(&uid) { return name.clone(); }
+    uid.to_string()
+}
+
+fn resolve_gid(gid: u32, group_cache: &std::collections::HashMap<u32, String>) -> String {
+    if gid == 0 { return "root".to_string(); }
+    if let Some(name) = group_cache.get(&gid) { return name.clone(); }
+    gid.to_string()
+}
+
+fn load_passwd_cache() -> std::collections::HashMap<u32, String> {
+    let mut map = std::collections::HashMap::new();
+    if let Ok(content) = fs::read_to_string("/etc/passwd") {
+        for line in content.lines() {
+            let parts: Vec<&str> = line.split(':').collect();
+            if parts.len() >= 3 {
+                if let Ok(uid) = parts[2].parse::<u32>() {
+                    map.insert(uid, parts[0].to_string());
+                }
+            }
+        }
+    }
+    map
+}
+
+fn load_group_cache() -> std::collections::HashMap<u32, String> {
+    let mut map = std::collections::HashMap::new();
+    if let Ok(content) = fs::read_to_string("/etc/group") {
+        for line in content.lines() {
+            let parts: Vec<&str> = line.split(':').collect();
+            if parts.len() >= 3 {
+                if let Ok(gid) = parts[2].parse::<u32>() {
+                    map.insert(gid, parts[0].to_string());
+                }
+            }
+        }
+    }
+    map
+}
+
+async fn list_systemd_services() -> Result<Vec<ServiceItem>, Box<dyn std::error::Error>> {
+    let connection = zbus::Connection::system().await?;
+    let proxy = zbus::Proxy::new(
+        &connection,
+        "org.freedesktop.systemd1",
+        "/org/freedesktop/systemd1",
+        "org.freedesktop.systemd1.Manager",
+    ).await?;
+
+    // ListUnits returns: Vec<(name, description, load_state, active_state, sub_state, following, path, job_id, job_type, job_path)>
+    let units: Vec<(String, String, String, String, String, String, zbus::zvariant::OwnedObjectPath, u32, String, zbus::zvariant::OwnedObjectPath)> =
+        proxy.call_method("ListUnits", &()).await?.body().deserialize()?;
+
+    let passwd_cache = load_passwd_cache();
+    let group_cache = load_group_cache();
+
+    let mut services = Vec::new();
+
+    for u in units.iter() {
+        if !u.0.ends_with(".service") { continue; }
+
+        let (pid, user, group) = if u.3 == "active" {
+            match get_service_main_pid(&connection, &u.6).await {
+                Ok(p) if p > 0 => {
+                    let (uid_val, gid_val) = read_pid_uid_gid(p);
+                    (p, resolve_uid(uid_val, &passwd_cache), resolve_gid(gid_val, &group_cache))
+                }
+                Ok(p) => (p, String::new(), String::new()),
+                Err(_) => (0, String::new(), String::new()),
+            }
+        } else {
+            (0, String::new(), String::new())
+        };
+
+        services.push(ServiceItem {
+            name: u.0.clone(),
+            description: u.1.clone(),
+            load_state: u.2.clone(),
+            active_state: u.3.clone(),
+            sub_state: u.4.clone(),
+            pid,
+            user,
+            group,
+        });
+    }
+
+    Ok(services)
+}
+
+async fn get_service_main_pid(connection: &zbus::Connection, path: &zbus::zvariant::OwnedObjectPath) -> Result<u32, Box<dyn std::error::Error>> {
+    let proxy = zbus::Proxy::new(
+        connection,
+        "org.freedesktop.systemd1",
+        path.as_str(),
+        "org.freedesktop.DBus.Properties",
+    ).await?;
+
+    let reply = proxy.call_method("Get", &("org.freedesktop.systemd1.Service", "MainPID")).await?;
+    let body = reply.body();
+    let pid: zbus::zvariant::OwnedValue = body.deserialize()?;
+    match &*pid {
+        zbus::zvariant::Value::U32(p) => Ok(*p),
+        zbus::zvariant::Value::I32(p) => Ok(*p as u32),
+        _ => Ok(0),
+    }
+}
+
+fn read_pid_uid_gid(pid: u32) -> (u32, u32) {
+    let status_path = format!("/proc/{}/status", pid);
+    let content = match fs::read_to_string(&status_path) { Ok(c) => c, Err(_) => return (0, 0) };
+    let mut uid: u32 = 0;
+    let mut gid: u32 = 0;
+    for line in content.lines() {
+        if line.starts_with("Uid:") {
+            // Uid: 1000 1000 1000 1000  — take the first (real UID)
+            uid = line[4..].split_whitespace().next().and_then(|v| v.parse().ok()).unwrap_or(0);
+        }
+        if line.starts_with("Gid:") {
+            gid = line[4..].split_whitespace().next().and_then(|v| v.parse().ok()).unwrap_or(0);
+        }
+    }
+    (uid, gid)
+}
+
+async fn do_service_action(name: &str, action: &str) -> Result<bool, Box<dyn std::error::Error>> {
+    let connection = zbus::Connection::system().await?;
+    let proxy = zbus::Proxy::new(
+        &connection,
+        "org.freedesktop.systemd1",
+        "/org/freedesktop/systemd1",
+        "org.freedesktop.systemd1.Manager",
+    ).await?;
+
+    let method = match action {
+        "start" => "StartUnit",
+        "stop" => "StopUnit",
+        "restart" => "RestartUnit",
+        _ => return Ok(false),
+    };
+
+    // method signature: (name: String, mode: String) -> o (object path)
+    let _: zbus::zvariant::OwnedObjectPath = proxy.call_method(method, &(name, "replace")).await?.body().deserialize()?;
+    Ok(true)
+}
+
+fn get_systemd_services() -> Vec<ServiceItem> {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        list_systemd_services().await.unwrap_or_default()
+    })
+}
+
+fn service_action(name: &str, action: &str) -> bool {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        do_service_action(name, action).await.unwrap_or(false)
+    })
+}
+
+fn get_service_log(name: &str) -> String {
+    std::process::Command::new("journalctl")
+        .args(["-u", name, "-n", "50", "--no-pager"])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+        .unwrap_or_else(|_| "Failed to read journal".to_string())
+}
+
 fn get_process_detail(pid_val: u32) -> Option<ProcessDetail> {
     let pid_str = pid_val.to_string();
     let proc_path = format!("/proc/{}", pid_str);
@@ -323,7 +506,7 @@ fn main() {
         }
     });
 
-    for mut request in server.incoming_requests() {
+    for request in server.incoming_requests() {
         last_request.store(now_secs(), Ordering::Relaxed);
         
         // Token Verification
@@ -388,6 +571,26 @@ fn main() {
             let records = parse_utmp_file("/var/log/btmp", false, Some(count));
             let data = serde_json::to_string(&records).unwrap_or_else(|_| "[]".to_string());
             Response::from_string(data).with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap())
+        } else if url == "/services" {
+            let services = get_systemd_services();
+            let data = serde_json::to_string(&services).unwrap_or_else(|_| "[]".to_string());
+            Response::from_string(data).with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap())
+        } else if url.starts_with("/service_start") {
+            let name = url_decode(url.split("name=").last().unwrap_or(""));
+            let success = service_action(&name, "start");
+            Response::from_string(success.to_string())
+        } else if url.starts_with("/service_stop") {
+            let name = url_decode(url.split("name=").last().unwrap_or(""));
+            let success = service_action(&name, "stop");
+            Response::from_string(success.to_string())
+        } else if url.starts_with("/service_restart") {
+            let name = url_decode(url.split("name=").last().unwrap_or(""));
+            let success = service_action(&name, "restart");
+            Response::from_string(success.to_string())
+        } else if url.starts_with("/service_log") {
+            let name = url_decode(url.split("name=").last().unwrap_or(""));
+            let log = get_service_log(&name);
+            Response::from_string(log).with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"text/plain; charset=utf-8"[..]).unwrap())
         } else {
             Response::from_string("Not Found").with_status_code(404)
         };
