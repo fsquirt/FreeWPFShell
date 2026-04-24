@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using FreeWPFShell.Models;
 using FreeWPFShell.Services;
 using FreeWPFShell.Share;
@@ -121,6 +122,26 @@ namespace FreeWPFShell.Views
 
         private void BtnRefreshServices_Click(object sender, RoutedEventArgs e) => _ = LoadServicesAsync();
         private void TogFilterInactive_Click(object sender, RoutedEventArgs e) => ApplyServiceFilter();
+
+        private void BtnTabLogin_Click(object sender, RoutedEventArgs e)
+        {
+            PanelLogin.Visibility = Visibility.Visible;
+            PanelService.Visibility = Visibility.Collapsed;
+            BtnTabLogin.Background = new SolidColorBrush(Color.FromRgb(0x2D, 0x2D, 0x30));
+            BtnTabLogin.Foreground = Brushes.White;
+            BtnTabService.Background = Brushes.Transparent;
+            BtnTabService.Foreground = Brushes.Gray;
+        }
+
+        private void BtnTabService_Click(object sender, RoutedEventArgs e)
+        {
+            PanelLogin.Visibility = Visibility.Collapsed;
+            PanelService.Visibility = Visibility.Visible;
+            BtnTabService.Background = new SolidColorBrush(Color.FromRgb(0x2D, 0x2D, 0x30));
+            BtnTabService.Foreground = Brushes.White;
+            BtnTabLogin.Background = Brushes.Transparent;
+            BtnTabLogin.Foreground = Brushes.Gray;
+        }
         private void TxtServiceSearch_TextChanged(object sender, TextChangedEventArgs e) => ApplyServiceFilter();
 
         private async void CtxServiceStart_Click(object sender, RoutedEventArgs e)
