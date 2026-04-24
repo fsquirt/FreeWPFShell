@@ -3,12 +3,14 @@ mod utils;
 mod utmp_parser;
 mod service_manager;
 mod stats_collector;
+mod cron_manager;
 
 use models::{SysStats, ProcessItem, DiskItem};
 use utils::{format_size, format_uptime, now_secs, url_decode};
 use utmp_parser::parse_utmp_file;
 use service_manager::{get_systemd_services, service_action, get_service_log};
 use stats_collector::{get_process_detail, get_net_conns};
+use cron_manager::{list_cron_jobs, add_cron_job, remove_cron_job, toggle_cron_job, get_cron_service_status};
 
 use sysinfo::{Disks, Networks, System};
 use tiny_http::{Response, Server};
@@ -209,6 +211,31 @@ fn main() {
             let name = url_decode(url.split("name=").last().unwrap_or(""));
             let log = get_service_log(&name);
             Response::from_string(log).with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"text/plain; charset=utf-8"[..]).unwrap())
+        } else if url == "/cron_list" {
+            let jobs = list_cron_jobs();
+            let data = serde_json::to_string(&jobs).unwrap_or_else(|_| "[]".to_string());
+            Response::from_string(data).with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap())
+        } else if url.starts_with("/cron_add") {
+            let raw = url_decode(url.split("raw=").last().unwrap_or(""));
+            let success = add_cron_job(&raw);
+            Response::from_string(success.to_string())
+        } else if url.starts_with("/cron_remove") {
+            let line = url.split("line=").last().and_then(|p| p.parse::<usize>().ok()).unwrap_or(0);
+            let success = remove_cron_job(line);
+            Response::from_string(success.to_string())
+        } else if url.starts_with("/cron_toggle") {
+            let parts: Vec<&str> = url.split('?').nth(1).unwrap_or("").split('&').collect();
+            let mut line = 0usize;
+            let mut enabled = true;
+            for p in parts {
+                if p.starts_with("line=") { line = p[5..].parse::<usize>().unwrap_or(0); }
+                if p.starts_with("enabled=") { enabled = p[8..].parse::<bool>().unwrap_or(true); }
+            }
+            let success = toggle_cron_job(line, enabled);
+            Response::from_string(success.to_string())
+        } else if url == "/cron_status" {
+            let status = get_cron_service_status();
+            Response::from_string(status).with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"text/plain; charset=utf-8"[..]).unwrap())
         } else {
             Response::from_string("Not Found").with_status_code(404)
         };

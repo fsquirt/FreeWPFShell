@@ -16,6 +16,7 @@
             <mica:Button x:Name="BtnTabNet" Content="网络连接" Click="BtnTabNet_Click" Margin="5,0,0,0" Width="100" Height="32" Background="Transparent" Foreground="Gray"/>
             <mica:Button x:Name="BtnTabLogin" Content="登录记录" Click="BtnTabLogin_Click" Margin="5,0,0,0" Width="100" Height="32" Background="Transparent" Foreground="Gray"/>
             <mica:Button x:Name="BtnTabService" Content="服务管理" Click="BtnTabService_Click" Margin="5,0,0,0" Width="100" Height="32" Background="Transparent" Foreground="Gray"/>
+            <mica:Button x:Name="BtnTabCron" Content="计划任务" Click="BtnTabCron_Click" Margin="5,0,0,0" Width="100" Height="32" Background="Transparent" Foreground="Gray"/>
         </StackPanel>
 
         <!-- 进程管理面板 -->
@@ -227,6 +228,100 @@
                     </DataGrid.Columns>
                 </DataGrid>
 
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- 计划任务面板 -->
+        <ScrollViewer x:Name="PanelCron" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
+            <StackPanel Margin="10,8,10,10">
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                    <icon:PackIconRemixIcon Kind="TimeLine" Foreground="#FF9800" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                    <TextBlock Text="计划任务" FontWeight="Bold" FontSize="16" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="TxtCronServiceStatus" Text="检查中..." FontSize="11" Foreground="Gray" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                    <TextBlock Text="搜索:" VerticalAlignment="Center" Margin="20,0,5,0"/>
+                    <mica:TextBox x:Name="TxtCronSearch" Width="150" Height="26" TextChanged="TxtCronSearch_TextChanged"/>
+                    <mica:Button x:Name="BtnRefreshCron" Content="刷新" Click="BtnRefreshCron_Click" Margin="10,0,0,0" Width="60" Height="26"/>
+                    <mica:ToggleSwitch x:Name="TogFilterDisabledCron" Content="隐藏已禁用" IsChecked="False" VerticalAlignment="Center" Margin="15,0,0,0" Click="TogFilterDisabledCron_Click"/>
+                </StackPanel>
+
+                <DataGrid x:Name="CronGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                          Background="Transparent" RowHeaderWidth="0" GridLinesVisibility="Horizontal"
+                          HeadersVisibility="Column" SelectionMode="Single" FontFamily="Consolas, Microsoft YaHei">
+                    <DataGrid.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="启用" Click="CtxCronEnable_Click">
+                                <MenuItem.Icon>
+                                    <icon:PackIconRemixIcon Kind="PlayCircleLine" Foreground="#4CAF50" Width="14" Height="14"/>
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Header="禁用" Click="CtxCronDisable_Click">
+                                <MenuItem.Icon>
+                                    <icon:PackIconRemixIcon Kind="StopCircleLine" Foreground="#F44336" Width="14" Height="14"/>
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <Separator/>
+                            <MenuItem Header="删除" Click="CtxCronDelete_Click">
+                                <MenuItem.Icon>
+                                    <icon:PackIconRemixIcon Kind="DeleteBin6Line" Foreground="#F44336" Width="14" Height="14"/>
+                                </MenuItem.Icon>
+                            </MenuItem>
+                        </ContextMenu>
+                    </DataGrid.ContextMenu>
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="状态" Binding="{Binding StatusText}" Width="80"/>
+                        <DataGridTextColumn Header="时间规则" Binding="{Binding ScheduleDescription}" Width="1.5*">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="ToolTip" Value="{Binding Schedule}"/>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+                        <DataGridTextColumn Header="命令" Binding="{Binding Command}" Width="3*"/>
+                        <DataGridTextColumn Header="原始行" Binding="{Binding Raw}" Width="2*"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <Border BorderBrush="#555" BorderThickness="0,1,0,0" Margin="0,15,0,0" Padding="10">
+                    <StackPanel>
+                        <TextBlock Text="新建计划任务" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="执行频率:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <ComboBox x:Name="CmbCronPreset" Width="150" Height="26" SelectionChanged="CmbCronPreset_SelectionChanged">
+                                <ComboBoxItem Content="每分钟" Tag="* * * * *"/>
+                                <ComboBoxItem Content="每5分钟" Tag="*/5 * * * *"/>
+                                <ComboBoxItem Content="每小时" Tag="0 * * * *"/>
+                                <ComboBoxItem Content="每5小时" Tag="0 */5 * * *"/>
+                                <ComboBoxItem Content="每天" Tag="0 0 * * *"/>
+                                <ComboBoxItem Content="每5天" Tag="0 0 */5 * *"/>
+                                <ComboBoxItem Content="每周5" Tag="0 0 * * 5"/>
+                                <ComboBoxItem Content="每月5日" Tag="0 0 5 * *"/>
+                                <ComboBoxItem Content="每年5月5日" Tag="0 0 5 5 *"/>
+                                <ComboBoxItem Content="自定义" Tag="custom"/>
+                            </ComboBox>
+                        </StackPanel>
+                        <Grid x:Name="GridCustomCron" Visibility="Visible" Margin="0,5,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="50"/>
+                                <ColumnDefinition Width="50"/>
+                                <ColumnDefinition Width="50"/>
+                                <ColumnDefinition Width="50"/>
+                                <ColumnDefinition Width="50"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="分 时 日 月 周" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <mica:TextBox x:Name="TxtCronMin" Grid.Column="1" Text="*" Height="26" Margin="2,0"/>
+                            <mica:TextBox x:Name="TxtCronHour" Grid.Column="2" Text="*" Height="26" Margin="2,0"/>
+                            <mica:TextBox x:Name="TxtCronDom" Grid.Column="3" Text="*" Height="26" Margin="2,0"/>
+                            <mica:TextBox x:Name="TxtCronMonth" Grid.Column="4" Text="*" Height="26" Margin="2,0"/>
+                            <mica:TextBox x:Name="TxtCronDow" Grid.Column="5" Text="*" Height="26" Margin="2,0"/>
+                        </Grid>
+                        <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                            <TextBlock Text="命令:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <mica:TextBox x:Name="TxtCronCommand" Width="400" Height="26"/>
+                            <mica:Button x:Name="BtnAddCron" Content="添加" Click="BtnAddCron_Click" Width="60" Height="26" Margin="10,0,0,0"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </ScrollViewer>
     </Grid>

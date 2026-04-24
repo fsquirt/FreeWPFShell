@@ -90,3 +90,12 @@ pub struct NetConnItem {
     pub user: String,
     pub program: String,
 }
+
+#[derive(Serialize, Clone)]
+pub struct CronJobItem {
+    pub line_index: usize,
+    pub schedule: String,
+    pub command: String,
+    pub enabled: bool,
+    pub raw: String,
+}

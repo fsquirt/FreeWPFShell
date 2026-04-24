@@ -35,6 +35,10 @@ namespace FreeWPFShell.Views
         private readonly ObservableCollection<NetConnItem> _netConns = new();
         private List<NetConnItem> _allNetConnsRaw = new();
 
+        // Cron Jobs
+        private readonly ObservableCollection<CronJobItem> _cronJobs = new();
+        private List<CronJobItem> _allCronJobsRaw = new();
+
         public SystemManagementPage(SshSessionService session)
         {
             InitializeComponent();
@@ -45,6 +49,7 @@ namespace FreeWPFShell.Views
             ServiceGrid.ItemsSource = _serviceRecords;
             ProcessGrid.ItemsSource = _processes;
             NetGrid.ItemsSource = _netConns;
+            CronGrid.ItemsSource = _cronJobs;
 
             // Initialize Process Timer
             _processRefreshTimer = new System.Timers.Timer(2000);
@@ -59,6 +64,7 @@ namespace FreeWPFShell.Views
             _ = LoadServicesAsync();
             _ = RefreshProcessData();
             _ = LoadNetConnsAsync();
+            _ = LoadCronJobsAsync();
         }
 
         #region Tab Navigation
@@ -67,6 +73,7 @@ namespace FreeWPFShell.Views
         private void BtnTabNet_Click(object sender, RoutedEventArgs e) => SwitchToTab("Net");
         private void BtnTabLogin_Click(object sender, RoutedEventArgs e) => SwitchToTab("Login");
         private void BtnTabService_Click(object sender, RoutedEventArgs e) => SwitchToTab("Service");
+        private void BtnTabCron_Click(object sender, RoutedEventArgs e) => SwitchToTab("Cron");
 
         private void SwitchToTab(string tabName)
         {
@@ -74,11 +81,13 @@ namespace FreeWPFShell.Views
             PanelNet.Visibility = tabName == "Net" ? Visibility.Visible : Visibility.Collapsed;
             PanelLogin.Visibility = tabName == "Login" ? Visibility.Visible : Visibility.Collapsed;
             PanelService.Visibility = tabName == "Service" ? Visibility.Visible : Visibility.Collapsed;
+            PanelCron.Visibility = tabName == "Cron" ? Visibility.Visible : Visibility.Collapsed;
 
             UpdateTabButton(BtnTabProcess, tabName == "Process");
             UpdateTabButton(BtnTabNet, tabName == "Net");
             UpdateTabButton(BtnTabLogin, tabName == "Login");
             UpdateTabButton(BtnTabService, tabName == "Service");
+            UpdateTabButton(BtnTabCron, tabName == "Cron");
 
             // Only run process timer when process tab is active
             if (tabName == "Process") _processRefreshTimer.Start();
@@ -480,6 +489,130 @@ namespace FreeWPFShell.Views
                     else UserForm.ModernMessageBox.Show("操作失败，可能权限不足。");
                     await LoadNetConnsAsync();
                 }
+            }
+        }
+
+        #endregion
+
+        #region Cron Management
+
+        private async Task LoadCronJobsAsync()
+        {
+            try
+            {
+                _allCronJobsRaw = await _session.GetCronJobsAsync();
+                ApplyCronFilter();
+                string status = await _session.GetCronStatusAsync();
+                TxtCronServiceStatus.Text = status;
+                TxtCronServiceStatus.Foreground = status == "运行中" ? Brushes.LimeGreen : Brushes.Gray;
+            }
+            catch (Exception ex)
+            {
+                UserForm.ModernMessageBox.Show($"读取计划任务失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void ApplyCronFilter()
+        {
+            string search = TxtCronSearch.Text.Trim().ToLower();
+            bool hideDisabled = TogFilterDisabledCron.IsChecked == true;
+            _cronJobs.Clear();
+            foreach (var c in _allCronJobsRaw.Where(c =>
+            {
+                if (hideDisabled && !c.Enabled) return false;
+                if (string.IsNullOrEmpty(search)) return true;
+                return c.Schedule.ToLower().Contains(search) ||
+                       c.Command.ToLower().Contains(search) ||
+                       c.Raw.ToLower().Contains(search);
+            }))
+            {
+                _cronJobs.Add(c);
+            }
+        }
+
+        private void BtnRefreshCron_Click(object sender, RoutedEventArgs e) => _ = LoadCronJobsAsync();
+        private void TxtCronSearch_TextChanged(object sender, TextChangedEventArgs e) => ApplyCronFilter();
+        private void TogFilterDisabledCron_Click(object sender, RoutedEventArgs e) => ApplyCronFilter();
+
+        private async void CtxCronEnable_Click(object sender, RoutedEventArgs e) => await DoToggleCron(true);
+        private async void CtxCronDisable_Click(object sender, RoutedEventArgs e) => await DoToggleCron(false);
+
+        private async Task DoToggleCron(bool enabled)
+        {
+            if (CronGrid.SelectedItem is CronJobItem c)
+            {
+                string action = enabled ? "启用" : "禁用";
+                if (UserForm.ModernMessageBox.Show($"确定要{action}该计划任务吗？\n\n{c.Schedule}\n{c.Command}", $"{action}任务", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+                {
+                    bool ok = await _session.ToggleCronJobAsync(c.LineIndex, enabled);
+                    if (ok) UserForm.ModernMessageBox.Show($"计划任务已{action}。");
+                    else UserForm.ModernMessageBox.Show("操作失败，可能权限不足。");
+                    await LoadCronJobsAsync();
+                }
+            }
+        }
+
+        private async void CtxCronDelete_Click(object sender, RoutedEventArgs e)
+        {
+            if (CronGrid.SelectedItem is CronJobItem c)
+            {
+                if (UserForm.ModernMessageBox.Show($"确定要删除该计划任务吗？\n\n{c.Schedule}\n{c.Command}", "删除任务", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
+                {
+                    bool ok = await _session.RemoveCronJobAsync(c.LineIndex);
+                    if (ok) UserForm.ModernMessageBox.Show("计划任务已删除。");
+                    else UserForm.ModernMessageBox.Show("删除失败，可能权限不足。");
+                    await LoadCronJobsAsync();
+                }
+            }
+        }
+
+        private void CmbCronPreset_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (CmbCronPreset.SelectedItem is ComboBoxItem item && item.Tag != null)
+            {
+                string tag = item.Tag.ToString()!;
+                if (tag != "custom")
+                {
+                    var parts = tag.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length == 5)
+                    {
+                        TxtCronMin.Text = parts[0];
+                        TxtCronHour.Text = parts[1];
+                        TxtCronDom.Text = parts[2];
+                        TxtCronMonth.Text = parts[3];
+                        TxtCronDow.Text = parts[4];
+                    }
+                }
+            }
+        }
+
+        private async void BtnAddCron_Click(object sender, RoutedEventArgs e)
+        {
+            string cmd = TxtCronCommand.Text.Trim();
+            if (string.IsNullOrEmpty(cmd))
+            {
+                UserForm.ModernMessageBox.Show("命令不能为空。", "输入错误", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            string min = TxtCronMin.Text.Trim();
+            string hour = TxtCronHour.Text.Trim();
+            string dom = TxtCronDom.Text.Trim();
+            string month = TxtCronMonth.Text.Trim();
+            string dow = TxtCronDow.Text.Trim();
+            string schedule = $"{min} {hour} {dom} {month} {dow}";
+
+            string raw = $"{schedule} {cmd}";
+            bool ok = await _session.AddCronJobAsync(raw);
+            if (ok)
+            {
+                UserForm.ModernMessageBox.Show("计划任务已添加。");
+                TxtCronCommand.Clear();
+                await LoadCronJobsAsync();
+            }
+            else
+            {
+                UserForm.ModernMessageBox.Show("添加失败，请检查 crontab 格式或权限。", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 

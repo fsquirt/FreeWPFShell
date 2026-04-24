@@ -682,6 +682,69 @@ namespace FreeWPFShell.Services
             catch { return new List<NetConnItem>(); }
         }
 
+        public async Task<List<CronJobItem>> GetCronJobsAsync()
+        {
+            if (LinuxMonitorLocalPort == 0) return new List<CronJobItem>();
+            try
+            {
+                using var hc = CreateMonitorHttpClient();
+                hc.Timeout = TimeSpan.FromSeconds(3);
+                string json = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/cron_list");
+                return JsonSerializer.Deserialize<List<CronJobItem>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<CronJobItem>();
+            }
+            catch { return new List<CronJobItem>(); }
+        }
+
+        public async Task<bool> AddCronJobAsync(string rawLine)
+        {
+            if (LinuxMonitorLocalPort == 0) return false;
+            try
+            {
+                using var hc = CreateMonitorHttpClient();
+                hc.Timeout = TimeSpan.FromSeconds(5);
+                string encoded = System.Net.WebUtility.UrlEncode(rawLine);
+                string result = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/cron_add?raw={encoded}");
+                return result.ToLower() == "true";
+            }
+            catch { return false; }
+        }
+
+        public async Task<bool> RemoveCronJobAsync(int lineIndex)
+        {
+            if (LinuxMonitorLocalPort == 0) return false;
+            try
+            {
+                using var hc = CreateMonitorHttpClient();
+                string result = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/cron_remove?line={lineIndex}");
+                return result.ToLower() == "true";
+            }
+            catch { return false; }
+        }
+
+        public async Task<bool> ToggleCronJobAsync(int lineIndex, bool enabled)
+        {
+            if (LinuxMonitorLocalPort == 0) return false;
+            try
+            {
+                using var hc = CreateMonitorHttpClient();
+                string result = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/cron_toggle?line={lineIndex}&enabled={enabled.ToString().ToLowerInvariant()}");
+                return result.ToLower() == "true";
+            }
+            catch { return false; }
+        }
+
+        public async Task<string> GetCronStatusAsync()
+        {
+            if (LinuxMonitorLocalPort == 0) return "未连接";
+            try
+            {
+                using var hc = CreateMonitorHttpClient();
+                hc.Timeout = TimeSpan.FromSeconds(3);
+                return await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/cron_status");
+            }
+            catch { return "未知"; }
+        }
+
         public void Disconnect()
         {
             _cts.Cancel();
