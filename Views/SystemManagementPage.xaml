@@ -12,12 +12,67 @@
 
         <!-- 顶部 Tab 按钮 -->
         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="10,8,10,0">
-            <mica:Button x:Name="BtnTabLogin" Content="登录记录" Click="BtnTabLogin_Click" Width="100" Height="32" Background="#2D2D30" Foreground="White"/>
+            <mica:Button x:Name="BtnTabProcess" Content="进程管理" Click="BtnTabProcess_Click" Width="100" Height="32" Background="#2D2D30" Foreground="White"/>
+            <mica:Button x:Name="BtnTabLogin" Content="登录记录" Click="BtnTabLogin_Click" Margin="5,0,0,0" Width="100" Height="32" Background="Transparent" Foreground="Gray"/>
             <mica:Button x:Name="BtnTabService" Content="服务管理" Click="BtnTabService_Click" Margin="5,0,0,0" Width="100" Height="32" Background="Transparent" Foreground="Gray"/>
         </StackPanel>
 
+        <!-- 进程管理面板 -->
+        <Grid x:Name="PanelProcess" Grid.Row="1" Margin="10">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="200"/>
+            </Grid.RowDefinitions>
+
+            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
+                <icon:PackIconRemixIcon Kind="PulseLine" Foreground="#F44336" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                <TextBlock Text="进程列表" VerticalAlignment="Center" FontWeight="Bold" FontSize="16"/>
+
+                <TextBlock Text="搜索:" VerticalAlignment="Center" Margin="20,0,5,0"/>
+                <mica:TextBox x:Name="TxtProcessSearch" Width="150" Height="26" TextChanged="TxtProcessSearch_TextChanged"/>
+
+                <mica:ToggleSwitch x:Name="TogFilterEmpty" Content="过滤空路径" IsChecked="True" VerticalAlignment="Center" Margin="20,0,0,0" Click="TogFilterEmpty_Click" />
+
+                <mica:Button x:Name="BtnRefreshProcess" Content="刷新" Click="BtnRefreshProcess_Click" Margin="20,0,0,0" Width="60" Height="26"/>
+            </StackPanel>
+
+            <DataGrid Grid.Row="1" x:Name="ProcessGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                      Background="Transparent" RowHeaderWidth="0" GridLinesVisibility="Horizontal"
+                      HeadersVisibility="Column" SelectionMode="Single" SelectionChanged="ProcessGrid_SelectionChanged" FontFamily="Consolas, Microsoft YaHei" FontSize="13">
+                <DataGrid.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="发送 SIGTERM (Kill)" Click="CtxKill_Click" />
+                        <MenuItem Header="发送 SIGKILL (Kill -9)" Click="CtxKillForce_Click" />
+                        <Separator />
+                        <MenuItem Header="全部结束 (Killall)" Click="CtxKillAll_Click" />
+                        <MenuItem Header="全部强行结束 (Killall -9)" Click="CtxKillAllForce_Click" />
+                        <Separator />
+                        <MenuItem Header="复制 PID" Click="CtxCopyPid_Click" />
+                    </ContextMenu>
+                </DataGrid.ContextMenu>
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="PID" Binding="{Binding Pid}" Width="60"/>
+                    <DataGridTextColumn Header="用户" Binding="{Binding User}" Width="80"/>
+                    <DataGridTextColumn Header="CPU" Binding="{Binding Cpu}" Width="60"/>
+                    <DataGridTextColumn Header="内存" Binding="{Binding Mem}" Width="60"/>
+                    <DataGridTextColumn Header="路径" Binding="{Binding File}" Width="200"/>
+                    <DataGridTextColumn Header="命令行" Binding="{Binding Cmd}" Width="*"/>
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <GridSplitter Grid.Row="2" Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Center" ResizeBehavior="PreviousAndNext" ResizeDirection="Rows" Background="Transparent"/>
+
+            <Border Grid.Row="3" BorderBrush="#555" BorderThickness="0,1,0,0" Margin="0,5,0,0" Padding="10" Background="#1A000000">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <TextBlock x:Name="TxtProcessDetail" Text="请从上方列表中选择一个进程以查看详细信息..." TextWrapping="Wrap" FontFamily="Consolas, Microsoft YaHei" FontSize="12" />
+                </ScrollViewer>
+            </Border>
+        </Grid>
+
         <!-- 登录记录面板 -->
-        <ScrollViewer x:Name="PanelLogin" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <ScrollViewer x:Name="PanelLogin" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
             <StackPanel Margin="10,8,10,10">
 
                 <!-- 登录成功标题栏 -->

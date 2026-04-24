@@ -80,9 +80,6 @@
                         <mica:Button x:Name="BtnTraceroute" Margin="0,0,10,0" Width="35" Click="BtnTraceroute_Click" ToolTip="路由追踪">
                             <icon:PackIconRemixIcon Kind="RouteLine" Foreground="#FF9800" Width="14" Height="22" />
                         </mica:Button>
-                        <mica:Button x:Name="BtnProcess" Margin="0,0,10,0" Width="35" Click="BtnProcess_Click" ToolTip="进程管理">
-                            <icon:PackIconRemixIcon Kind="PulseLine" Foreground="#F44336" Width="14" Height="22" />
-                        </mica:Button>
                         <mica:Button x:Name="BtnSysManagement" Margin="0,0,10,0" Width="35" Click="BtnSysManagement_Click" ToolTip="系统管理">
                             <icon:PackIconRemixIcon Kind="Settings3Line" Foreground="#9C27B0" Width="14" Height="22" />
                         </mica:Button>

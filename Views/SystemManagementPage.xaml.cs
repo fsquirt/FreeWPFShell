@@ -14,26 +14,77 @@ using FreeWPFShell.Share;
 
 namespace FreeWPFShell.Views
 {
-    public partial class SystemManagementPage : UserControl
+    public partial class SystemManagementPage : UserControl, IDisposable
     {
         private readonly SshSessionService _session;
+        
+        // Login Records
         private readonly ObservableCollection<LoginRecord> _wtmpRecords = new();
         private readonly ObservableCollection<LoginRecord> _btmpRecords = new();
+        
+        // Services
         private readonly ObservableCollection<ServiceItem> _serviceRecords = new();
         private List<ServiceItem> _allServicesRaw = new();
+
+        // Processes
+        private readonly ObservableCollection<ProcessItem> _processes = new();
+        private List<ProcessItem> _allProcessesRaw = new();
+        private readonly System.Timers.Timer _processRefreshTimer;
 
         public SystemManagementPage(SshSessionService session)
         {
             InitializeComponent();
             _session = session;
+            
             WtmpGrid.ItemsSource = _wtmpRecords;
             BtmpGrid.ItemsSource = _btmpRecords;
             ServiceGrid.ItemsSource = _serviceRecords;
+            ProcessGrid.ItemsSource = _processes;
+
+            // Initialize Process Timer
+            _processRefreshTimer = new System.Timers.Timer(2000);
+            _processRefreshTimer.Elapsed += async (s, e) => await RefreshProcessData();
+            _processRefreshTimer.AutoReset = true;
+
+            // Default Tab
+            SwitchToTab("Process");
 
             _ = LoadWtmpAsync();
             _ = LoadBtmpAsync();
             _ = LoadServicesAsync();
+            _ = RefreshProcessData();
         }
+
+        #region Tab Navigation
+
+        private void BtnTabProcess_Click(object sender, RoutedEventArgs e) => SwitchToTab("Process");
+        private void BtnTabLogin_Click(object sender, RoutedEventArgs e) => SwitchToTab("Login");
+        private void BtnTabService_Click(object sender, RoutedEventArgs e) => SwitchToTab("Service");
+
+        private void SwitchToTab(string tabName)
+        {
+            PanelProcess.Visibility = tabName == "Process" ? Visibility.Visible : Visibility.Collapsed;
+            PanelLogin.Visibility = tabName == "Login" ? Visibility.Visible : Visibility.Collapsed;
+            PanelService.Visibility = tabName == "Service" ? Visibility.Visible : Visibility.Collapsed;
+
+            UpdateTabButton(BtnTabProcess, tabName == "Process");
+            UpdateTabButton(BtnTabLogin, tabName == "Login");
+            UpdateTabButton(BtnTabService, tabName == "Service");
+
+            // Only run process timer when process tab is active
+            if (tabName == "Process") _processRefreshTimer.Start();
+            else _processRefreshTimer.Stop();
+        }
+
+        private void UpdateTabButton(MicaWPF.Controls.Button btn, bool isActive)
+        {
+            btn.Background = isActive ? new SolidColorBrush(Color.FromRgb(0x2D, 0x2D, 0x30)) : Brushes.Transparent;
+            btn.Foreground = isActive ? Brushes.White : Brushes.Gray;
+        }
+
+        #endregion
+
+        #region Login Records
 
         private async Task LoadWtmpAsync()
         {
@@ -70,7 +121,6 @@ namespace FreeWPFShell.Views
             var geoService = IpGeoService.Instance;
             foreach (var r in records)
             {
-                // timestamp 是 UTC，转为本地时区显示
                 if (r.Timestamp > 0)
                     r.Time = DateTimeOffset.FromUnixTimeSeconds(r.Timestamp).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
 
@@ -88,6 +138,62 @@ namespace FreeWPFShell.Views
 
         private void BtnRefreshWtmp_Click(object sender, RoutedEventArgs e) => _ = LoadWtmpAsync();
         private void BtnRefreshBtmp_Click(object sender, RoutedEventArgs e) => _ = LoadBtmpAsync();
+
+        private async void BtnExportWtmp_Click(object sender, RoutedEventArgs e) => await ExportCsvAsync("/wtmp", "登录记录");
+        private async void BtnExportBtmp_Click(object sender, RoutedEventArgs e) => await ExportCsvAsync("/btmp", "登录失败记录");
+
+        private async Task ExportCsvAsync(string endpoint, string title)
+        {
+            var dlg = new Microsoft.Win32.SaveFileDialog
+            {
+                Filter = "CSV 文件 (*.csv)|*.csv",
+                FileName = $"{title}_{DateTime.Now:yyyyMMdd_HHmmss}",
+                Title = $"导出{title}"
+            };
+            if (dlg.ShowDialog() != true) return;
+
+            try
+            {
+                var records = await _session.GetLoginRecordsAsync(endpoint);
+                var geoService = IpGeoService.Instance;
+                var sb = new StringBuilder();
+                sb.AppendLine("登录时间,登录用户,登录来源(IP),IP归属地");
+                foreach (var r in records)
+                {
+                    string time = r.Timestamp > 0
+                        ? DateTimeOffset.FromUnixTimeSeconds(r.Timestamp).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
+                        : r.Time;
+                    string geo;
+                    if (!string.IsNullOrEmpty(r.Ip) && r.Ip != "(本地)")
+                    {
+                        try { geo = geoService.Query(r.Ip).SimpleGeo; } catch { geo = ""; }
+                    }
+                    else
+                    {
+                        geo = "本地";
+                    }
+                    sb.AppendLine($"{EscapeCsv(time)},{EscapeCsv(r.User)},{EscapeCsv(r.Ip)},{EscapeCsv(geo)}");
+                }
+                await File.WriteAllTextAsync(dlg.FileName, sb.ToString(), Encoding.UTF8);
+                UserForm.ModernMessageBox.Show($"已导出 {records.Count} 条记录到:\n{dlg.FileName}", "导出成功", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                UserForm.ModernMessageBox.Show($"导出失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private static string EscapeCsv(string? field)
+        {
+            if (string.IsNullOrEmpty(field)) return "";
+            if (field.Contains(',') || field.Contains('"') || field.Contains('\n') || field.Contains('\r'))
+                return $"\"{field.Replace("\"", "\"\"")}\"";
+            return field;
+        }
+
+        #endregion
+
+        #region Services Management
 
         private async Task LoadServicesAsync()
         {
@@ -122,26 +228,6 @@ namespace FreeWPFShell.Views
 
         private void BtnRefreshServices_Click(object sender, RoutedEventArgs e) => _ = LoadServicesAsync();
         private void TogFilterInactive_Click(object sender, RoutedEventArgs e) => ApplyServiceFilter();
-
-        private void BtnTabLogin_Click(object sender, RoutedEventArgs e)
-        {
-            PanelLogin.Visibility = Visibility.Visible;
-            PanelService.Visibility = Visibility.Collapsed;
-            BtnTabLogin.Background = new SolidColorBrush(Color.FromRgb(0x2D, 0x2D, 0x30));
-            BtnTabLogin.Foreground = Brushes.White;
-            BtnTabService.Background = Brushes.Transparent;
-            BtnTabService.Foreground = Brushes.Gray;
-        }
-
-        private void BtnTabService_Click(object sender, RoutedEventArgs e)
-        {
-            PanelLogin.Visibility = Visibility.Collapsed;
-            PanelService.Visibility = Visibility.Visible;
-            BtnTabService.Background = new SolidColorBrush(Color.FromRgb(0x2D, 0x2D, 0x30));
-            BtnTabService.Foreground = Brushes.White;
-            BtnTabLogin.Background = Brushes.Transparent;
-            BtnTabLogin.Foreground = Brushes.Gray;
-        }
         private void TxtServiceSearch_TextChanged(object sender, TextChangedEventArgs e) => ApplyServiceFilter();
 
         private async void CtxServiceStart_Click(object sender, RoutedEventArgs e)
@@ -216,57 +302,124 @@ namespace FreeWPFShell.Views
             }
         }
 
-        private async void BtnExportWtmp_Click(object sender, RoutedEventArgs e) => await ExportCsvAsync("/wtmp", "登录记录");
-        private async void BtnExportBtmp_Click(object sender, RoutedEventArgs e) => await ExportCsvAsync("/btmp", "登录失败记录");
+        #endregion
 
-        private async Task ExportCsvAsync(string endpoint, string title)
+        #region Process Management
+
+        private async Task RefreshProcessData()
         {
-            var dlg = new Microsoft.Win32.SaveFileDialog
-            {
-                Filter = "CSV 文件 (*.csv)|*.csv",
-                FileName = $"{title}_{DateTime.Now:yyyyMMdd_HHmmss}",
-                Title = $"导出{title}"
-            };
-            if (dlg.ShowDialog() != true) return;
+            _allProcessesRaw = await _session.GetAllProcessesAsync();
+            ApplyProcessFilter();
+        }
 
-            try
+        private void ApplyProcessFilter()
+        {
+            Dispatcher.Invoke(() =>
             {
-                // 导出全部记录，不传count参数
-                var records = await _session.GetLoginRecordsAsync(endpoint);
-                var geoService = IpGeoService.Instance;
-                var sb = new StringBuilder();
-                sb.AppendLine("登录时间,登录用户,登录来源(IP),IP归属地");
-                foreach (var r in records)
+                string search = TxtProcessSearch.Text.Trim().ToLower();
+                bool filterEmpty = TogFilterEmpty.IsChecked == true;
+                uint? selectedPid = (ProcessGrid.SelectedItem as ProcessItem)?.Pid;
+
+                var filtered = _allProcessesRaw.Where(p =>
                 {
-                    string time = r.Timestamp > 0
-                        ? DateTimeOffset.FromUnixTimeSeconds(r.Timestamp).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
-                        : r.Time;
-                    string geo;
-                    if (!string.IsNullOrEmpty(r.Ip) && r.Ip != "(本地)")
-                    {
-                        try { geo = geoService.Query(r.Ip).SimpleGeo; } catch { geo = ""; }
-                    }
-                    else
-                    {
-                        geo = "本地";
-                    }
-                    sb.AppendLine($"{EscapeCsv(time)},{EscapeCsv(r.User)},{EscapeCsv(r.Ip)},{EscapeCsv(geo)}");
+                    if (filterEmpty && string.IsNullOrEmpty(p.File)) return false;
+                    if (string.IsNullOrEmpty(search)) return true;
+                    return p.Pid.ToString().Contains(search) ||
+                           p.File.ToLower().Contains(search) ||
+                           p.Cmd.ToLower().Contains(search);
+                }).ToList();
+
+                _processes.Clear();
+                foreach (var p in filtered) _processes.Add(p);
+
+                if (selectedPid.HasValue)
+                {
+                    var newSelected = _processes.FirstOrDefault(x => x.Pid == selectedPid.Value);
+                    if (newSelected != null) ProcessGrid.SelectedItem = newSelected;
                 }
-                await File.WriteAllTextAsync(dlg.FileName, sb.ToString(), Encoding.UTF8);
-                UserForm.ModernMessageBox.Show($"已导出 {records.Count} 条记录到:\n{dlg.FileName}", "导出成功", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-            catch (Exception ex)
+            });
+        }
+
+        private void TxtProcessSearch_TextChanged(object sender, TextChangedEventArgs e) => ApplyProcessFilter();
+        private void TogFilterEmpty_Click(object sender, RoutedEventArgs e) => ApplyProcessFilter();
+        private void BtnRefreshProcess_Click(object sender, RoutedEventArgs e) => _ = RefreshProcessData();
+
+        private async void ProcessGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (ProcessGrid.SelectedItem is ProcessItem p)
             {
-                UserForm.ModernMessageBox.Show($"导出失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                TxtProcessDetail.Text = $"正在获取进程 {p.Pid} 的详细信息...";
+                var detail = await _session.GetProcessDetailAsync(p.Pid);
+                if (detail != null)
+                {
+                    var sb = new StringBuilder();
+                    sb.AppendLine($"PID (Process ID)      : {detail.pid}");
+                    sb.AppendLine($"PPID (Parent PID)     : {detail.ppid}");
+                    sb.AppendLine($"UID/GID (用户/组)     : {detail.uid_gid}");
+                    sb.AppendLine($"进程状态              : {detail.status}");
+                    sb.AppendLine($"优先级与 Nice 值      : {detail.priority_nice}");
+                    sb.AppendLine($"CPU 占用时间          : {detail.cpu_time}");
+                    sb.AppendLine($"文件描述符 (FD) 数量   : {detail.fd_count}");
+                    sb.AppendLine($"内存信息 (statm)       : {detail.mem_info}");
+                    sb.AppendLine($"资源限制 (ulimit)      : \n{detail.ulimit}");
+                    sb.AppendLine($"CWD (当前工作目录)      : {detail.cwd}");
+                    sb.AppendLine($"命令行参数 (argv)      : \n{detail.argv}");
+                    sb.AppendLine($"TTY (终端关联)         : {detail.tty}");
+                    sb.AppendLine($"\n--- 信号处理 (Status/Sig) ---");
+                    sb.AppendLine(detail.signals);
+                    sb.AppendLine($"\n--- 寄存器上下文 (Kernel Stack) ---");
+                    sb.AppendLine(detail.context);
+                    TxtProcessDetail.Text = sb.ToString();
+                }
+                else TxtProcessDetail.Text = "无法获取详细信息，该进程可能已经结束。";
             }
         }
 
-        private static string EscapeCsv(string? field)
+        private async void CtxKill_Click(object sender, RoutedEventArgs e) => await DoKill(15);
+        private async void CtxKillForce_Click(object sender, RoutedEventArgs e) => await DoKill(9);
+        private async void CtxKillAll_Click(object sender, RoutedEventArgs e) => await DoKillAll(15);
+        private async void CtxKillAllForce_Click(object sender, RoutedEventArgs e) => await DoKillAll(9);
+
+        private async Task DoKill(int sig)
         {
-            if (string.IsNullOrEmpty(field)) return "";
-            if (field.Contains(',') || field.Contains('"') || field.Contains('\n') || field.Contains('\r'))
-                return $"\"{field.Replace("\"", "\"\"")}\"";
-            return field;
+            if (ProcessGrid.SelectedItem is ProcessItem p)
+            {
+                if (UserForm.ModernMessageBox.Show($"确定要对进程 {p.Pid} ({p.Cmd}) 发送信号 {sig} 吗？", "结束进程", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
+                {
+                    bool success = await _session.KillProcessAsync(p.Pid, sig);
+                    if (success) UserForm.ModernMessageBox.Show("信号已发送。");
+                    else UserForm.ModernMessageBox.Show("操作失败，可能权限不足。");
+                }
+            }
+        }
+
+        private async Task DoKillAll(int sig)
+        {
+            if (ProcessGrid.SelectedItem is ProcessItem p)
+            {
+                string procName = !string.IsNullOrEmpty(p.File) ? System.IO.Path.GetFileName(p.File) : p.Cmd.Split(' ')[0];
+                if (string.IsNullOrEmpty(procName)) return;
+
+                if (UserForm.ModernMessageBox.Show($"确定要结束所有名为 \"{procName}\" 的进程吗？\n信号: {sig}", "全部结束", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
+                {
+                    bool success = await _session.KillAllProcessesAsync(p.File, sig);
+                    if (success) UserForm.ModernMessageBox.Show("批量结束信号已发送。");
+                    else UserForm.ModernMessageBox.Show("操作可能部分失败或权限不足。");
+                }
+            }
+        }
+
+        private void CtxCopyPid_Click(object sender, RoutedEventArgs e)
+        {
+            if (ProcessGrid.SelectedItem is ProcessItem p) Clipboard.SetText(p.Pid.ToString());
+        }
+
+        #endregion
+
+        public void Dispose()
+        {
+            _processRefreshTimer?.Stop();
+            _processRefreshTimer?.Dispose();
         }
     }
 }

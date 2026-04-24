@@ -7,7 +7,6 @@ using System.Windows.Media;
 using System.Windows.Shapes;
 using FreeWPFShell.Models;
 using FreeWPFShell.Services;
-using FreeWPFShell.ViewModels;
 
 namespace FreeWPFShell.Views
 {
@@ -73,12 +72,6 @@ namespace FreeWPFShell.Views
             var page = new TraceroutePage();
             AddTab("路由追踪", page);
             if (!string.IsNullOrEmpty(initialTarget)) page.TxtTarget.Text = initialTarget;
-        }
-
-        public void OpenProcessPage(SshSessionService session)
-        {
-            var page = new ProcessPage(session);
-            AddTab($"进程-{session.DisplayName}", page);
         }
 
         public void OpenSystemManagementPage(SshSessionService session)

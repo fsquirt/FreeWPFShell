@@ -54,9 +54,9 @@ namespace FreeWPFShell.Services
         public uint LinuxMonitorLocalPort { get; private set; } = 0;
         private readonly List<SshTunnelInfo> _associatedTunnels = new();
 
-        public ViewModels.MonitorData Monitor { get; } = new();
+        public MonitorData Monitor { get; } = new();
 
-        public event EventHandler<ViewModels.MonitorData>? MonitorUpdated;
+        public event EventHandler<MonitorData>? MonitorUpdated;
 
         private CancellationTokenSource _cts = new();
         private Timer? _monitorTimer;

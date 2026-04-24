@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using FreeWPFShell.Models;
 using FreeWPFShell.Share;
 
-namespace FreeWPFShell.ViewModels
+namespace FreeWPFShell.Models
 {
     public class MonitorData : ObservableObject
     {
