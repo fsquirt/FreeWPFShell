@@ -109,6 +109,75 @@ fn url_decode(s: &str) -> String {
     res
 }
 
+// --- utmp parsing via utmp-rs ---
+
+#[derive(Serialize, Clone)]
+struct LoginRecord {
+    user: String,
+    ip: String,
+    time: String,
+    timestamp: i64,
+}
+
+fn extract_ip_from_host(host: &str) -> String {
+    if host.is_empty() { return "(本地)".to_string(); }
+    let trimmed = host.trim();
+    let possible_ip = trimmed.split(|c: char| c == ' ' || c == ':').next().unwrap_or(trimmed);
+    if possible_ip.parse::<std::net::IpAddr>().is_ok() {
+        return possible_ip.to_string();
+    }
+    trimmed.to_string()
+}
+
+fn format_offset_datetime(dt: &time::OffsetDateTime) -> String {
+    format!("{}-{:02}-{:02} {:02}:{:02}:{:02}",
+        dt.year(), u8::from(dt.month()), dt.day(),
+        dt.hour(), dt.minute(), dt.second())
+}
+
+fn parse_utmp_file(path: &str, filter_user_process: bool, max_count: Option<usize>) -> Vec<LoginRecord> {
+    let entries = match utmp_rs::parse_from_path(path) {
+        Ok(e) => e,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut records = Vec::new();
+
+    for entry in entries.into_iter().rev() {
+        if let Some(max) = max_count {
+            if records.len() >= max { break; }
+        }
+
+        let (user, host, dt) = match entry {
+            utmp_rs::UtmpEntry::UserProcess { ref user, ref host, ref time, .. } => {
+                (user.clone(), host.clone(), time.clone())
+            }
+            utmp_rs::UtmpEntry::LoginProcess { ref user, ref host, ref time, .. } => {
+                if filter_user_process { continue; }
+                (user.clone(), host.clone(), time.clone())
+            }
+            _ => continue,
+        };
+
+        let user_trimmed = user.trim().to_string();
+        let host_trimmed = host.trim().to_string();
+
+        if user_trimmed.is_empty() && host_trimmed.is_empty() { continue; }
+
+        let ip = extract_ip_from_host(&host_trimmed);
+        let timestamp = dt.unix_timestamp();
+        let time_str = format_offset_datetime(&dt);
+
+        records.push(LoginRecord {
+            user: if user_trimmed.is_empty() { "(未知)".to_string() } else { user_trimmed },
+            ip,
+            time: time_str,
+            timestamp,
+        });
+    }
+    records
+}
+
 fn get_process_detail(pid_val: u32) -> Option<ProcessDetail> {
     let pid_str = pid_val.to_string();
     let proc_path = format!("/proc/{}", pid_str);
@@ -309,6 +378,16 @@ fn main() {
             }
             let success = std::process::Command::new("kill").arg(format!("-{}", sig)).arg(pid.to_string()).status().map(|s| s.success()).unwrap_or(false);
             Response::from_string(success.to_string())
+        } else if url.starts_with("/wtmp") {
+            let count: usize = url.split("count=").last().and_then(|c| c.parse().ok()).unwrap_or(0);
+            let records = parse_utmp_file("/var/log/wtmp", true, if count > 0 { Some(count) } else { None });
+            let data = serde_json::to_string(&records).unwrap_or_else(|_| "[]".to_string());
+            Response::from_string(data).with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap())
+        } else if url.starts_with("/btmp") {
+            let count: usize = url.split("count=").last().and_then(|c| c.parse().ok()).unwrap_or(100);
+            let records = parse_utmp_file("/var/log/btmp", false, Some(count));
+            let data = serde_json::to_string(&records).unwrap_or_else(|_| "[]".to_string());
+            Response::from_string(data).with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap())
         } else {
             Response::from_string("Not Found").with_status_code(404)
         };

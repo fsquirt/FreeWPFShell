@@ -1,0 +1,75 @@
+<UserControl x:Class="FreeWPFShell.Views.SystemManagementPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mica="clr-namespace:MicaWPF.Controls;assembly=MicaWPF"
+             xmlns:icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
+             Background="Transparent" FontFamily="Microsoft YaHei" FontSize="14">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- 登录记录标题栏 -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+            <icon:PackIconRemixIcon Kind="LoginBoxLine" Foreground="#4CAF50" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,5,0"/>
+            <TextBlock Text="登录记录" FontWeight="Bold" FontSize="16" VerticalAlignment="Center"/>
+            <TextBlock Text="/var/log/wtmp" FontSize="11" Foreground="Gray" VerticalAlignment="Center" Margin="10,0,0,0"/>
+            <TextBlock Text="获取条数:" VerticalAlignment="Center" Margin="20,0,5,0"/>
+            <mica:TextBox x:Name="TxtWtmpCount" Width="60" Height="26" Text="100"/>
+            <mica:Button x:Name="BtnRefreshWtmp" Content="刷新" Click="BtnRefreshWtmp_Click" Margin="10,0,0,0" Width="60" Height="26"/>
+            <mica:Button x:Name="BtnExportWtmp" Click="BtnExportWtmp_Click" Margin="10,0,0,0" Width="75" Height="26">
+                <StackPanel Orientation="Horizontal">
+                    <icon:PackIconRemixIcon Kind="Download2Line" Foreground="#4CAF50" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,3,0"/>
+                    <TextBlock Text="导出CSV" VerticalAlignment="Center"/>
+                </StackPanel>
+            </mica:Button>
+        </StackPanel>
+
+        <!-- 登录记录表格 -->
+        <DataGrid Grid.Row="1" x:Name="WtmpGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                  Background="Transparent" RowHeaderWidth="0" GridLinesVisibility="Horizontal"
+                  HeadersVisibility="Column" SelectionMode="Single" FontFamily="Consolas, Microsoft YaHei">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="登录时间" Binding="{Binding Time}" Width="2*"/>
+                <DataGridTextColumn Header="登录用户" Binding="{Binding User}" Width="1*"/>
+                <DataGridTextColumn Header="登录来源 (IP)" Binding="{Binding Ip}" Width="1.5*"/>
+                <DataGridTextColumn Header="IP归属地" Binding="{Binding Geo}" Width="2*"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <GridSplitter Grid.Row="2" Height="8" HorizontalAlignment="Stretch" VerticalAlignment="Center" ResizeBehavior="PreviousAndNext" ResizeDirection="Rows" Background="Transparent"/>
+
+        <!-- 登录失败记录标题栏 -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,5,0,8">
+            <icon:PackIconRemixIcon Kind="ShieldLine" Foreground="#F44336" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,5,0"/>
+            <TextBlock Text="登录失败记录" FontWeight="Bold" FontSize="16" VerticalAlignment="Center"/>
+            <TextBlock Text="/var/log/btmp" FontSize="11" Foreground="Gray" VerticalAlignment="Center" Margin="10,0,0,0"/>
+
+            <TextBlock Text="获取条数:" VerticalAlignment="Center" Margin="20,0,5,0"/>
+            <mica:TextBox x:Name="TxtBtmpCount" Width="60" Height="26" Text="100"/>
+            <mica:Button x:Name="BtnRefreshBtmp" Content="刷新" Click="BtnRefreshBtmp_Click" Margin="10,0,0,0" Width="60" Height="26"/>
+            <mica:Button x:Name="BtnExportBtmp" Click="BtnExportBtmp_Click" Margin="10,0,0,0" Width="75" Height="26">
+                <StackPanel Orientation="Horizontal">
+                    <icon:PackIconRemixIcon Kind="Download2Line" Foreground="#F44336" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,3,0"/>
+                    <TextBlock Text="导出CSV" VerticalAlignment="Center"/>
+                </StackPanel>
+            </mica:Button>
+        </StackPanel>
+
+        <!-- 登录失败记录表格 -->
+        <DataGrid Grid.Row="4" x:Name="BtmpGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                  Background="Transparent" RowHeaderWidth="0" GridLinesVisibility="Horizontal"
+                  HeadersVisibility="Column" SelectionMode="Single" FontFamily="Consolas, Microsoft YaHei">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="登录时间" Binding="{Binding Time}" Width="2*"/>
+                <DataGridTextColumn Header="登录用户" Binding="{Binding User}" Width="1*"/>
+                <DataGridTextColumn Header="登录来源 (IP)" Binding="{Binding Ip}" Width="1.5*"/>
+                <DataGridTextColumn Header="IP归属地" Binding="{Binding Geo}" Width="2*"/>
+            </DataGrid.Columns>
+        </DataGrid>
+    </Grid>
+</UserControl>

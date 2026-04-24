@@ -603,6 +603,19 @@ namespace FreeWPFShell.Services
             catch { return new List<ProcessItem>(); }
         }
 
+        public async Task<List<LoginRecord>> GetLoginRecordsAsync(string endpoint)
+        {
+            if (LinuxMonitorLocalPort == 0) return new List<LoginRecord>();
+            try
+            {
+                using var hc = CreateMonitorHttpClient();
+                hc.Timeout = TimeSpan.FromSeconds(5);
+                string json = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}{endpoint}");
+                return JsonSerializer.Deserialize<List<LoginRecord>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<LoginRecord>();
+            }
+            catch { return new List<LoginRecord>(); }
+        }
+
         public async Task<bool> KillAllProcessesAsync(string fullPath, int signal)
         {
             if (LinuxMonitorLocalPort == 0) return false;

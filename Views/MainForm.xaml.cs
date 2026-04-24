@@ -81,6 +81,12 @@ namespace FreeWPFShell.Views
             AddTab($"进程-{session.DisplayName}", page);
         }
 
+        public void OpenSystemManagementPage(SshSessionService session)
+        {
+            var page = new SystemManagementPage(session);
+            AddTab($"系统管理-{session.DisplayName}", page);
+        }
+
         private TabItem AddTab(string header, UIElement content)
         {
             var headerPanel = new StackPanel { Orientation = Orientation.Horizontal };
