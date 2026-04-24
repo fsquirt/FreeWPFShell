@@ -30,6 +30,7 @@ namespace FreeWPFShell.Views
         private readonly ObservableCollection<ProcessItem> _processes = new();
         private List<ProcessItem> _allProcessesRaw = new();
         private readonly System.Timers.Timer _processRefreshTimer;
+        private bool _isRefreshingProcess;
 
         // Network Connections
         private readonly ObservableCollection<NetConnItem> _netConns = new();
@@ -53,18 +54,20 @@ namespace FreeWPFShell.Views
 
             // Initialize Process Timer
             _processRefreshTimer = new System.Timers.Timer(2000);
-            _processRefreshTimer.Elapsed += async (s, e) => await RefreshProcessData();
+            _processRefreshTimer.Elapsed += async (s, e) =>
+            {
+                if (_isRefreshingProcess) return;
+                _isRefreshingProcess = true;
+                try { await RefreshProcessData(); }
+                finally { _isRefreshingProcess = false; }
+            };
             _processRefreshTimer.AutoReset = true;
 
             // Default Tab
             SwitchToTab("Process");
 
-            _ = LoadWtmpAsync();
-            _ = LoadBtmpAsync();
-            _ = LoadServicesAsync();
             _ = RefreshProcessData();
-            _ = LoadNetConnsAsync();
-            _ = LoadCronJobsAsync();
+            // Lazy load other tabs on first switch to avoid startup burst
         }
 
         #region Tab Navigation
@@ -74,6 +77,8 @@ namespace FreeWPFShell.Views
         private void BtnTabLogin_Click(object sender, RoutedEventArgs e) => SwitchToTab("Login");
         private void BtnTabService_Click(object sender, RoutedEventArgs e) => SwitchToTab("Service");
         private void BtnTabCron_Click(object sender, RoutedEventArgs e) => SwitchToTab("Cron");
+
+        private bool _loginLoaded, _servicesLoaded, _netLoaded, _cronLoaded;
 
         private void SwitchToTab(string tabName)
         {
@@ -92,6 +97,12 @@ namespace FreeWPFShell.Views
             // Only run process timer when process tab is active
             if (tabName == "Process") _processRefreshTimer.Start();
             else _processRefreshTimer.Stop();
+
+            // Lazy load on first visit
+            if (tabName == "Login" && !_loginLoaded) { _loginLoaded = true; _ = LoadWtmpAsync(); _ = LoadBtmpAsync(); }
+            if (tabName == "Service" && !_servicesLoaded) { _servicesLoaded = true; _ = LoadServicesAsync(); }
+            if (tabName == "Net" && !_netLoaded) { _netLoaded = true; _ = LoadNetConnsAsync(); }
+            if (tabName == "Cron" && !_cronLoaded) { _cronLoaded = true; _ = LoadCronJobsAsync(); }
         }
 
         private void UpdateTabButton(MicaWPF.Controls.Button btn, bool isActive)
@@ -327,35 +338,32 @@ namespace FreeWPFShell.Views
         private async Task RefreshProcessData()
         {
             _allProcessesRaw = await _session.GetAllProcessesAsync();
-            ApplyProcessFilter();
+            await Dispatcher.InvokeAsync(ApplyProcessFilter);
         }
 
         private void ApplyProcessFilter()
         {
-            Dispatcher.Invoke(() =>
+            string search = TxtProcessSearch.Text.Trim().ToLower();
+            bool filterEmpty = TogFilterEmpty.IsChecked == true;
+            uint? selectedPid = (ProcessGrid.SelectedItem as ProcessItem)?.Pid;
+
+            var filtered = _allProcessesRaw.Where(p =>
             {
-                string search = TxtProcessSearch.Text.Trim().ToLower();
-                bool filterEmpty = TogFilterEmpty.IsChecked == true;
-                uint? selectedPid = (ProcessGrid.SelectedItem as ProcessItem)?.Pid;
+                if (filterEmpty && string.IsNullOrEmpty(p.File)) return false;
+                if (string.IsNullOrEmpty(search)) return true;
+                return p.Pid.ToString().Contains(search) ||
+                       p.File.ToLower().Contains(search) ||
+                       p.Cmd.ToLower().Contains(search);
+            }).ToList();
 
-                var filtered = _allProcessesRaw.Where(p =>
-                {
-                    if (filterEmpty && string.IsNullOrEmpty(p.File)) return false;
-                    if (string.IsNullOrEmpty(search)) return true;
-                    return p.Pid.ToString().Contains(search) ||
-                           p.File.ToLower().Contains(search) ||
-                           p.Cmd.ToLower().Contains(search);
-                }).ToList();
+            _processes.Clear();
+            foreach (var p in filtered) _processes.Add(p);
 
-                _processes.Clear();
-                foreach (var p in filtered) _processes.Add(p);
-
-                if (selectedPid.HasValue)
-                {
-                    var newSelected = _processes.FirstOrDefault(x => x.Pid == selectedPid.Value);
-                    if (newSelected != null) ProcessGrid.SelectedItem = newSelected;
-                }
-            });
+            if (selectedPid.HasValue)
+            {
+                var newSelected = _processes.FirstOrDefault(x => x.Pid == selectedPid.Value);
+                if (newSelected != null) ProcessGrid.SelectedItem = newSelected;
+            }
         }
 
         private void TxtProcessSearch_TextChanged(object sender, TextChangedEventArgs e) => ApplyProcessFilter();
@@ -387,9 +395,14 @@ namespace FreeWPFShell.Views
                     sb.AppendLine(detail.signals);
                     sb.AppendLine($"\n--- 寄存器上下文 (Kernel Stack) ---");
                     sb.AppendLine(detail.context);
-                    TxtProcessDetail.Text = sb.ToString();
+                    // Only update if still the same selection (avoid race on rapid switching)
+                    if (ProcessGrid.SelectedItem is ProcessItem cur && cur.Pid == p.Pid)
+                        TxtProcessDetail.Text = sb.ToString();
                 }
-                else TxtProcessDetail.Text = "无法获取详细信息，该进程可能已经结束。";
+                else if (ProcessGrid.SelectedItem is ProcessItem cur2 && cur2.Pid == p.Pid)
+                {
+                    TxtProcessDetail.Text = "无法获取详细信息，该进程可能已经结束。";
+                }
             }
         }
 
@@ -500,9 +513,11 @@ namespace FreeWPFShell.Views
         {
             try
             {
-                _allCronJobsRaw = await _session.GetCronJobsAsync();
+                var jobsTask = _session.GetCronJobsAsync();
+                var statusTask = _session.GetCronStatusAsync();
+                _allCronJobsRaw = await jobsTask;
                 ApplyCronFilter();
-                string status = await _session.GetCronStatusAsync();
+                string status = await statusTask;
                 TxtCronServiceStatus.Text = status;
                 TxtCronServiceStatus.Foreground = status == "运行中" ? Brushes.LimeGreen : Brushes.Gray;
             }
