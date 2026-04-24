@@ -79,3 +79,14 @@ pub struct ServiceItem {
     pub user: String,
     pub group: String,
 }
+
+#[derive(Serialize, Clone)]
+pub struct NetConnItem {
+    pub proto: String,
+    pub local: String,
+    pub remote: String,
+    pub state: String,
+    pub pid: u32,
+    pub user: String,
+    pub program: String,
+}

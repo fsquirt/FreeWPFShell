@@ -669,6 +669,19 @@ namespace FreeWPFShell.Services
             catch { return false; }
         }
 
+        public async Task<List<NetConnItem>> GetNetConnsAsync()
+        {
+            if (LinuxMonitorLocalPort == 0) return new List<NetConnItem>();
+            try
+            {
+                using var hc = CreateMonitorHttpClient();
+                hc.Timeout = TimeSpan.FromSeconds(5);
+                string json = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/net_conns");
+                return JsonSerializer.Deserialize<List<NetConnItem>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<NetConnItem>();
+            }
+            catch { return new List<NetConnItem>(); }
+        }
+
         public void Disconnect()
         {
             _cts.Cancel();

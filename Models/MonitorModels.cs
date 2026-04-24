@@ -52,4 +52,15 @@ namespace FreeWPFShell.Models
         public List<ProcessItem> processes { get; set; } = new();
         public List<DiskItem> disks { get; set; } = new();
     }
+
+    public class NetConnItem
+    {
+        public string Proto { get; set; } = string.Empty;
+        public string Local { get; set; } = string.Empty;
+        public string Remote { get; set; } = string.Empty;
+        public string State { get; set; } = string.Empty;
+        public uint Pid { get; set; }
+        public string User { get; set; } = string.Empty;
+        public string Program { get; set; } = string.Empty;
+    }
 }

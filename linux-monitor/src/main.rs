@@ -8,7 +8,7 @@ use models::{SysStats, ProcessItem, DiskItem};
 use utils::{format_size, format_uptime, now_secs, url_decode};
 use utmp_parser::parse_utmp_file;
 use service_manager::{get_systemd_services, service_action, get_service_log};
-use stats_collector::get_process_detail;
+use stats_collector::{get_process_detail, get_net_conns};
 
 use sysinfo::{Disks, Networks, System};
 use tiny_http::{Response, Server};
@@ -188,6 +188,10 @@ fn main() {
         } else if url == "/services" {
             let services = get_systemd_services();
             let data = serde_json::to_string(&services).unwrap_or_else(|_| "[]".to_string()) ;
+            Response::from_string(data).with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap())
+        } else if url == "/net_conns" {
+            let conns = get_net_conns();
+            let data = serde_json::to_string(&conns).unwrap_or_else(|_| "[]".to_string());
             Response::from_string(data).with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap())
         } else if url.starts_with("/service_start") {
             let name = url_decode(url.split("name=").last().unwrap_or(""));

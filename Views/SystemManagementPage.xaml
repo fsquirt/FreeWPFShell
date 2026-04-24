@@ -13,6 +13,7 @@
         <!-- 顶部 Tab 按钮 -->
         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="10,8,10,0">
             <mica:Button x:Name="BtnTabProcess" Content="进程管理" Click="BtnTabProcess_Click" Width="100" Height="32" Background="#2D2D30" Foreground="White"/>
+            <mica:Button x:Name="BtnTabNet" Content="网络连接" Click="BtnTabNet_Click" Margin="5,0,0,0" Width="100" Height="32" Background="Transparent" Foreground="Gray"/>
             <mica:Button x:Name="BtnTabLogin" Content="登录记录" Click="BtnTabLogin_Click" Margin="5,0,0,0" Width="100" Height="32" Background="Transparent" Foreground="Gray"/>
             <mica:Button x:Name="BtnTabService" Content="服务管理" Click="BtnTabService_Click" Margin="5,0,0,0" Width="100" Height="32" Background="Transparent" Foreground="Gray"/>
         </StackPanel>
@@ -69,6 +70,45 @@
                     <TextBlock x:Name="TxtProcessDetail" Text="请从上方列表中选择一个进程以查看详细信息..." TextWrapping="Wrap" FontFamily="Consolas, Microsoft YaHei" FontSize="12" />
                 </ScrollViewer>
             </Border>
+        </Grid>
+
+        <!-- 网络连接面板 -->
+        <Grid x:Name="PanelNet" Grid.Row="1" Margin="10" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
+                <icon:PackIconRemixIcon Kind="LinksLine" Foreground="#00BCFF" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                <TextBlock Text="网络连接" VerticalAlignment="Center" FontWeight="Bold" FontSize="16"/>
+
+                <TextBlock Text="搜索:" VerticalAlignment="Center" Margin="20,0,5,0"/>
+                <mica:TextBox x:Name="TxtNetSearch" Width="150" Height="26" TextChanged="TxtNetSearch_TextChanged"/>
+
+                <mica:Button x:Name="BtnRefreshNet" Content="刷新" Click="BtnRefreshNet_Click" Margin="20,0,0,0" Width="60" Height="26"/>
+                <mica:ToggleSwitch x:Name="TogFilterEmptyNet" Content="隐藏空路径" IsChecked="True" VerticalAlignment="Center" Margin="15,0,0,0" Click="TogFilterEmptyNet_Click"/>
+            </StackPanel>
+
+            <DataGrid Grid.Row="1" x:Name="NetGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                      Background="Transparent" RowHeaderWidth="0" GridLinesVisibility="Horizontal"
+                      HeadersVisibility="Column" SelectionMode="Single" FontFamily="Consolas, Microsoft YaHei" FontSize="13">
+                <DataGrid.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="发送 SIGTERM (Kill)" Click="CtxKillNet_Click" />
+                        <MenuItem Header="发送 SIGKILL (Kill -9)" Click="CtxKillNetForce_Click" />
+                    </ContextMenu>
+                </DataGrid.ContextMenu>
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="协议" Binding="{Binding Proto}" Width="60"/>
+                    <DataGridTextColumn Header="本地地址" Binding="{Binding Local}" Width="1.5*"/>
+                    <DataGridTextColumn Header="远程地址" Binding="{Binding Remote}" Width="1.5*"/>
+                    <DataGridTextColumn Header="状态" Binding="{Binding State}" Width="100"/>
+                    <DataGridTextColumn Header="PID" Binding="{Binding Pid}" Width="60"/>
+                    <DataGridTextColumn Header="用户" Binding="{Binding User}" Width="80"/>
+                    <DataGridTextColumn Header="程序路径" Binding="{Binding Program}" Width="2*"/>
+                </DataGrid.Columns>
+            </DataGrid>
         </Grid>
 
         <!-- 登录记录面板 -->

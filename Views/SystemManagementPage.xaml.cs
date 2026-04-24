@@ -31,6 +31,10 @@ namespace FreeWPFShell.Views
         private List<ProcessItem> _allProcessesRaw = new();
         private readonly System.Timers.Timer _processRefreshTimer;
 
+        // Network Connections
+        private readonly ObservableCollection<NetConnItem> _netConns = new();
+        private List<NetConnItem> _allNetConnsRaw = new();
+
         public SystemManagementPage(SshSessionService session)
         {
             InitializeComponent();
@@ -40,6 +44,7 @@ namespace FreeWPFShell.Views
             BtmpGrid.ItemsSource = _btmpRecords;
             ServiceGrid.ItemsSource = _serviceRecords;
             ProcessGrid.ItemsSource = _processes;
+            NetGrid.ItemsSource = _netConns;
 
             // Initialize Process Timer
             _processRefreshTimer = new System.Timers.Timer(2000);
@@ -53,21 +58,25 @@ namespace FreeWPFShell.Views
             _ = LoadBtmpAsync();
             _ = LoadServicesAsync();
             _ = RefreshProcessData();
+            _ = LoadNetConnsAsync();
         }
 
         #region Tab Navigation
 
         private void BtnTabProcess_Click(object sender, RoutedEventArgs e) => SwitchToTab("Process");
+        private void BtnTabNet_Click(object sender, RoutedEventArgs e) => SwitchToTab("Net");
         private void BtnTabLogin_Click(object sender, RoutedEventArgs e) => SwitchToTab("Login");
         private void BtnTabService_Click(object sender, RoutedEventArgs e) => SwitchToTab("Service");
 
         private void SwitchToTab(string tabName)
         {
             PanelProcess.Visibility = tabName == "Process" ? Visibility.Visible : Visibility.Collapsed;
+            PanelNet.Visibility = tabName == "Net" ? Visibility.Visible : Visibility.Collapsed;
             PanelLogin.Visibility = tabName == "Login" ? Visibility.Visible : Visibility.Collapsed;
             PanelService.Visibility = tabName == "Service" ? Visibility.Visible : Visibility.Collapsed;
 
             UpdateTabButton(BtnTabProcess, tabName == "Process");
+            UpdateTabButton(BtnTabNet, tabName == "Net");
             UpdateTabButton(BtnTabLogin, tabName == "Login");
             UpdateTabButton(BtnTabService, tabName == "Service");
 
@@ -412,6 +421,66 @@ namespace FreeWPFShell.Views
         private void CtxCopyPid_Click(object sender, RoutedEventArgs e)
         {
             if (ProcessGrid.SelectedItem is ProcessItem p) Clipboard.SetText(p.Pid.ToString());
+        }
+
+        #endregion
+
+        #region Network Connections
+
+        private async Task LoadNetConnsAsync()
+        {
+            try
+            {
+                _allNetConnsRaw = await _session.GetNetConnsAsync();
+                ApplyNetFilter();
+            }
+            catch (Exception ex)
+            {
+                UserForm.ModernMessageBox.Show($"读取网络连接失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void ApplyNetFilter()
+        {
+            string search = TxtNetSearch.Text.Trim().ToLower();
+            bool hideEmpty = TogFilterEmptyNet.IsChecked == true;
+            
+            _netConns.Clear();
+            foreach (var c in _allNetConnsRaw.Where(c =>
+            {
+                if (hideEmpty && string.IsNullOrEmpty(c.Program)) return false;
+                if (string.IsNullOrEmpty(search)) return true;
+                return c.Local.ToLower().Contains(search) ||
+                       c.Remote.ToLower().Contains(search) ||
+                       c.Program.ToLower().Contains(search) ||
+                       c.Pid.ToString().Contains(search) ||
+                       c.User.ToLower().Contains(search) ||
+                       c.Proto.ToLower().Contains(search);
+            }))
+            {
+                _netConns.Add(c);
+            }
+        }
+
+        private void BtnRefreshNet_Click(object sender, RoutedEventArgs e) => _ = LoadNetConnsAsync();
+        private void TxtNetSearch_TextChanged(object sender, TextChangedEventArgs e) => ApplyNetFilter();
+        private void TogFilterEmptyNet_Click(object sender, RoutedEventArgs e) => ApplyNetFilter();
+
+        private async void CtxKillNet_Click(object sender, RoutedEventArgs e) => await DoKillNet(15);
+        private async void CtxKillNetForce_Click(object sender, RoutedEventArgs e) => await DoKillNet(9);
+
+        private async Task DoKillNet(int sig)
+        {
+            if (NetGrid.SelectedItem is NetConnItem c && c.Pid > 0)
+            {
+                if (UserForm.ModernMessageBox.Show($"确定要结束进程 {c.Pid} ({c.Program}) 吗？\n信号: {sig}", "结束进程", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
+                {
+                    bool success = await _session.KillProcessAsync(c.Pid, sig);
+                    if (success) UserForm.ModernMessageBox.Show("信号已发送。");
+                    else UserForm.ModernMessageBox.Show("操作失败，可能权限不足。");
+                    await LoadNetConnsAsync();
+                }
+            }
         }
 
         #endregion
