@@ -30,9 +30,9 @@ if %errorlevel% neq 0 (
 )
 
 :: 3. 清理旧环境
-:: echo [INFO] 清理旧编译产物...
-:: if exist "target" rmdir /s /q target
-:: if exist "linux-monitor" del linux-monitor
+echo [INFO] 清理旧编译产物...
+if exist "target" rmdir /s /q target
+if exist "linux-monitor" del linux-monitor
 
 :: 4. 编译
 echo [INFO] 开始执行 Cargo Release 编译...

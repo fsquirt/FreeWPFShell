@@ -230,6 +230,11 @@ namespace FreeWPFShell.Services
             // 等待 SSH.NET 握手彻底完成并释放线程池资源
             bool success = await tcs.Task;
             if (!success || _cts.IsCancellationRequested) return;
+            if (MasterClient is null)
+            {
+                ConnectionStatus = "SSH 主连接未初始化";
+                return;
+            }
 
             // 直接用 SSH.NET ShellStream 创建终端连接
             // 初始尺寸会在 BindSession → Resize 中被 TerminalControl 同步为实际值

@@ -25,7 +25,7 @@ namespace FreeWPFShell.Views
         private readonly Stack<string> _backHistory = new(), _forwardHistory = new();
         private int _activeTransfers, _totalFiles, _completedFiles;
         private string _currentTransferName = "";
-        private double _currentTransferProgress;
+        private double _currentTransferProgress = 0;
 
         public SshSessionService Session { get; }
         private SftpClient Sftp => Session.SftpClient!;
