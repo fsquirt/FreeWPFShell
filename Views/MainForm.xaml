@@ -139,6 +139,11 @@
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
                 <TabControl x:Name="SessionTabs" Grid.Row="0" BorderThickness="0" Background="Transparent" SelectionChanged="SessionTabs_SelectionChanged" KeyboardNavigation.DirectionalNavigation="None" KeyboardNavigation.TabNavigation="None">
+                    <TabControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </TabControl.ItemsPanel>
                     <TabItem x:Name="WelcomeTab">
                         <TabItem.Header>
                             <StackPanel Orientation="Horizontal">

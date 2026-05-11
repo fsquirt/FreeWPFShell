@@ -9,8 +9,11 @@
              d:DesignHeight="800" d:DesignWidth="800"
              FontFamily="Microsoft YaHei">
     <Grid>
-        <StackPanel Margin="20">
-            <Grid Margin="0,0,0,20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+            <Grid Grid.Row="0" Margin="20,20,20,0">
                 <TextBlock Text="已保存的主机列表:" FontSize="16" VerticalAlignment="Center" HorizontalAlignment="Left" />
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <mica:Button x:Name="BtnSettings" Margin="0,0,10,0" Padding="10,4" Click="BtnSettings_Click">
@@ -33,51 +36,64 @@
                     </mica:Button>
                 </StackPanel>
             </Grid>
-            
-            <ListBox x:Name="HostsList" Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" MouseDoubleClick="HostsList_MouseDoubleClick">
-                <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <Border Background="#1C2E41" Margin="5" Padding="15" CornerRadius="8" Width="280">
-                            <Border.ContextMenu>
-                                <ContextMenu>
-                                    <MenuItem Header="连接主机" Click="CtxConnect_Click" />
-                                    <MenuItem Header="编辑连接" Click="CtxEdit_Click" />
-                                    <MenuItem Header="删除连接" Click="CtxDelete_Click" />
-                                </ContextMenu>
-                            </Border.ContextMenu>
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
-                                    <icon:PackIconRemixIcon Kind="LockPasswordLine" Foreground="#00BCFF" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,5,0" ToolTip="由 Windows Hello 凭据保险箱保护">
-                                        <icon:PackIconRemixIcon.Style>
-                                            <Style TargetType="icon:PackIconRemixIcon">
-                                                <Setter Property="Visibility" Value="Collapsed"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding UseVault}" Value="True">
-                                                        <Setter Property="Visibility" Value="Visible"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </icon:PackIconRemixIcon.Style>
-                                    </icon:PackIconRemixIcon>
-                                    <TextBlock Text="{Binding HostName}" FontWeight="Bold" FontSize="16" Foreground="White" VerticalAlignment="Center"/>
-                                </StackPanel>
-                                <TextBlock Text="{Binding IpAddress}" FontSize="13" Foreground="#B0BEC5"/>
-                                <TextBlock Text="{Binding SimpleIpGEO}" FontSize="11" Foreground="#78909C" Margin="0,2,0,0"/>
-                                <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
-                                    <TextBlock Text="{Binding SshUser}" FontSize="12" Foreground="#78909C"/>
-                                    <TextBlock Text=" : " FontSize="12" Foreground="#78909C"/>
-                                    <TextBlock Text="{Binding SshPort}" FontSize="12" Foreground="#78909C"/>
-                                </StackPanel>
+
+        <ListBox x:Name="HostsList" 
+         Grid.Row="1" 
+         Margin="20" 
+         Background="Transparent" 
+         BorderThickness="0" 
+         HorizontalContentAlignment="Stretch"
+         ScrollViewer.HorizontalScrollBarVisibility="Disabled" 
+         ScrollViewer.CanContentScroll="False" 
+         MouseDoubleClick="HostsList_MouseDoubleClick">
+
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Border Background="#1C2E41" Margin="5" Padding="15" CornerRadius="8" Width="280">
+                        <Border.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="连接主机" Click="CtxConnect_Click" />
+                                <MenuItem Header="编辑连接" Click="CtxEdit_Click" />
+                                <MenuItem Header="删除连接" Click="CtxDelete_Click" />
+                            </ContextMenu>
+                        </Border.ContextMenu>
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
+                                <!-- 图标样式保持不变 -->
+                                <icon:PackIconRemixIcon Kind="LockPasswordLine" Foreground="#00BCFF" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,5,0" ToolTip="由 Windows Hello 凭据保险箱保护">
+                                    <icon:PackIconRemixIcon.Style>
+                                        <Style TargetType="icon:PackIconRemixIcon">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding UseVault}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </icon:PackIconRemixIcon.Style>
+                                </icon:PackIconRemixIcon>
+                                <TextBlock Text="{Binding HostName}" FontWeight="Bold" FontSize="16" Foreground="White" VerticalAlignment="Center"/>
                             </StackPanel>
-                        </Border>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-                <ListBox.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <WrapPanel Orientation="Horizontal" />
-                    </ItemsPanelTemplate>
-                </ListBox.ItemsPanel>
-            </ListBox>
-        </StackPanel>
+                            <TextBlock Text="{Binding IpAddress}" FontSize="13" Foreground="#B0BEC5"/>
+                            <TextBlock Text="{Binding SimpleIpGEO}" FontSize="11" Foreground="#78909C" Margin="0,2,0,0"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                <TextBlock Text="{Binding SshUser}" FontSize="12" Foreground="#78909C"/>
+                                <TextBlock Text=" : " FontSize="12" Foreground="#78909C"/>
+                                <TextBlock Text="{Binding SshPort}" FontSize="12" Foreground="#78909C"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+
+            <ListBox.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <!-- 【关键修改点】 -->
+                    <!-- 绑定宽度到 ScrollContentPresenter 的实际宽度，这会强制 WrapPanel 在到达边缘时换行 -->
+                    <WrapPanel Orientation="Horizontal" 
+                       Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ScrollContentPresenter}}" />
+                </ItemsPanelTemplate>
+            </ListBox.ItemsPanel>
+        </ListBox>
     </Grid>
 </UserControl>

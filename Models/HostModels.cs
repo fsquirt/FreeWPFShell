@@ -52,7 +52,7 @@ namespace FreeWPFShell.Models
         public string TerminalBackground { get; set; } = "#1E3047";
         public bool UseImageBackground { get; set; } = false;
         public string? ImageBackgroundPath { get; set; }
-        public int ImageStretchMode { get; set; } = 3; // 默认 UniformToFill
+        public int ImageStretchMode { get; set; } = 1; // 默认填充
         public int TracerouteTimeout { get; set; } = 2; // 默认 2 秒
         public int TracerouteMaxHops { get; set; } = 30; // 默认 30 跳
         public string TerminalFont { get; set; } = "Cascadia Code";

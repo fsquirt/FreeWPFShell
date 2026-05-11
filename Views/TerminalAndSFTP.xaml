@@ -83,13 +83,16 @@
                         <mica:Button x:Name="BtnSysManagement" Margin="0,0,10,0" Width="35" Click="BtnSysManagement_Click" ToolTip="系统管理">
                             <icon:PackIconRemixIcon Kind="Settings3Line" Foreground="#9C27B0" Width="14" Height="22" />
                         </mica:Button>
+                        <mica:Button x:Name="BtnTermCopy" Margin="0,0,10,0" Width="35" Click="BtnTermCopy_Click" ToolTip="复制选中内容">
+                            <icon:PackIconRemixIcon Kind="FileCopyLine" Foreground="#AEB5BD" Width="14" Height="22"/>
+                        </mica:Button>
                         <TextBlock x:Name="TxtConnStatus" Text="等待中..." VerticalAlignment="Center" FontSize="11" Margin="10,0,10,0"/>
                         <TextBlock x:Name="TxtCursorMode" Text="NORMAL MODE" VerticalAlignment="Center" Margin="5,0,0,0" Opacity="0.8"/>
                     </StackPanel>
                 </Grid>
             </Border>
 
-            <DataGrid x:Name="FileGrid" Grid.Row="1" AutoGenerateColumns="False" HeadersVisibility="Column" Background="Transparent" RowHeaderWidth="0" GridLinesVisibility="None" BorderThickness="0" MouseDoubleClick="FileGrid_MouseDoubleClick" IsReadOnly="True" SelectionMode="Extended">
+            <DataGrid x:Name="FileGrid" Grid.Row="1" AllowDrop="True" DragOver="FileGrid_DragOver" Drop="FileGrid_Drop" AutoGenerateColumns="False" HeadersVisibility="Column" Background="Transparent" RowHeaderWidth="0" GridLinesVisibility="None" BorderThickness="0" MouseDoubleClick="FileGrid_MouseDoubleClick" IsReadOnly="True" SelectionMode="Extended">
                 <DataGrid.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="使用 VS Code 编辑" Click="CtxGridEditVSCode_Click">

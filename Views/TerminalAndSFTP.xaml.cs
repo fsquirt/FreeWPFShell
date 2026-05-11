@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -137,6 +138,13 @@ namespace FreeWPFShell.Views
             if (input != null) { e.Handled = true; Session?.TerminalConnection?.WriteInput(input); }
         }
 
+        private void BtnTermCopy_Click(object sender, RoutedEventArgs e)
+        {
+            string selectedText = Terminal.GetSelectedText();
+            if (!string.IsNullOrEmpty(selectedText))
+                Clipboard.SetText(selectedText);
+        }
+
         private void LoadPath(string path, bool isHistory = false)
         {
             if (Sftp == null || !Sftp.IsConnected) return;
@@ -147,7 +155,7 @@ namespace FreeWPFShell.Views
                 _currentPath = path; TxtCurrentPath.Text = path;
                 _remoteFiles.Clear();
                 foreach (var f in files.Where(f => f.Name != "." && f.Name != "..").OrderByDescending(f => f.IsDirectory).ThenBy(f => f.Name))
-                    _remoteFiles.Add(new RemoteFile { Icon = f.IsDirectory ? "FolderFill" : "FileTextLine", Name = f.Name, Size = f.IsDirectory ? "" : FormatSize(f.Length), Type = f.IsDirectory ? "文件夹" : "文件", Date = f.LastWriteTime.ToString("yyyy/MM/dd HH:mm"), Perms = GetPerms(f), Owner = $"{f.UserId}::{f.GroupId}", IsDirectory = f.IsDirectory, FullName = f.FullName });
+                    _remoteFiles.Add(new RemoteFile { Icon = f.IsDirectory ? "FolderFill" : "FileTextLine", Name = f.Name, Size = f.IsDirectory ? "" : FormatSize(f.Length), Type = f.IsDirectory ? "文件夹" : "文件", Date = f.LastWriteTime.ToString("yyyy/MM/dd HH:mm"), Perms = GetPerms(f), Owner = $"{f.UserId}::{f.GroupId}", IsDirectory = f.IsDirectory, Length = f.Length, FullName = f.FullName });
             }
             catch (Exception ex) { ModernMessageBox.Show("访问失败: " + ex.Message); }
         }
@@ -160,13 +168,32 @@ namespace FreeWPFShell.Views
         private void BtnRefresh_Click(object sender, RoutedEventArgs e) => LoadPath(_currentPath, true);
         private void BtnUp_Click(object sender, RoutedEventArgs e) { if (_currentPath != "/") { int i = _currentPath.TrimEnd('/').LastIndexOf('/'); LoadPath(i > 0 ? _currentPath.Substring(0, i) : "/"); } }
         private void BtnNewFolder_Click(object sender, RoutedEventArgs e) { try { Sftp.CreateDirectory(_currentPath == "/" ? "/NewFolder" : _currentPath.TrimEnd('/') + "/NewFolder"); LoadPath(_currentPath, true); } catch (Exception ex) { ModernMessageBox.Show("新建文件夹失败: " + ex.Message); } }
-        private void FileGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e) 
-        { 
+        private void FileGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
             if (FileGrid.SelectedItem is RemoteFile f)
             {
                 if (f.IsDirectory) LoadPath(f.FullName);
                 else { _ = Session.EditRemoteFileAsync(f.FullName, "code"); }
             }
+        }
+
+        private void FileGrid_DragOver(object sender, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+                e.Effects = DragDropEffects.Copy;
+            else
+                e.Effects = DragDropEffects.None;
+            e.Handled = true;
+        }
+
+        private void FileGrid_Drop(object sender, DragEventArgs e)
+        {
+            if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
+            var files = (string[])e.Data.GetData(DataFormats.FileDrop)!;
+            if (files == null || files.Length == 0) return;
+
+            foreach (var file in files)
+                UploadLocalItemAsync(file, _currentPath);
         }
 
         private void CtxGridEditVSCode_Click(object sender, RoutedEventArgs e)
@@ -181,7 +208,13 @@ namespace FreeWPFShell.Views
                 _ = Session.EditRemoteFileAsync(f.FullName, "notepad");
         }
 
-        private void UpdateStatus() => Dispatcher.InvokeAsync(() => { if (_activeTransfers > 0) { TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.Loader2Line; TxtStatusIcon.ToolTip = $"传输中... ({_completedFiles}/{_totalFiles}) [{_currentTransferProgress:0}%] - {_currentTransferName}"; } else { TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.CheckboxCircleLine; TxtStatusIcon.ToolTip = "当前没有传输任务"; } });
+        private void UpdateStatus() => Dispatcher.InvokeAsync(() => { if (_activeTransfers > 0) { TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.Loader2Line; TxtStatusIcon.ToolTip = $"传输中... ({_completedFiles}/{_totalFiles}) [{_currentTransferProgress:F1}%] - {_currentTransferName}"; } else { TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.CheckboxCircleLine; TxtStatusIcon.ToolTip = "当前没有传输任务"; } });
+
+        private void UpdateProgress(ulong transferred, long totalBytes)
+        {
+            _currentTransferProgress = totalBytes > 0 ? (double)transferred / totalBytes * 100 : 0;
+            Dispatcher.InvokeAsync(UpdateStatus);
+        }
 
         private void DownloadItemAsync(RemoteFile item, string localDir)
         {
@@ -191,8 +224,18 @@ namespace FreeWPFShell.Views
                 try
                 {
                     string localPath = GetUniqueLocalPath(Path.Combine(localDir, item.Name));
-                    if (item.IsDirectory) { Directory.CreateDirectory(localPath); foreach (var c in Sftp.ListDirectory(item.FullName).Where(c => c.Name != "." && c.Name != "..")) DownloadItemSync(c, localPath); }
-                    else { using var s = File.Create(localPath); _currentTransferName = item.Name; Sftp.DownloadFile(item.FullName, s); }
+                    _currentTransferName = item.Name;
+                    if (item.IsDirectory)
+                    {
+                        Directory.CreateDirectory(localPath);
+                        foreach (var c in Sftp.ListDirectory(item.FullName).Where(c => c.Name != "." && c.Name != ".."))
+                            DownloadItemSync(c, localPath);
+                    }
+                    else
+                    {
+                        using var s = File.Create(localPath);
+                        Sftp.DownloadFile(item.FullName, s, uploaded => UpdateProgress(uploaded, item.Length));
+                    }
                 }
                 catch (Exception ex) { Dispatcher.InvokeAsync(() => ModernMessageBox.Show($"下载失败 {item.Name}: " + ex.Message)); }
                 finally { _completedFiles++; _activeTransfers--; UpdateStatus(); }
@@ -202,31 +245,73 @@ namespace FreeWPFShell.Views
         private void DownloadItemSync(ISftpFile item, string localDir)
         {
             string lp = Path.Combine(localDir, item.Name);
-            if (item.IsDirectory) { Directory.CreateDirectory(lp); foreach (var c in Sftp.ListDirectory(item.FullName).Where(c => c.Name != "." && c.Name != "..")) DownloadItemSync(c, lp); }
-            else { using var s = File.Create(lp); Sftp.DownloadFile(item.FullName, s); }
+            _currentTransferName = item.Name;
+            if (item.IsDirectory)
+            {
+                Directory.CreateDirectory(lp);
+                foreach (var c in Sftp.ListDirectory(item.FullName).Where(c => c.Name != "." && c.Name != ".."))
+                    DownloadItemSync(c, lp);
+            }
+            else
+            {
+                using var s = File.Create(lp);
+                Sftp.DownloadFile(item.FullName, s, uploaded => UpdateProgress(uploaded, item.Length));
+            }
         }
 
-        private void UploadLocalItemAsync(string localPath, string remoteDir)
+        private async void UploadLocalItemAsync(string localPath, string remoteDir)
         {
             _activeTransfers++; _totalFiles++;
-            Task.Run(() =>
+            try
             {
-                try
+                await Task.Run(() =>
                 {
                     bool isDir = (File.GetAttributes(localPath) & FileAttributes.Directory) == FileAttributes.Directory;
                     string name = Path.GetFileName(localPath.TrimEnd('\\', '/')), rp = remoteDir.TrimEnd('/') + "/" + name;
-                    if (isDir) { if (!Sftp.Exists(rp)) Sftp.CreateDirectory(rp); UploadDirSync(localPath, rp); }
-                    else { using var s = File.OpenRead(localPath); _currentTransferName = name; Sftp.UploadFile(s, rp); }
-                }
-                catch (Exception ex) { Dispatcher.InvokeAsync(() => ModernMessageBox.Show($"上传失败: " + ex.Message)); }
-                finally { _completedFiles++; _activeTransfers--; UpdateStatus(); Dispatcher.InvokeAsync(() => { if (_activeTransfers == 0) LoadPath(_currentPath, true); }); }
-            });
+                    _currentTransferName = name;
+                    if (isDir)
+                    {
+                        if (!Sftp.Exists(rp)) Sftp.CreateDirectory(rp);
+                        UploadDirSync(localPath, rp);
+                    }
+                    else
+                    {
+                        long fileSize = new FileInfo(localPath).Length;
+                        using var s = File.OpenRead(localPath);
+                        Sftp.UploadFile(s, rp, uploaded => UpdateProgress(uploaded, fileSize));
+                    }
+                });
+            }
+            catch (Exception ex) { Dispatcher.InvokeAsync(() => ModernMessageBox.Show($"上传失败: " + ex.Message)); }
+            finally { _completedFiles++; _activeTransfers--; UpdateStatus(); Dispatcher.InvokeAsync(() => { if (_activeTransfers == 0) LoadPath(_currentPath, true); }); }
         }
 
         private void UploadDirSync(string localDir, string remoteDir)
         {
-            foreach (var f in Directory.GetFiles(localDir)) { using var s = File.OpenRead(f); Sftp.UploadFile(s, remoteDir.TrimEnd('/') + "/" + Path.GetFileName(f)); }
-            foreach (var d in Directory.GetDirectories(localDir)) { string rp = remoteDir.TrimEnd('/') + "/" + Path.GetFileName(d); if (!Sftp.Exists(rp)) Sftp.CreateDirectory(rp); UploadDirSync(d, rp); }
+            var files = Directory.GetFiles(localDir);
+            Parallel.ForEach(files, new ParallelOptions { MaxDegreeOfParallelism = 4 }, f =>
+            {
+                try
+                {
+                    string fileName = Path.GetFileName(f);
+                    long fileSize = new FileInfo(f).Length;
+
+                    Interlocked.Exchange(ref _currentTransferName, fileName);
+
+                    using var s = File.OpenRead(f);
+                    Sftp.UploadFile(s, remoteDir.TrimEnd('/') + "/" + fileName,
+                        uploaded => Interlocked.Exchange(ref _currentTransferProgress,
+                            fileSize > 0 ? (double)uploaded / fileSize * 100 : 0));
+                }
+                catch { }
+            });
+
+            foreach (var d in Directory.GetDirectories(localDir))
+            {
+                string rp = remoteDir.TrimEnd('/') + "/" + Path.GetFileName(d);
+                if (!Sftp.Exists(rp)) Sftp.CreateDirectory(rp);
+                UploadDirSync(d, rp);
+            }
         }
 
         private static string GetUniqueLocalPath(string p) { if (!File.Exists(p) && !Directory.Exists(p)) return p; string dir = Path.GetDirectoryName(p) ?? "", name = Path.GetFileNameWithoutExtension(p), ext = Path.GetExtension(p); int c = 1; while (File.Exists(p) || Directory.Exists(p)) { p = Path.Combine(dir, $"{name} ({c}){ext}"); c++; } return p; }
