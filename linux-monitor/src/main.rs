@@ -12,7 +12,7 @@ use service_manager::{get_systemd_services, service_action, get_service_log};
 use stats_collector::{get_process_detail, get_net_conns};
 use cron_manager::{list_cron_jobs, add_cron_job, remove_cron_job, toggle_cron_job, get_cron_service_status};
 
-use sysinfo::{Disks, Networks, System};
+use sysinfo::{Disks, Networks, System, RefreshKind, CpuRefreshKind, ProcessRefreshKind, MemoryRefreshKind, UpdateKind};
 use tiny_http::{Response, Server};
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicI64, Ordering};
@@ -49,8 +49,8 @@ fn main() {
         let mut sys = System::new_with_specifics(
             RefreshKind::new()
                 .with_cpu(CpuRefreshKind::everything())
-                .with_memory()
-                .with_processes(ProcessRefreshKind::new().with_cpu().with_memory().with_exe().with_cmd())
+                .with_memory(MemoryRefreshKind::everything())
+                .with_processes(ProcessRefreshKind::new().with_cpu().with_memory().with_exe(UpdateKind::Always).with_cmd(UpdateKind::Always))
         );
         let mut networks = Networks::new_with_refreshed_list();
         let mut disks = Disks::new_with_refreshed_list();
@@ -63,8 +63,8 @@ fn main() {
             sys.refresh_specifics(
                 RefreshKind::new()
                     .with_cpu(CpuRefreshKind::everything())
-                    .with_memory()
-                    .with_processes(ProcessRefreshKind::new().with_cpu().with_memory().with_exe().with_cmd())
+                    .with_memory(MemoryRefreshKind::everything())
+                    .with_processes(ProcessRefreshKind::new().with_cpu().with_memory().with_exe(UpdateKind::Always).with_cmd(UpdateKind::Always))
             );
             networks.refresh();
             disks.refresh();

@@ -1,6 +1,5 @@
 use crate::models::{ProcessDetail, NetConnItem};
 use std::fs;
-use std::path::Path;
 use std::collections::HashMap;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
