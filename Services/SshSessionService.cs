@@ -210,7 +210,7 @@ namespace FreeWPFShell.Services
                     SftpClient = BuildSftpClient(preloadedKey);
                     SftpClient.Connect();
 
-                    try { DeployLinuxMonitor(); } catch { }
+                    try { await DeployLinuxMonitor(); } catch { }
 
                     IsConnected = true;
                     tcs.SetResult(true);
@@ -508,7 +508,7 @@ namespace FreeWPFShell.Services
         }
 
         private string _monitorToken = "";
-        private void DeployLinuxMonitor()
+        private async void DeployLinuxMonitor()
         {
             var settings = _settingsRepo.Load();
             if (!settings.UseLinuxMonitor) return;
