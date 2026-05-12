@@ -302,9 +302,11 @@ namespace FreeWPFShell.Services
                     authMethods.ToArray());
             }
 
-            return new ConnectionInfo(
+            var conn = new ConnectionInfo(
                 HostInfo.IpAddress, HostInfo.SshPort, HostInfo.SshUser,
                 authMethods.ToArray());
+            conn.Encoding = System.Text.Encoding.UTF8;
+            return conn;
         }
 
         private SshClient BuildSshClient(PrivateKeyFile? preloadedKey = null)

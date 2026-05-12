@@ -222,7 +222,11 @@ namespace FreeWPFShell.Views
 
         private void BtnCopyIp_Click(object sender, RoutedEventArgs e)
         {
-            if (_currentSession != null) Clipboard.SetText(_currentSession.HostInfo.IpAddress);
+            if (_currentSession != null) 
+            {
+                try { Clipboard.SetText(_currentSession.HostInfo.IpAddress); }
+                catch (Exception ex) { UserForm.ModernMessageBox.Show("复制到剪切板失败: " + ex.Message); }
+            }
         }
 
         private void MicaWindow_Closed(object sender, EventArgs e)

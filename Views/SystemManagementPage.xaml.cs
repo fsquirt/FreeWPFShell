@@ -442,7 +442,11 @@ namespace FreeWPFShell.Views
 
         private void CtxCopyPid_Click(object sender, RoutedEventArgs e)
         {
-            if (ProcessGrid.SelectedItem is ProcessItem p) Clipboard.SetText(p.Pid.ToString());
+            if (ProcessGrid.SelectedItem is ProcessItem p)
+            {
+                try { Clipboard.SetText(p.Pid.ToString()); }
+                catch (Exception ex) { UserForm.ModernMessageBox.Show("复制失败: " + ex.Message); }
+            }
         }
 
         #endregion

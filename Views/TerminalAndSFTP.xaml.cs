@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -25,9 +26,16 @@ namespace FreeWPFShell.Views
         private readonly ObservableCollection<RemoteFile> _remoteFiles = new();
         private string _currentPath = "/";
         private readonly Stack<string> _backHistory = new(), _forwardHistory = new();
-        private int _activeTransfers, _totalFiles, _completedFiles;
-        private string _currentTransferName = "";
-        private double _currentTransferProgress = 0;
+        
+        // 分离上传和下载状态
+        private int _upActive, _upTotal, _upDone;
+        private string _upName = "";
+        private double _upProgress = 0;
+
+        private int _downActive, _downTotal, _downDone;
+        private string _downName = "";
+        private double _downProgress = 0;
+
         private CancellationTokenSource? _transferCts;
 
         public SshSessionService Session { get; }
@@ -58,7 +66,7 @@ namespace FreeWPFShell.Views
 
         private void TxtStatusIcon_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            if (e.ClickCount == 2 && _activeTransfers > 0)
+            if (e.ClickCount == 2 && (_upActive > 0 || _downActive > 0))
             {
                 if (ModernMessageBox.Show("确定要中断当前所有的传输任务吗？", "中断传输", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
                 {
@@ -157,7 +165,10 @@ namespace FreeWPFShell.Views
         {
             string selectedText = Terminal.GetSelectedText();
             if (!string.IsNullOrEmpty(selectedText))
-                Clipboard.SetText(selectedText);
+            {
+                try { Clipboard.SetText(selectedText); }
+                catch (Exception ex) { ModernMessageBox.Show("复制失败: " + ex.Message); }
+            }
         }
 
         private void LoadPath(string path, bool isHistory = false)
@@ -225,12 +236,23 @@ namespace FreeWPFShell.Views
 
         private void UpdateStatus() => Dispatcher.InvokeAsync(() => 
         { 
-            if (_activeTransfers > 0) 
+            bool anyUp = _upActive > 0 || (_upTotal > 0 && _upDone == _upTotal && _upActive == 0 && _downActive > 0);
+            bool anyDown = _downActive > 0 || (_downTotal > 0 && _downDone == _downTotal && _downActive == 0 && _upActive > 0);
+
+            if (_upActive > 0 || _downActive > 0) 
             { 
                 TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.Loader2Line; 
                 TxtStatusIcon.Spin = true;
                 TxtStatusIcon.Foreground = Brushes.Gold;
-                StatusIconContainer.ToolTip = $"传输中... ({_completedFiles}/{_totalFiles}) [{_currentTransferProgress:F1}%] - {_currentTransferName}\n双击可取消所有任务"; 
+
+                StringBuilder sb = new StringBuilder();
+                if (_upActive > 0 || (_upTotal > 0 && _upDone == _upTotal))
+                    sb.AppendLine($"上传: ({_upDone}/{_upTotal}) [{(_upActive > 0 ? _upProgress : 100):F1}%] - {(_upActive > 0 ? _upName : "已完成")}");
+                if (_downActive > 0 || (_downTotal > 0 && _downDone == _downTotal))
+                    sb.AppendLine($"下载: ({_downDone}/{_downTotal}) [{(_downActive > 0 ? _downProgress : 100):F1}%] - {(_downActive > 0 ? _downName : "已完成")}");
+                
+                sb.Append("\n双击可取消所有任务");
+                StatusIconContainer.ToolTip = sb.ToString().Trim();
             } 
             else 
             { 
@@ -238,16 +260,11 @@ namespace FreeWPFShell.Views
                 TxtStatusIcon.Spin = false;
                 TxtStatusIcon.Foreground = Brushes.LimeGreen;
                 StatusIconContainer.ToolTip = "当前没有传输任务"; 
-                _completedFiles = 0;
-                _totalFiles = 0;
+                // 只有全部完成后才重置统计
+                _upTotal = _upDone = 0;
+                _downTotal = _downDone = 0;
             } 
         });
-
-        private void UpdateProgress(ulong transferred, long totalBytes)
-        {
-            _currentTransferProgress = totalBytes > 0 ? (double)transferred / totalBytes * 100 : 0;
-            Dispatcher.InvokeAsync(UpdateStatus);
-        }
 
         private int CountLocalFiles(string path)
         {
@@ -280,16 +297,16 @@ namespace FreeWPFShell.Views
 
         private async void DownloadItemAsync(RemoteFile item, string localDir)
         {
-            if (_activeTransfers == 0) 
+            if (_upActive == 0 && _downActive == 0) 
             {
                 _transferCts = new CancellationTokenSource();
-                _totalFiles = 0;
-                _completedFiles = 0;
+                _downTotal = 0; _downDone = 0;
+                _upTotal = 0; _upDone = 0;
             }
             
             int count = item.IsDirectory ? await CountRemoteFilesAsync(item.FullName) : 1;
-            Interlocked.Add(ref _totalFiles, count);
-            _activeTransfers++;
+            Interlocked.Add(ref _downTotal, count);
+            Interlocked.Increment(ref _downActive);
             UpdateStatus();
 
             Task.Run(() =>
@@ -297,7 +314,7 @@ namespace FreeWPFShell.Views
                 try
                 {
                     string localPath = GetUniqueLocalPath(Path.Combine(localDir, item.Name));
-                    _currentTransferName = item.Name;
+                    _downName = item.Name;
                     if (item.IsDirectory)
                     {
                         Directory.CreateDirectory(localPath);
@@ -312,14 +329,17 @@ namespace FreeWPFShell.Views
                         using var s = File.Create(localPath);
                         using (var reg = _transferCts?.Token.Register(() => { try { s.Close(); } catch { } }))
                         {
-                            Sftp.DownloadFile(item.FullName, s, uploaded => UpdateProgress(uploaded, item.Length));
+                            Sftp.DownloadFile(item.FullName, s, uploaded => {
+                                _downProgress = item.Length > 0 ? (double)uploaded / item.Length * 100 : 0;
+                                Dispatcher.InvokeAsync(UpdateStatus);
+                            });
                         }
                     }
                 }
                 catch (Exception ex) when (ex is OperationCanceledException || ex is IOException || ex is ObjectDisposedException || ex is SshNetException)
                 { }
                 catch (Exception ex) { Dispatcher.InvokeAsync(() => ModernMessageBox.Show($"下载失败 {item.Name}: " + ex.Message)); }
-                finally { _completedFiles++; _activeTransfers--; UpdateStatus(); }
+                finally { _downDone++; Interlocked.Decrement(ref _downActive); UpdateStatus(); }
             });
         }
 
@@ -327,7 +347,7 @@ namespace FreeWPFShell.Views
         {
             if (_transferCts?.IsCancellationRequested == true) return;
             string lp = Path.Combine(localDir, item.Name);
-            _currentTransferName = item.Name;
+            _downName = item.Name;
             if (item.IsDirectory)
             {
                 Directory.CreateDirectory(lp);
@@ -343,25 +363,28 @@ namespace FreeWPFShell.Views
                     using var s = File.Create(lp);
                     using (var reg = _transferCts?.Token.Register(() => { try { s.Close(); } catch { } }))
                     {
-                        Sftp.DownloadFile(item.FullName, s, uploaded => UpdateProgress(uploaded, item.Length));
+                        Sftp.DownloadFile(item.FullName, s, uploaded => {
+                            _downProgress = item.Length > 0 ? (double)uploaded / item.Length * 100 : 0;
+                            Dispatcher.InvokeAsync(UpdateStatus);
+                        });
                     }
-                    _completedFiles++;
+                    _downDone++;
                 } catch { }
             }
         }
 
         private async void UploadLocalItemAsync(string localPath, string remoteDir)
         {
-            if (_activeTransfers == 0) 
+            if (_upActive == 0 && _downActive == 0) 
             {
                 _transferCts = new CancellationTokenSource();
-                _totalFiles = 0;
-                _completedFiles = 0;
+                _upTotal = 0; _upDone = 0;
+                _downTotal = 0; _downDone = 0;
             }
 
             int count = await Task.Run(() => CountLocalFiles(localPath));
-            Interlocked.Add(ref _totalFiles, count);
-            _activeTransfers++; 
+            Interlocked.Add(ref _upTotal, count);
+            Interlocked.Increment(ref _upActive);
             UpdateStatus();
 
             try
@@ -370,7 +393,7 @@ namespace FreeWPFShell.Views
                 {
                     bool isDir = (File.GetAttributes(localPath) & FileAttributes.Directory) == FileAttributes.Directory;
                     string name = Path.GetFileName(localPath.TrimEnd('\\', '/')), rp = remoteDir.TrimEnd('/') + "/" + name;
-                    _currentTransferName = name;
+                    _upName = name;
                     if (isDir)
                     {
                         lock (Session.SftpLock) { if (!Sftp.Exists(rp)) Sftp.CreateDirectory(rp); }
@@ -384,7 +407,10 @@ namespace FreeWPFShell.Views
                         {
                             lock (Session.SftpLock)
                             {
-                                Sftp.UploadFile(s, rp, uploaded => UpdateProgress(uploaded, fileSize));
+                                Sftp.UploadFile(s, rp, uploaded => {
+                                    _upProgress = fileSize > 0 ? (double)uploaded / fileSize * 100 : 0;
+                                    Dispatcher.InvokeAsync(UpdateStatus);
+                                });
                             }
                         }
                     }
@@ -395,9 +421,9 @@ namespace FreeWPFShell.Views
             catch (Exception ex) { Dispatcher.InvokeAsync(() => ModernMessageBox.Show($"上传失败: " + ex.Message)); }
             finally 
             { 
-                _completedFiles++; _activeTransfers--; 
+                _upDone++; Interlocked.Decrement(ref _upActive);
                 UpdateStatus(); 
-                Dispatcher.InvokeAsync(() => { if (_activeTransfers == 0) LoadPath(_currentPath, true); }); 
+                Dispatcher.InvokeAsync(() => { if (_upActive == 0 && _downActive == 0) LoadPath(_currentPath, true); }); 
             }
         }
 
@@ -413,7 +439,7 @@ namespace FreeWPFShell.Views
                     string fileName = Path.GetFileName(f);
                     long fileSize = new FileInfo(f).Length;
 
-                    Interlocked.Exchange(ref _currentTransferName, fileName);
+                    _upName = fileName;
                     Dispatcher.InvokeAsync(UpdateStatus);
 
                     using var s = File.OpenRead(f);
@@ -423,13 +449,12 @@ namespace FreeWPFShell.Views
                         {
                             Sftp.UploadFile(s, remoteDir.TrimEnd('/') + "/" + fileName,
                                 uploaded => {
-                                    Interlocked.Exchange(ref _currentTransferProgress,
-                                        fileSize > 0 ? (double)uploaded / fileSize * 100 : 0);
+                                    _upProgress = fileSize > 0 ? (double)uploaded / fileSize * 100 : 0;
                                     Dispatcher.InvokeAsync(UpdateStatus);
                                 });
                         }
                     }
-                    Interlocked.Increment(ref _completedFiles);
+                    Interlocked.Increment(ref _upDone);
                 }
                 catch { }
             });
@@ -467,12 +492,12 @@ namespace FreeWPFShell.Views
             var items = FileGrid.SelectedItems.Cast<RemoteFile>().ToList(); if (items.Count == 0) return;
             if (ModernMessageBox.Show($"确认删除选中的 {items.Count} 个项吗？\n文件夹将会被强行递归删除！", "删除确认", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
             {
-                _activeTransfers++;
+                Interlocked.Increment(ref _upActive); // 借用上传状态锁住 UI 刷新
                 await Task.Run(() =>
                 {
                     try { foreach (var item in items) { if (item.IsDirectory) RecursiveDelete(item.FullName); else Sftp.DeleteFile(item.FullName); } }
                     catch (Exception ex) { Dispatcher.InvokeAsync(() => ModernMessageBox.Show($"删除失败: " + ex.Message)); }
-                    finally { _activeTransfers--; Dispatcher.InvokeAsync(() => LoadPath(_currentPath, true)); }
+                    finally { Interlocked.Decrement(ref _upActive); Dispatcher.InvokeAsync(() => LoadPath(_currentPath, true)); }
                 });
             }
         }
@@ -491,26 +516,40 @@ namespace FreeWPFShell.Views
         private void CtxGridCopy_Click(object sender, RoutedEventArgs e)
         {
             var items = FileGrid.SelectedItems.Cast<RemoteFile>().ToList(); if (items.Count == 0) return;
-            Clipboard.SetText($"FreeWPFRemoteCopy|{Session?.HostInfo?.Id}|" + string.Join("|", items.Select(x => x.FullName)));
+            try
+            {
+                Clipboard.SetText($"FreeWPFRemoteCopy|{Session?.HostInfo?.Id}|" + string.Join("|", items.Select(x => x.FullName)));
+            }
+            catch (Exception ex)
+            {
+                ModernMessageBox.Show("复制到剪切板失败: " + ex.Message);
+            }
         }
 
         private async void CtxGridPaste_Click(object sender, RoutedEventArgs e)
         {
-            if (Clipboard.ContainsFileDropList()) { foreach (string? f in Clipboard.GetFileDropList()) { if (f != null) UploadLocalItemAsync(f, _currentPath); } }
-            else if (Clipboard.ContainsText())
+            try
             {
-                string text = Clipboard.GetText() ?? "";
-                if (text.StartsWith($"FreeWPFRemoteCopy|{Session?.HostInfo?.Id}|"))
+                if (Clipboard.ContainsFileDropList()) { foreach (string? f in Clipboard.GetFileDropList()) { if (f != null) UploadLocalItemAsync(f, _currentPath); } }
+                else if (Clipboard.ContainsText())
                 {
-                    _activeTransfers++; TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.Loader2Line; TxtStatusIcon.ToolTip = "正在服务器端复制...";
-                    await Task.Run(() =>
+                    string text = Clipboard.GetText() ?? "";
+                    if (text.StartsWith($"FreeWPFRemoteCopy|{Session?.HostInfo?.Id}|"))
                     {
-                        try { foreach (var src in text.Split('|').Skip(2)) Ssh.CreateCommand($"cp -a \"{src}\" \"{_currentPath}/\"").Execute(); }
-                        catch (Exception ex) { Dispatcher.InvokeAsync(() => ModernMessageBox.Show($"粘贴失败: " + ex.Message)); }
-                        finally { _activeTransfers--; UpdateStatus(); Dispatcher.InvokeAsync(() => LoadPath(_currentPath, true)); }
-                    });
+                        Interlocked.Increment(ref _upActive); TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.Loader2Line; TxtStatusIcon.ToolTip = "正在服务器端复制...";
+                        await Task.Run(() =>
+                        {
+                            try { foreach (var src in text.Split('|').Skip(2)) Ssh.CreateCommand($"cp -a \"{src}\" \"{_currentPath}/\"").Execute(); }
+                            catch (Exception ex) { Dispatcher.InvokeAsync(() => ModernMessageBox.Show($"粘贴失败: " + ex.Message)); }
+                            finally { Interlocked.Decrement(ref _upActive); UpdateStatus(); Dispatcher.InvokeAsync(() => LoadPath(_currentPath, true)); }
+                        });
+                    }
+                    else if (text.StartsWith("FreeWPFRemoteCopy|")) ModernMessageBox.Show("抱歉，目前不允许跨服务器进行一键复制粘贴。", "提示");
                 }
-                else if (text.StartsWith("FreeWPFRemoteCopy|")) ModernMessageBox.Show("抱歉，目前不允许跨服务器进行一键复制粘贴。", "提示");
+            }
+            catch (Exception ex)
+            {
+                ModernMessageBox.Show("访问剪切板失败: " + ex.Message);
             }
         }
     }
