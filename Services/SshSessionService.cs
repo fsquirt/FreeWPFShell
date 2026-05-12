@@ -238,6 +238,17 @@ namespace FreeWPFShell.Services
 
                         // 这里直接调用同步方法，Task.Run 会保证它不卡 UI
                         DeployLinuxMonitor();
+
+                        if (_settingsRepo.Load().InjectChineseLocale)
+                        {
+                            ConnectionStatus = "设置中文环境变量...";
+                            // 创建临时连接以执行注入，此时 TerminalConnection 尚未启动 ReadOutput
+                            var tempConn = new SshTerminalConnection(MasterClient, 120, 30);
+                            tempConn.Start();
+                            Task.Run(() => tempConn.InjectLocaleAsync()).Wait();
+                            // 注入完成后立即关闭，稍后由真正的 TerminalConnection 接管
+                            tempConn.Close();
+                        }
                     }
                 );
                 IsConnected = true;

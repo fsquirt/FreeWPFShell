@@ -57,5 +57,6 @@ namespace FreeWPFShell.Models
         public int TracerouteMaxHops { get; set; } = 30; // 默认 30 跳
         public string TerminalFont { get; set; } = "Cascadia Code";
         public int TerminalFontSize { get; set; } = 10;
+        public bool InjectChineseLocale { get; set; } = true;
     }
 }

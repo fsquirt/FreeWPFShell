@@ -19,6 +19,7 @@ namespace FreeWPFShell.Views
             var settings = _settingsRepo.Load();
             TogVault.IsChecked = settings.UseWindowsHello;
             TogLinuxMonitor.IsChecked = settings.UseLinuxMonitor;
+            TogInjectLocale.IsChecked = settings.InjectChineseLocale;
             TxtTerminalBg.Text = settings.TerminalBackground;
             TogImageBg.IsChecked = settings.UseImageBackground;
             TxtImagePath.Text = settings.ImageBackgroundPath;
@@ -64,6 +65,7 @@ namespace FreeWPFShell.Views
             var settings = _settingsRepo.Load();
             if (TogVault.IsChecked.HasValue) settings.UseWindowsHello = TogVault.IsChecked.Value;
             if (TogLinuxMonitor.IsChecked.HasValue) settings.UseLinuxMonitor = TogLinuxMonitor.IsChecked.Value;
+            if (TogInjectLocale.IsChecked.HasValue) settings.InjectChineseLocale = TogInjectLocale.IsChecked.Value;
             settings.TerminalBackground = TxtTerminalBg.Text.Trim();
             settings.UseImageBackground = TogImageBg.IsChecked ?? false;
             settings.ImageBackgroundPath = TxtImagePath.Text;

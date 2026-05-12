@@ -27,6 +27,8 @@ namespace FreeWPFShell
 
         public bool IsConnected => _client?.IsConnected ?? false;
 
+        public bool InjectChineseLocale { get; set; } = true;
+
         /// <summary>
         /// 使用已连接的 SshClient 创建终端连接（不拥有 client 生命周期）。
         /// </summary>
@@ -55,6 +57,14 @@ namespace FreeWPFShell
 
             _cts = new CancellationTokenSource();
             Task.Run(() => ReadOutputAsync(_cts.Token));
+        }
+
+        public async Task InjectLocaleAsync()
+        {
+            if (_shellStream == null) return;
+            await Task.Delay(500); // 等待 shell 准备就绪
+            WriteInput("export LANG=zh_CN.UTF-8\nexport LC_ALL=zh_CN.UTF-8\nclear\n");
+            await Task.Delay(300); // 等待命令执行完成
         }
 
         private async Task ReadOutputAsync(CancellationToken token)
