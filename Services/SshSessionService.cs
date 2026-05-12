@@ -9,6 +9,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Timers;
 using System.Diagnostics;
+using System.Security.Cryptography;
 using FreeWPFShell.Models;
 using FreeWPFShell.Repositories;
 using FreeWPFShell.Share;
@@ -67,6 +68,8 @@ namespace FreeWPFShell.Services
 
         private readonly SettingsRepository _settingsRepo;
         private readonly Dictionary<string, FileSystemWatcher> _activeWatchers = new();
+        private readonly object _sftpLock = new();
+        public object SftpLock => _sftpLock;
 
         public SshSessionService(SshConnectionInfo hostInfo, SettingsRepository? settingsRepo = null)
         {
@@ -89,14 +92,24 @@ namespace FreeWPFShell.Services
             try
             {
                 string fileName = Path.GetFileName(remotePath);
-                string localDir = Path.Combine(Path.GetTempPath(), "FreeWPFShell", SessionId);
+                // 使用路径哈希创建子文件夹，避免不同目录下同名文件冲突导致的相互覆盖和监听错误
+                string pathHash = BitConverter.ToString(MD5.HashData(System.Text.Encoding.UTF8.GetBytes(remotePath))).Replace("-", "").Substring(0, 8);
+                string localDir = Path.Combine(Path.GetTempPath(), "FreeWPFShell", SessionId, pathHash);
                 if (!Directory.Exists(localDir)) Directory.CreateDirectory(localDir);
                 string localPath = Path.Combine(localDir, fileName);
+
+                // 在下载新内容前停止旧监听，防止 File.Create 的写入操作触发旧的上传逻辑（导致远程文件被旧内容或空白内容覆盖）
+                StopFileWatcher(localPath);
 
                 // 1. 下载文件
                 using (var fs = File.Create(localPath))
                 {
-                    await Task.Run(() => SftpClient.DownloadFile(remotePath, fs));
+                    await Task.Run(() => {
+                        lock (_sftpLock)
+                        {
+                            SftpClient.DownloadFile(remotePath, fs);
+                        }
+                    });
                 }
 
                 // 2. 启动监听
@@ -123,16 +136,25 @@ namespace FreeWPFShell.Services
             }
         }
 
+        private void StopFileWatcher(string localPath)
+        {
+            lock (_activeWatchers)
+            {
+                if (_activeWatchers.TryGetValue(localPath, out var watcher))
+                {
+                    watcher.EnableRaisingEvents = false;
+                    watcher.Dispose();
+                    _activeWatchers.Remove(localPath);
+                }
+            }
+        }
+
         private void StartFileWatcher(string localPath, string remotePath)
         {
             string localDir = Path.GetDirectoryName(localPath)!;
             string fileName = Path.GetFileName(localPath);
 
-            if (_activeWatchers.ContainsKey(localPath))
-            {
-                _activeWatchers[localPath].Dispose();
-                _activeWatchers.Remove(localPath);
-            }
+            StopFileWatcher(localPath);
 
             var watcher = new FileSystemWatcher(localDir, fileName)
             {
@@ -143,7 +165,7 @@ namespace FreeWPFShell.Services
             // 防抖：防止某些编辑器多次写入触发多次上传
             DateTime lastUploadTime = DateTime.MinValue;
 
-            watcher.Changed += (s, e) =>
+            FileSystemEventHandler handler = (s, e) =>
             {
                 if ((DateTime.Now - lastUploadTime).TotalMilliseconds < 500) return;
                 lastUploadTime = DateTime.Now;
@@ -152,31 +174,42 @@ namespace FreeWPFShell.Services
                 {
                     try
                     {
-                        // 等待文件句柄释放
-                        int retry = 5;
+                        // 等待文件句柄释放 (部分编辑器可能在写入过程中锁定文件)
+                        int retry = 10;
                         while (retry-- > 0)
                         {
                             try
                             {
                                 using (var fs = new FileStream(localPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
                                 {
-                                    if (SftpClient != null && SftpClient.IsConnected)
+                                    lock (_sftpLock)
                                     {
-                                        SftpClient.UploadFile(fs, remotePath, true);
-                                        Debug.WriteLine($"[Editor] Auto-uploaded: {remotePath}");
+                                        if (SftpClient != null && SftpClient.IsConnected)
+                                        {
+                                            SftpClient.UploadFile(fs, remotePath, true);
+                                            Debug.WriteLine($"[Editor] Auto-uploaded: {remotePath}");
+                                        }
                                     }
                                 }
                                 break;
                             }
-                            catch { await Task.Delay(200); }
+                            catch { await Task.Delay(300); }
                         }
                     }
                     catch (Exception ex) { Debug.WriteLine($"[Editor] Upload Error: {ex.Message}"); }
                 });
             };
 
-            _activeWatchers[localPath] = watcher;
+            watcher.Changed += handler;
+            watcher.Created += handler;
+            watcher.Renamed += (s, e) => handler(s, e);
+
+            lock (_activeWatchers)
+            {
+                _activeWatchers[localPath] = watcher;
+            }
         }
+
 
         public async Task ConnectAsync()
         {
@@ -527,11 +560,14 @@ namespace FreeWPFShell.Services
                     _monitorToken = Guid.NewGuid().ToString("N");
 
                     MasterClient.CreateCommand($"pkill -9 -f {remotePath}").Execute();
-                    using (var fs = System.IO.File.OpenRead(binPath)) SftpClient.UploadFile(fs, remotePath, true);
-                    
-                    // 写入 Token 文件并设置 600 权限 (仅所有者可读)
-                    using (var ms = new System.IO.MemoryStream(System.Text.Encoding.UTF8.GetBytes(_monitorToken)))
-                        SftpClient.UploadFile(ms, tokenPath, true);
+                    lock (_sftpLock)
+                    {
+                        using (var fs = System.IO.File.OpenRead(binPath)) SftpClient.UploadFile(fs, remotePath, true);
+
+                        // 写入 Token 文件并设置 600 权限 (仅所有者可读)
+                        using (var ms = new System.IO.MemoryStream(System.Text.Encoding.UTF8.GetBytes(_monitorToken)))
+                            SftpClient.UploadFile(ms, tokenPath, true);
+                    }
                     
                     MasterClient.CreateCommand($"chmod 600 {tokenPath}").Execute();
                     MasterClient.CreateCommand($"chmod +x {remotePath}").Execute();
@@ -784,7 +820,12 @@ namespace FreeWPFShell.Services
                         try { MasterClient.CreateCommand($"pkill -9 -f linux-monitor_{LinuxMonitorLocalPort}")?.Execute(); } catch { }
                     }
 
-                    SftpClient?.Disconnect(); SftpClient?.Dispose();
+                    lock (_sftpLock)
+                    {
+                        SftpClient?.Disconnect();
+                        SftpClient?.Dispose();
+                        SftpClient = null;
+                    }
                     MasterClient?.Disconnect(); MasterClient?.Dispose();
                 }
                 catch { } // 忽略后台清理过程中的任何异常

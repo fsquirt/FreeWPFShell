@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:mica="clr-namespace:MicaWPF.Controls;assembly=MicaWPF"
         mc:Ignorable="d"
-        Title="设置" Height="740" Width="420"
+        Title="设置" Height="700" Width="420"
         SystemBackdropType="Acrylic"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
         FontFamily="Microsoft YaHei">
@@ -26,7 +26,7 @@
 
         <TextBlock Grid.Row="0" Text="安全设置" FontSize="20" FontWeight="Bold" Margin="0,0,0,15"/>
 
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,5">
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,20">
             <mica:ToggleSwitch x:Name="TogVault" VerticalAlignment="Center" Margin="0,0,10,0"/>
             <TextBlock Text="使用 Windows Hello 保护密码" FontSize="14" VerticalAlignment="Center" ToolTip="启用后，新保存的凭据将强制要求通过本机 PIN 或生物识别才能解锁。"/>
         </StackPanel>
