@@ -72,7 +72,9 @@
                             </StackPanel>
                         </mica:Button>
 
-                        <icon:PackIconRemixIcon x:Name="TxtStatusIcon" Kind="CheckboxCircleLine" Foreground="LimeGreen" Width="16" Height="16" VerticalAlignment="Center" Margin="0,0,10,0" ToolTip="当前没有传输任务"/>
+                        <Grid x:Name="StatusIconContainer" Background="Transparent" Cursor="Hand" MouseLeftButtonDown="TxtStatusIcon_MouseLeftButtonDown" VerticalAlignment="Center" Margin="0,0,10,0" Width="24" Height="24">
+                            <icon:PackIconRemixIcon x:Name="TxtStatusIcon" Kind="CheckboxCircleLine" Foreground="LimeGreen" Width="18" Height="18" VerticalAlignment="Center" HorizontalAlignment="Center" ToolTip="当前没有传输任务"/>
+                        </Grid>
 
                         <mica:Button x:Name="BtnSshTunnel" Margin="0,0,10,0" Width="35" Click="BtnSshTunnel_Click" ToolTip="SSH隧道管理">
                             <icon:PackIconRemixIcon Kind="NodeTree" Foreground="#00BCFF" Width="14" Height="22" />

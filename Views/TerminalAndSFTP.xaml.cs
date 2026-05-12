@@ -16,6 +16,7 @@ using FreeWPFShell.UserForm;
 using Microsoft.Terminal.Wpf;
 using Renci.SshNet;
 using Renci.SshNet.Sftp;
+using SshNetException = Renci.SshNet.Common.SshException;
 
 namespace FreeWPFShell.Views
 {
@@ -27,6 +28,7 @@ namespace FreeWPFShell.Views
         private int _activeTransfers, _totalFiles, _completedFiles;
         private string _currentTransferName = "";
         private double _currentTransferProgress = 0;
+        private CancellationTokenSource? _transferCts;
 
         public SshSessionService Session { get; }
         private SftpClient Sftp => Session.SftpClient!;
@@ -49,17 +51,30 @@ namespace FreeWPFShell.Views
                     else if (e.PropertyName == nameof(SshSessionService.IsAppCursorMode))
                     {
                         TxtCursorMode.Text = Session.IsAppCursorMode ? "APP MODE" : "NORMAL MODE";
-                        //TxtCursorMode.Foreground = Session.IsAppCursorMode ? Brushes.Gold : Brushes.LightGray;
                     }
                 });
             };
+        }
+
+        private void TxtStatusIcon_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ClickCount == 2 && _activeTransfers > 0)
+            {
+                if (ModernMessageBox.Show("确定要中断当前所有的传输任务吗？", "中断传输", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+                {
+                    _transferCts?.Cancel();
+                    Dispatcher.InvokeAsync(() => {
+                        StatusIconContainer.ToolTip = "正在取消任务...";
+                    });
+                }
+            }
         }
 
         private void Terminal_Loaded(object sender, RoutedEventArgs e)
         {
             var settings = new Repositories.SettingsRepository().Load();
             var bgColorStr = settings.TerminalBackground ?? "#1E3047";
-            uint bgColorUint = 0x0047301E; // Default #1E3047 in terminal uint format (0x00BBGGRR)
+            uint bgColorUint = 0x0047301E; 
 
             try
             {
@@ -88,33 +103,33 @@ namespace FreeWPFShell.Views
                 DefaultSelectionBackground = 0x00ffffff, CursorStyle = CursorStyle.BlinkingBar,
                 ColorTable = new uint[16] { 0x000c0c0c,0x001f0fc5,0x000ea113,0x00009cc1,0x00da3700,0x00981788,0x00dd963a,0x00cccccc,0x00767676,0x005648e7,0x000cc616,0x00a5f1f9,0x00ff783b,0x009e00b4,0x00d6d661,0x00f2f2f2 }
             }, settings.TerminalFont ?? "Cascadia Code", (short)(settings.TerminalFontSize > 0 ? settings.TerminalFontSize : 10));
-            TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.Loader2Line; TxtStatusIcon.ToolTip = "Connecting...";
+            
+            TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.Loader2Line; 
+            TxtStatusIcon.Spin = true;
+            StatusIconContainer.ToolTip = "Connecting...";
         }
 
         public void BindSession()
         {
             if (Session == null || !Session.IsConnected)
-            { TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.CloseCircleLine; TxtStatusIcon.Foreground = Brushes.Red; return; }
+            { 
+                TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.CloseCircleLine; 
+                TxtStatusIcon.Spin = false; 
+                TxtStatusIcon.Foreground = Brushes.Red; 
+                StatusIconContainer.ToolTip = "未连接";
+                return; 
+            }
 
             _currentPath = Sftp.WorkingDirectory ?? "/";
             FileGrid.ItemsSource = _remoteFiles;
             LoadPath(_currentPath);
-            TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.CheckboxCircleLine; TxtStatusIcon.Foreground = Brushes.LimeGreen; TxtStatusIcon.ToolTip = "当前没有传输任务";
+            TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.CheckboxCircleLine; 
+            TxtStatusIcon.Spin = false; 
+            TxtStatusIcon.Foreground = Brushes.LimeGreen; 
+            StatusIconContainer.ToolTip = "当前没有传输任务";
             
             Terminal.Connection = Session.TerminalConnection;
 
-            // 监听模式变更以更新 UI
-            Session.PropertyChanged += (s, e) =>
-            {
-                if (e.PropertyName == nameof(SshSessionService.IsAppCursorMode))
-                {
-                    Dispatcher.Invoke(() => {
-                        TxtCursorMode.Text = Session.IsAppCursorMode ? "APP MODE" : "NORMAL MODE";
-                    });
-                }
-            };
-
-            // 强制同步一次 PTY 尺寸，弥补线程池饥饿可能吞掉的首次 WM_SIZE
             Dispatcher.InvokeAsync(() => {
                 Session.TerminalConnection?.Resize(
                     (uint)Terminal.Rows, (uint)Terminal.Columns);
@@ -208,7 +223,25 @@ namespace FreeWPFShell.Views
                 _ = Session.EditRemoteFileAsync(f.FullName, "notepad");
         }
 
-        private void UpdateStatus() => Dispatcher.InvokeAsync(() => { if (_activeTransfers > 0) { TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.Loader2Line; TxtStatusIcon.ToolTip = $"传输中... ({_completedFiles}/{_totalFiles}) [{_currentTransferProgress:F1}%] - {_currentTransferName}"; } else { TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.CheckboxCircleLine; TxtStatusIcon.ToolTip = "当前没有传输任务"; } });
+        private void UpdateStatus() => Dispatcher.InvokeAsync(() => 
+        { 
+            if (_activeTransfers > 0) 
+            { 
+                TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.Loader2Line; 
+                TxtStatusIcon.Spin = true;
+                TxtStatusIcon.Foreground = Brushes.Gold;
+                StatusIconContainer.ToolTip = $"传输中... ({_completedFiles}/{_totalFiles}) [{_currentTransferProgress:F1}%] - {_currentTransferName}\n双击可取消所有任务"; 
+            } 
+            else 
+            { 
+                TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.CheckboxCircleLine; 
+                TxtStatusIcon.Spin = false;
+                TxtStatusIcon.Foreground = Brushes.LimeGreen;
+                StatusIconContainer.ToolTip = "当前没有传输任务"; 
+                _completedFiles = 0;
+                _totalFiles = 0;
+            } 
+        });
 
         private void UpdateProgress(ulong transferred, long totalBytes)
         {
@@ -216,9 +249,49 @@ namespace FreeWPFShell.Views
             Dispatcher.InvokeAsync(UpdateStatus);
         }
 
-        private void DownloadItemAsync(RemoteFile item, string localDir)
+        private int CountLocalFiles(string path)
         {
-            _activeTransfers++; _totalFiles++;
+            try
+            {
+                if (File.Exists(path)) return 1;
+                if (Directory.Exists(path))
+                    return Directory.GetFiles(path, "*", SearchOption.AllDirectories).Length;
+            }
+            catch { }
+            return 0;
+        }
+
+        private async Task<int> CountRemoteFilesAsync(string path)
+        {
+            int count = 0;
+            try
+            {
+                var files = await Task.Run(() => Sftp.ListDirectory(path).ToList());
+                foreach (var f in files)
+                {
+                    if (f.Name == "." || f.Name == "..") continue;
+                    if (f.IsDirectory) count += await CountRemoteFilesAsync(f.FullName);
+                    else count++;
+                }
+            }
+            catch { }
+            return count;
+        }
+
+        private async void DownloadItemAsync(RemoteFile item, string localDir)
+        {
+            if (_activeTransfers == 0) 
+            {
+                _transferCts = new CancellationTokenSource();
+                _totalFiles = 0;
+                _completedFiles = 0;
+            }
+            
+            int count = item.IsDirectory ? await CountRemoteFilesAsync(item.FullName) : 1;
+            Interlocked.Add(ref _totalFiles, count);
+            _activeTransfers++;
+            UpdateStatus();
+
             Task.Run(() =>
             {
                 try
@@ -229,14 +302,22 @@ namespace FreeWPFShell.Views
                     {
                         Directory.CreateDirectory(localPath);
                         foreach (var c in Sftp.ListDirectory(item.FullName).Where(c => c.Name != "." && c.Name != ".."))
+                        {
+                            if (_transferCts?.IsCancellationRequested == true) break;
                             DownloadItemSync(c, localPath);
+                        }
                     }
                     else
                     {
                         using var s = File.Create(localPath);
-                        Sftp.DownloadFile(item.FullName, s, uploaded => UpdateProgress(uploaded, item.Length));
+                        using (var reg = _transferCts?.Token.Register(() => { try { s.Close(); } catch { } }))
+                        {
+                            Sftp.DownloadFile(item.FullName, s, uploaded => UpdateProgress(uploaded, item.Length));
+                        }
                     }
                 }
+                catch (Exception ex) when (ex is OperationCanceledException || ex is IOException || ex is ObjectDisposedException || ex is SshNetException)
+                { }
                 catch (Exception ex) { Dispatcher.InvokeAsync(() => ModernMessageBox.Show($"下载失败 {item.Name}: " + ex.Message)); }
                 finally { _completedFiles++; _activeTransfers--; UpdateStatus(); }
             });
@@ -244,24 +325,45 @@ namespace FreeWPFShell.Views
 
         private void DownloadItemSync(ISftpFile item, string localDir)
         {
+            if (_transferCts?.IsCancellationRequested == true) return;
             string lp = Path.Combine(localDir, item.Name);
             _currentTransferName = item.Name;
             if (item.IsDirectory)
             {
                 Directory.CreateDirectory(lp);
                 foreach (var c in Sftp.ListDirectory(item.FullName).Where(c => c.Name != "." && c.Name != ".."))
+                {
+                    if (_transferCts?.IsCancellationRequested == true) break;
                     DownloadItemSync(c, lp);
+                }
             }
             else
             {
-                using var s = File.Create(lp);
-                Sftp.DownloadFile(item.FullName, s, uploaded => UpdateProgress(uploaded, item.Length));
+                try {
+                    using var s = File.Create(lp);
+                    using (var reg = _transferCts?.Token.Register(() => { try { s.Close(); } catch { } }))
+                    {
+                        Sftp.DownloadFile(item.FullName, s, uploaded => UpdateProgress(uploaded, item.Length));
+                    }
+                    _completedFiles++;
+                } catch { }
             }
         }
 
         private async void UploadLocalItemAsync(string localPath, string remoteDir)
         {
-            _activeTransfers++; _totalFiles++;
+            if (_activeTransfers == 0) 
+            {
+                _transferCts = new CancellationTokenSource();
+                _totalFiles = 0;
+                _completedFiles = 0;
+            }
+
+            int count = await Task.Run(() => CountLocalFiles(localPath));
+            Interlocked.Add(ref _totalFiles, count);
+            _activeTransfers++; 
+            UpdateStatus();
+
             try
             {
                 await Task.Run(() =>
@@ -271,25 +373,40 @@ namespace FreeWPFShell.Views
                     _currentTransferName = name;
                     if (isDir)
                     {
-                        if (!Sftp.Exists(rp)) Sftp.CreateDirectory(rp);
+                        lock (Session.SftpLock) { if (!Sftp.Exists(rp)) Sftp.CreateDirectory(rp); }
                         UploadDirSync(localPath, rp);
                     }
                     else
                     {
                         long fileSize = new FileInfo(localPath).Length;
                         using var s = File.OpenRead(localPath);
-                        Sftp.UploadFile(s, rp, uploaded => UpdateProgress(uploaded, fileSize));
+                        using (var reg = _transferCts?.Token.Register(() => { try { s.Close(); } catch { } }))
+                        {
+                            lock (Session.SftpLock)
+                            {
+                                Sftp.UploadFile(s, rp, uploaded => UpdateProgress(uploaded, fileSize));
+                            }
+                        }
                     }
                 });
             }
+            catch (Exception ex) when (ex is OperationCanceledException || ex is IOException || ex is ObjectDisposedException || ex is SshNetException)
+            { }
             catch (Exception ex) { Dispatcher.InvokeAsync(() => ModernMessageBox.Show($"上传失败: " + ex.Message)); }
-            finally { _completedFiles++; _activeTransfers--; UpdateStatus(); Dispatcher.InvokeAsync(() => { if (_activeTransfers == 0) LoadPath(_currentPath, true); }); }
+            finally 
+            { 
+                _completedFiles++; _activeTransfers--; 
+                UpdateStatus(); 
+                Dispatcher.InvokeAsync(() => { if (_activeTransfers == 0) LoadPath(_currentPath, true); }); 
+            }
         }
 
         private void UploadDirSync(string localDir, string remoteDir)
         {
+            if (_transferCts?.IsCancellationRequested == true) return;
             var files = Directory.GetFiles(localDir);
-            Parallel.ForEach(files, new ParallelOptions { MaxDegreeOfParallelism = 4 }, f =>
+            
+            Parallel.ForEach(files, new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = _transferCts?.Token ?? default }, f =>
             {
                 try
                 {
@@ -297,19 +414,32 @@ namespace FreeWPFShell.Views
                     long fileSize = new FileInfo(f).Length;
 
                     Interlocked.Exchange(ref _currentTransferName, fileName);
+                    Dispatcher.InvokeAsync(UpdateStatus);
 
                     using var s = File.OpenRead(f);
-                    Sftp.UploadFile(s, remoteDir.TrimEnd('/') + "/" + fileName,
-                        uploaded => Interlocked.Exchange(ref _currentTransferProgress,
-                            fileSize > 0 ? (double)uploaded / fileSize * 100 : 0));
+                    using (var reg = _transferCts?.Token.Register(() => { try { s.Close(); } catch { } }))
+                    {
+                        lock (Session.SftpLock)
+                        {
+                            Sftp.UploadFile(s, remoteDir.TrimEnd('/') + "/" + fileName,
+                                uploaded => {
+                                    Interlocked.Exchange(ref _currentTransferProgress,
+                                        fileSize > 0 ? (double)uploaded / fileSize * 100 : 0);
+                                    Dispatcher.InvokeAsync(UpdateStatus);
+                                });
+                        }
+                    }
+                    Interlocked.Increment(ref _completedFiles);
                 }
                 catch { }
             });
 
+            if (_transferCts?.IsCancellationRequested == true) return;
             foreach (var d in Directory.GetDirectories(localDir))
             {
+                if (_transferCts?.IsCancellationRequested == true) break;
                 string rp = remoteDir.TrimEnd('/') + "/" + Path.GetFileName(d);
-                if (!Sftp.Exists(rp)) Sftp.CreateDirectory(rp);
+                lock (Session.SftpLock) { if (!Sftp.Exists(rp)) Sftp.CreateDirectory(rp); }
                 UploadDirSync(d, rp);
             }
         }
