@@ -191,60 +191,45 @@ namespace FreeWPFShell.Services
                 preloadedKey = await keyRepo.LoadPrivateKeyFileAsync(HostInfo.SshKeyId);
             }
 
-            var tcs = new TaskCompletionSource<bool>();
-            var thread = new Thread(() =>
+            try
             {
-                try
-                {
-                    ConnectionStatus = "SSH.NET 建立连接...";
-                    MasterClient = BuildSshClient(preloadedKey);
-                    MasterClient.Connect();
-
-                    if (_cts.IsCancellationRequested)
+                await Task.Run(() =>
                     {
-                        tcs.SetResult(false);
-                        return;
+                        ConnectionStatus = "SSH.NET 建立连接...";
+                        MasterClient = BuildSshClient(preloadedKey);
+                        MasterClient.Connect(); // 同步阻塞连接
+
+                        ConnectionStatus = "SFTP 建立连接...";
+                        SftpClient = BuildSftpClient(preloadedKey);
+                        SftpClient.Connect(); // 同步阻塞连接
+
+                        // 这里直接调用同步方法，Task.Run 会保证它不卡 UI
+                        DeployLinuxMonitor();
                     }
+                );
+                IsConnected = true;
 
-                    ConnectionStatus = "SFTP 建立连接...";
-                    SftpClient = BuildSftpClient(preloadedKey);
-                    SftpClient.Connect();
+                // 直接用 SSH.NET ShellStream 创建终端连接
+                // 初始尺寸会在 BindSession → Resize 中被 TerminalControl 同步为实际值
+                TerminalConnection = new SshTerminalConnection(MasterClient, 120, 30);
 
-                    try { await DeployLinuxMonitor(); } catch { }
-
-                    IsConnected = true;
-                    tcs.SetResult(true);
-                }
-                catch (Exception ex)
+                // 监听 AppCursorMode 切换（通过检测 ShellStream 中的 VT 序列）
+                TerminalConnection.AppCursorModeChanged += (isApp) =>
                 {
-                    tcs.SetException(ex);
-                }
-            })
-            {
-                IsBackground = true,
-                Name = "SshConnectThread"
-            };
+                    IsAppCursorMode = isApp;
+                };
 
-            thread.Start();
+                _monitorTimer = new Timer(2000) { AutoReset = true, Enabled = true };
+                _monitorTimer.Elapsed += OnMonitorTick;
 
-            // 等待 SSH.NET 握手彻底完成并释放线程池资源
-            bool success = await tcs.Task;
-            if (!success || _cts.IsCancellationRequested) return;
-            if (MasterClient is null)
+                ConnectionStatus = "已连接";
+
+            }
+            catch (Exception ex)
             {
-                ConnectionStatus = "SSH 主连接未初始化";
+                ConnectionStatus = "连接失败: " + ex.Message;
                 return;
             }
-
-            // 直接用 SSH.NET ShellStream 创建终端连接
-            // 初始尺寸会在 BindSession → Resize 中被 TerminalControl 同步为实际值
-            TerminalConnection = new SshTerminalConnection(MasterClient, 120, 30);
-
-            // 监听 AppCursorMode 切换（通过检测 ShellStream 中的 VT 序列）
-            TerminalConnection.AppCursorModeChanged += (isApp) =>
-            {
-                IsAppCursorMode = isApp;
-            };
 
             _monitorTimer = new Timer(2000) { AutoReset = true, Enabled = true };
             _monitorTimer.Elapsed += OnMonitorTick;
@@ -303,7 +288,7 @@ namespace FreeWPFShell.Services
         {
             if (!IsConnected || MasterClient == null || !MasterClient.IsConnected) return;
             _tickCount++;
-            PingCheckAsync();
+            await PingCheckAsync();
             try
             {
                 if (LinuxMonitorLocalPort > 0)
@@ -324,7 +309,7 @@ namespace FreeWPFShell.Services
             catch { }
         }
 
-        private async void PingCheckAsync()
+        private async Task PingCheckAsync()
         {
             try
             {
@@ -508,7 +493,7 @@ namespace FreeWPFShell.Services
         }
 
         private string _monitorToken = "";
-        private async void DeployLinuxMonitor()
+        private void DeployLinuxMonitor()
         {
             var settings = _settingsRepo.Load();
             if (!settings.UseLinuxMonitor) return;
