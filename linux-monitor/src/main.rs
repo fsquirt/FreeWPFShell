@@ -46,7 +46,12 @@ fn main() {
     let last_req_clone = last_request.clone();
     
     thread::spawn(move || {
-        let mut sys = System::new_all();
+        let mut sys = System::new_with_specifics(
+            RefreshKind::new()
+                .with_cpu(CpuRefreshKind::everything())
+                .with_memory()
+                .with_processes(ProcessRefreshKind::new().with_cpu().with_memory().with_exe().with_cmd())
+        );
         let mut networks = Networks::new_with_refreshed_list();
         let mut disks = Disks::new_with_refreshed_list();
 
@@ -55,7 +60,12 @@ fn main() {
             let idle_secs = now_secs() - last_req_clone.load(Ordering::Relaxed);
             if idle_secs > 30 { std::process::exit(0); }
 
-            sys.refresh_all();
+            sys.refresh_specifics(
+                RefreshKind::new()
+                    .with_cpu(CpuRefreshKind::everything())
+                    .with_memory()
+                    .with_processes(ProcessRefreshKind::new().with_cpu().with_memory().with_exe().with_cmd())
+            );
             networks.refresh();
             disks.refresh();
 

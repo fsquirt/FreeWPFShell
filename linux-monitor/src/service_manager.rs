@@ -1,6 +1,8 @@
 use crate::models::ServiceItem;
 use std::fs;
 use std::collections::HashMap;
+use std::sync::OnceLock;
+use tokio::runtime::Runtime;
 
 pub fn resolve_uid(uid: u32, passwd_cache: &HashMap<u32, String>) -> String {
     if uid == 0 { return "root".to_string(); }
@@ -146,16 +148,19 @@ pub async fn do_service_action(name: &str, action: &str) -> Result<bool, Box<dyn
     Ok(true)
 }
 
+fn get_runtime() -> &'static Runtime {
+    static RUNTIME: OnceLock<Runtime> = OnceLock::new();
+    RUNTIME.get_or_init(|| tokio::runtime::Runtime::new().unwrap())
+}
+
 pub fn get_systemd_services() -> Vec<ServiceItem> {
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    rt.block_on(async {
+    get_runtime().block_on(async {
         list_systemd_services().await.unwrap_or_default()
     })
 }
 
 pub fn service_action(name: &str, action: &str) -> bool {
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    rt.block_on(async {
+    get_runtime().block_on(async {
         do_service_action(name, action).await.unwrap_or(false)
     })
 }

@@ -7,9 +7,10 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 pub fn get_process_detail(pid_val: u32) -> Option<ProcessDetail> {
     let pid_str = pid_val.to_string();
     let proc_path = format!("/proc/{}", pid_str);
-    if !Path::new(&proc_path).exists() { return None; }
-
-    let status_content = fs::read_to_string(format!("{}/status", proc_path)).unwrap_or_default();
+    let status_content = match fs::read_to_string(format!("{}/status", proc_path)) {
+        Ok(c) => c,
+        Err(_) => return None, // 读不到说明进程退出了，直接返回 None
+    };
     let mut ppid = 0;
     let mut uid_gid = String::new();
     let mut state = String::new();
