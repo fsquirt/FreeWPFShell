@@ -10,6 +10,8 @@ FreeWPFShell 是一款基于 WPF 开发的Windows SSH 客户端。并集成了�
   <img src="https://get.microsoft.com/images/zh-cn%20dark.svg" width="200"/>
 </a>
 
+https://apps.microsoft.com/detail/9pb305xqm927
+
 ---
 
 ## 核心特性
@@ -36,7 +38,7 @@ FreeWPFShell 是一款基于 WPF 开发的Windows SSH 客户端。并集成了�
 - **进程管理**: 查看所有进程及详细信息（PID/PPID/状态/优先级/CPU 时间/文件描述符/内存详情/ulimit/cwd/命令行/信号/TTY），支持 Kill 和 Killall。
 - **Systemd 服务管理**: 查看服务状态（活动状态/子状态/加载状态/PID/用户/用户组），支持 start/stop/restart 及日志查看。
 - **Cron 任务管理**: 查看、添加、删除、启用/禁用 crontab 任务。
-- **登录日志**: 查看用户登录/登出记录 (`/var/log/wtmp`) 及失败登录尝试 (`/var/log/btmp`)。
+- **登录日志**: 查看用户登录记录 (`/var/log/wtmp`) 及失败登录尝试 (`/var/log/btmp`)。
 - **网络连接**: 查看所有 TCP/UDP 连接及其所属进程。
 
 ### 5. 网络与隧道工具
