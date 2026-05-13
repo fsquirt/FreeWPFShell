@@ -16,26 +16,35 @@ FreeWPFShell 是一款基于 WPF 开发的Windows SSH 客户端。并集成了�
 
 ### 1. 高性能自定义终端
 - **GPU 加速渲染**: 基于 Microsoft Terminal 的高性能终端渲染，支持真彩色及 ANSI 256 色显示。
-- **自定义背景**: 支持设置图片背景（JPG/PNG/BMP），并内置 GPU 端高斯模糊 Shader 处理，支持 6 种拉伸模式。
-- **模式自适应**: 自动识别 VT100/xterm 控制序列，实现 **Normal Mode** 与 **Application Mode** (DECCKM) 的无缝切换，完美兼容 `htop`、`vim` 等 TUI 程序。
-- **外观高度自定义**: 支持自定义终端字体、字号及纯色背景色。
+- **自定义背景**: 支持设置图片背景（JPG/PNG/BMP），内置 GPU 高斯模糊 Shader，支持 6 种拉伸模式。
+- **模式自适应**: 自动识别 VT100/xterm 控制序列，Normal Mode 与 Application Mode (DECCKM) 无缝切换，完美兼容 `htop`、`vim` 等 TUI 程序。
+- **外观自定义**: 支持自定义字体、字号及纯色背景色。
+- **中文支持**: 连接时自动注入 `LANG` 环境变量，中文及 Unicode 字符正常显示。
 
-### 2. 集成监控
-- **Rust Native 探针**: 自动向远程主机部署轻量级 Rust 代理 (`linux-monitor`)，通过 SSH 隧道提供系统状态数据。
-- **混合监控逻辑**: 当探针不可用时，自动回退到 Shell 解析模式，确保对不同 Linux 的兼容性。
-- **实时仪表盘**: 侧边栏提供 CPU、内存、网络 IO 及磁盘空间的直观展示。
+### 2. 文件管理 (SFTP)
+- **双向传输**: 文件及文件夹的递归上传与下载，带进度显示。
+- **远程文件编辑**: 双击远程文件自动下载并用系统编辑器打开，保存后自动回传。
+- **服务器端极速复制**: 同服务器内粘贴时转化为 `cp -a` 命令在服务器本地执行，无需网络绕行。
+- **权限可视化**: 以 `rwx` 格式展示 Unix 文件权限。
 
-### 3. 文件管理
-- **双向传输**: 支持文件及文件夹的递归上传与下载。
-- **服务器端极速复制**: 在同一服务器内粘贴时，自动转化为 `cp -a` 命令在本地执行，无需经过网络绕行。
+### 3. 集成系统监控
+- **Rust 探针**: 自动向远程主机部署轻量级 Rust 代理，通过 SSH 隧道提供实时系统状态。
+- **混合监控**: 探针不可用时自动回退到 Shell 解析模式，兼容不同 Linux 发行版。
+- **实时仪表盘**: 侧边栏提供 CPU、内存、网络 IO 及磁盘空间的图表展示。
 
-### 4. 网络与隧道工具
-- **可视化路由追踪**: 支持自定义超时时间和最大跳数，并发探测，展示每一跳的地理位置。
+### 4. 系统管理
+- **进程管理**: 查看所有进程及详细信息（PID/PPID/状态/优先级/CPU 时间/文件描述符/内存详情/ulimit/cwd/命令行/信号/TTY），支持 Kill 和 Killall。
+- **Systemd 服务管理**: 查看服务状态（活动状态/子状态/加载状态/PID/用户/用户组），支持 start/stop/restart 及日志查看。
+- **Cron 任务管理**: 查看、添加、删除、启用/禁用 crontab 任务。
+- **登录日志**: 查看用户登录/登出记录 (`/var/log/wtmp`) 及失败登录尝试 (`/var/log/btmp`)。
+- **网络连接**: 查看所有 TCP/UDP 连接及其所属进程。
+
+### 5. 网络与隧道工具
+- **路由追踪**: 自定义超时和最大跳数，并发探测，每跳展示 IP 地理位置。
 - **SSH 隧道管理**: 统一管理本地/远程端口转发，支持随会话自动启动与销毁。
 
-### 5. 安全与性能优化
+### 6. 安全
 - **凭据保护**: 集成 Windows 凭据管理器，支持通过 Windows Hello 解密 SSH 密码。
-- **延迟补偿**: 实时显示连接阶段状态，提升高延迟主机的交互反馈。
 
 ---
 
@@ -96,6 +105,10 @@ msbuild WpfTerminalControl.csproj /t:Pack /p:Configuration=Release /p:DebugSymbo
 
 nupkg文件会生成在 `.\bin\x64\Release\WpfTerminalControl` 目录下。
 
+或者，你也可以下载我已经编译好的Microsoft.Terminal.Wpf: 
+
+https://www.cloudyou.top/files/Microsoft.Terminal.Wpf.0.1.0.nupkg
+
 #### 3. 为项目还原 Microsoft.Terminal.Wpf 包
 进入项目根目录，使用命令行：
 ```pwsh
@@ -116,6 +129,14 @@ cd .\MicaWPFRuntimeComponent\
 msbuild .\MicaWPFRuntimeComponent.sln /p:Configuration=Release
 mv .\MicaWPF.Projection\nuget\MicaWPFRuntimeComponent.1.1.9.nupkg ..\MicaWPF\
 ```
+
+或者，你也可以下载我已经编译好的MicaWPF: 
+
+https://www.cloudyou.top/files/MicaWPF.1.0.0.nupkg
+
+https://www.cloudyou.top/files/MicaWPF.Core.1.0.0.nupkg
+
+https://www.cloudyou.top/files/MicaWPFRuntimeComponent.1.1.9.nupkg
 
 #### 5.为项目还原 MicaWPF
 进入项目根目录，使用命令行：
