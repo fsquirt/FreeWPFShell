@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
@@ -18,7 +17,10 @@ namespace FreeWPFShell.Views
     {
         private readonly ObservableCollection<TracerouteHop> _hops = new();
         private CancellationTokenSource? _cts;
-        private bool _isTracing = false;
+        private bool _isTracing;
+
+        // 实例级复用 Ping（SendPingAsync 线程安全）
+        private Ping? _sharedPing;
 
         public TraceroutePage()
         {
@@ -31,6 +33,8 @@ namespace FreeWPFShell.Views
         {
             _cts?.Cancel();
             _cts?.Dispose();
+            _sharedPing?.Dispose();
+            _sharedPing = null;
             _isTracing = false;
         }
 
@@ -70,35 +74,35 @@ namespace FreeWPFShell.Views
                 if (destAddresses.Length == 0) { TxtDetail.Text = $"无法解析 {target}"; return; }
                 IPAddress destIp = destAddresses[0];
 
-                const int parallelLimit = 10; // 并发探测的跳数
+                const int parallelLimit = 10;
                 var foundDest = false;
 
-                // 预先填充 UI 占位
                 for (int i = 1; i <= maxHops; i++)
-                {
                     _hops.Add(new TracerouteHop { Hop = i, Ip = "*", Latency = "*", Status = "探测中..." });
-                }
+
+                _sharedPing = new Ping();
 
                 for (int startTtl = 1; startTtl <= maxHops; startTtl += parallelLimit)
                 {
                     if (foundDest || _cts.Token.IsCancellationRequested) break;
 
-                    var batchTasks = new List<Task<bool>>();
-                    for (int ttl = startTtl; ttl < startTtl + parallelLimit && ttl <= maxHops; ttl++)
-                    {
-                        int currentTtl = ttl;
-                        batchTasks.Add(ProbeHopAsync(destIp, currentTtl, timeoutMs, _cts.Token));
-                    }
+                    int batchSize = Math.Min(parallelLimit, maxHops - startTtl + 1);
+                    var batchTasks = new Task<bool>[batchSize];
+                    for (int i = 0; i < batchSize; i++)
+                        batchTasks[i] = ProbeHopAsync(destIp, startTtl + i, timeoutMs, _cts.Token);
 
                     var results = await Task.WhenAll(batchTasks);
-                    if (results.Any(r => r))
+                    for (int i = 0; i < results.Length; i++)
                     {
-                        foundDest = true;
-                        // 清理后续占位行
-                        int actualLastHop = startTtl + Array.IndexOf(results, true);
-                        while (_hops.Count > actualLastHop + 1) _hops.RemoveAt(_hops.Count - 1);
-                        break;
+                        if (results[i])
+                        {
+                            foundDest = true;
+                            int actualLastHop = startTtl + i;
+                            while (_hops.Count > actualLastHop + 1) _hops.RemoveAt(_hops.Count - 1);
+                            break;
+                        }
                     }
+                    if (foundDest) break;
                 }
 
                 if (!foundDest && !_cts.Token.IsCancellationRequested)
@@ -121,21 +125,19 @@ namespace FreeWPFShell.Views
             var hop = _hops[ttl - 1];
             try
             {
-                using var ping = new Ping();
                 var buffer = new byte[32];
                 var options = new PingOptions(ttl, true);
-                
-                // 初步探测 3 次以确保可靠性
+
                 for (int i = 0; i < 3; i++)
                 {
                     if (ct.IsCancellationRequested) return false;
-                    var reply = await ping.SendPingAsync(destIp, timeoutMs, buffer, options);
-                    
+                    var reply = await _sharedPing!.SendPingAsync(destIp, timeoutMs, buffer, options);
+
                     if (reply.Status == IPStatus.TtlExpired || reply.Status == IPStatus.Success)
                     {
                         var ip = reply.Address.ToString();
                         var isFinal = reply.Status == IPStatus.Success;
-                        
+
                         Dispatcher.Invoke(() =>
                         {
                             hop.Ip = ip;
@@ -145,13 +147,12 @@ namespace FreeWPFShell.Views
                             hop.SimpleGeo = geo.SimpleGeo;
                         });
 
-                        // 启动后台持续 Ping 任务
                         _ = RunContinuousPingAsync(hop, ip, timeoutMs, ct);
-                        
+
                         return isFinal;
                     }
                 }
-                
+
                 Dispatcher.Invoke(() => { hop.Status = "超时"; hop.Latency = "*"; });
             }
             catch { Dispatcher.Invoke(() => hop.Status = "错误"); }
@@ -161,27 +162,21 @@ namespace FreeWPFShell.Views
         private async Task RunContinuousPingAsync(TracerouteHop hop, string ip, int timeoutMs, CancellationToken ct)
         {
             if (string.IsNullOrEmpty(ip) || ip == "*") return;
-            
+
             using var ping = new Ping();
             var buffer = new byte[32];
-            
+
             while (!ct.IsCancellationRequested)
             {
                 try
                 {
                     var reply = await ping.SendPingAsync(ip, timeoutMs, buffer);
-                    if (reply.Status == IPStatus.Success)
-                    {
-                        Dispatcher.Invoke(() => hop.Latency = $"{reply.RoundtripTime}ms");
-                    }
-                    else
-                    {
-                        Dispatcher.Invoke(() => hop.Latency = "超时");
-                    }
+                    Dispatcher.Invoke(() => hop.Latency = reply.Status == IPStatus.Success
+                        ? $"{reply.RoundtripTime}ms" : "超时");
                 }
                 catch { Dispatcher.Invoke(() => hop.Latency = "错误"); }
-                
-                await Task.Delay(2000, ct); // 每 2 秒更新一次
+
+                await Task.Delay(2000, ct);
             }
         }
     }

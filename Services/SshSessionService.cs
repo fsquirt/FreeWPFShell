@@ -4,10 +4,10 @@ using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
-using System.Timers;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using FreeWPFShell.Models;
@@ -23,6 +23,9 @@ namespace FreeWPFShell.Services
     public class SshSessionService : IDisposable, INotifyPropertyChanged
     {
         private static int _sessionCounter = 0;
+
+        // 全局复用 Ping 实例（线程安全）
+        private static readonly System.Net.NetworkInformation.Ping s_sharedPing = new();
 
         public event PropertyChangedEventHandler? PropertyChanged;
         private void OnPropertyChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
@@ -59,7 +62,7 @@ namespace FreeWPFShell.Services
 
         public event EventHandler<MonitorData>? MonitorUpdated;
 
-        private CancellationTokenSource _cts = new();
+        private CancellationTokenSource? _monitorCts;
         private Timer? _monitorTimer;
         private ulong _lastCpuTotal, _lastCpuIdle;
         private ulong _lastRx, _lastTx;
@@ -70,6 +73,12 @@ namespace FreeWPFShell.Services
         private readonly Dictionary<string, FileSystemWatcher> _activeWatchers = new();
         private readonly object _sftpLock = new();
         public object SftpLock => _sftpLock;
+
+        // 复用的 HttpClient（整个 Session 生命周期一个实例）
+        private System.Net.Http.HttpClient? _monitorHttpClient;
+
+        // 复用的对象池
+        private static readonly Regex s_doubleRegex = new(@"[\d\.]+", RegexOptions.Compiled);
 
         public SshSessionService(SshConnectionInfo hostInfo, SettingsRepository? settingsRepo = null)
         {
@@ -92,16 +101,13 @@ namespace FreeWPFShell.Services
             try
             {
                 string fileName = Path.GetFileName(remotePath);
-                // 使用路径哈希创建子文件夹，避免不同目录下同名文件冲突导致的相互覆盖和监听错误
-                string pathHash = BitConverter.ToString(MD5.HashData(System.Text.Encoding.UTF8.GetBytes(remotePath))).Replace("-", "").Substring(0, 8);
+                string pathHash = BitConverter.ToString(MD5.HashData(Encoding.UTF8.GetBytes(remotePath))).Replace("-", "").Substring(0, 8);
                 string localDir = Path.Combine(Path.GetTempPath(), "FreeWPFShell", SessionId, pathHash);
                 if (!Directory.Exists(localDir)) Directory.CreateDirectory(localDir);
                 string localPath = Path.Combine(localDir, fileName);
 
-                // 在下载新内容前停止旧监听，防止 File.Create 的写入操作触发旧的上传逻辑（导致远程文件被旧内容或空白内容覆盖）
                 StopFileWatcher(localPath);
 
-                // 1. 下载文件
                 using (var fs = File.Create(localPath))
                 {
                     await Task.Run(() => {
@@ -112,18 +118,15 @@ namespace FreeWPFShell.Services
                     });
                 }
 
-                // 2. 启动监听
                 StartFileWatcher(localPath, remotePath);
 
-                // 3. 启动指定的编辑器
                 try
                 {
                     var psi = new ProcessStartInfo(editorCommand, $"\"{localPath}\"")
                     {
-                        UseShellExecute = true // 必须为 true 以便从 PATH 寻找 code 或 notepad
+                        UseShellExecute = true
                     };
                     Process.Start(psi);
-                    Debug.WriteLine($"[Editor] Started {editorCommand} for {remotePath}");
                 }
                 catch (Exception ex)
                 {
@@ -162,7 +165,6 @@ namespace FreeWPFShell.Services
                 EnableRaisingEvents = true
             };
 
-            // 防抖：防止某些编辑器多次写入触发多次上传
             DateTime lastUploadTime = DateTime.MinValue;
 
             FileSystemEventHandler handler = (s, e) =>
@@ -174,7 +176,6 @@ namespace FreeWPFShell.Services
                 {
                     try
                     {
-                        // 等待文件句柄释放 (部分编辑器可能在写入过程中锁定文件)
                         int retry = 10;
                         while (retry-- > 0)
                         {
@@ -187,7 +188,6 @@ namespace FreeWPFShell.Services
                                         if (SftpClient != null && SftpClient.IsConnected)
                                         {
                                             SftpClient.UploadFile(fs, remotePath, true);
-                                            Debug.WriteLine($"[Editor] Auto-uploaded: {remotePath}");
                                         }
                                     }
                                 }
@@ -213,7 +213,6 @@ namespace FreeWPFShell.Services
 
         public async Task ConnectAsync()
         {
-            // 密钥认证：在主线程加载密钥（可能需要 Windows Hello 验证）
             PrivateKeyFile? preloadedKey = null;
             if (HostInfo.AuthMethod == SshAuthMethod.PrivateKey)
             {
@@ -230,39 +229,34 @@ namespace FreeWPFShell.Services
                     {
                         ConnectionStatus = "SSH.NET 建立连接...";
                         MasterClient = BuildSshClient(preloadedKey);
-                        MasterClient.Connect(); // 同步阻塞连接
+                        MasterClient.Connect();
 
                         ConnectionStatus = "SFTP 建立连接...";
                         SftpClient = BuildSftpClient(preloadedKey);
-                        SftpClient.Connect(); // 同步阻塞连接
+                        SftpClient.Connect();
 
-                        // 这里直接调用同步方法，Task.Run 会保证它不卡 UI
                         DeployLinuxMonitor();
 
                         if (_settingsRepo.Load().InjectChineseLocale)
                         {
                             ConnectionStatus = "设置中文环境变量...";
-                            // 创建临时连接以执行注入，此时 TerminalConnection 尚未启动 ReadOutput
-                            var tempConn = new SshTerminalConnection(MasterClient, 120, 30);
-                            tempConn.Start();
-                            Task.Run(() => tempConn.InjectLocaleAsync()).Wait();
-                            // 注入完成后立即关闭，稍后由真正的 TerminalConnection 接管
-                            tempConn.Close();
+                            using var cmd = MasterClient.CreateCommand("export LANG=zh_CN.UTF-8; export LC_ALL=zh_CN.UTF-8");
+                            cmd.Execute();
                         }
                     }
                 );
                 IsConnected = true;
 
-                // 直接用 SSH.NET ShellStream 创建终端连接
-                // 初始尺寸会在 BindSession → Resize 中被 TerminalControl 同步为实际值
                 TerminalConnection = new SshTerminalConnection(MasterClient, 120, 30);
 
-                // 监听 AppCursorMode 切换（通过检测 ShellStream 中的 VT 序列）
                 TerminalConnection.AppCursorModeChanged += (isApp) =>
                 {
                     IsAppCursorMode = isApp;
                 };
 
+                _monitorHttpClient = CreateMonitorHttpClient();
+                _monitorHttpClient.Timeout = TimeSpan.FromSeconds(10); // 固定超时，避免多线程竞态
+                _monitorCts = new CancellationTokenSource();
                 _monitorTimer = new Timer(2000) { AutoReset = true, Enabled = true };
                 _monitorTimer.Elapsed += OnMonitorTick;
 
@@ -272,25 +266,19 @@ namespace FreeWPFShell.Services
             catch (Exception ex)
             {
                 ConnectionStatus = "连接失败: " + ex.Message;
-                return;
             }
-
-            _monitorTimer = new Timer(2000) { AutoReset = true, Enabled = true };
-            _monitorTimer.Elapsed += OnMonitorTick;
-
-            ConnectionStatus = "已连接";
         }
 
         private ConnectionInfo BuildConnectionInfo(PrivateKeyFile? preloadedKey = null)
         {
-            var authMethods = new List<AuthenticationMethod>();
+            var authMethods = new List<AuthenticationMethod>(2);
 
             if (HostInfo.AuthMethod == SshAuthMethod.Password)
             {
                 authMethods.Add(new PasswordAuthenticationMethod(
                     HostInfo.SshUser, HostInfo.DecryptedSshSecret ?? ""));
             }
-            else // PrivateKey
+            else
             {
                 if (preloadedKey == null)
                     throw new Exception("密钥未预加载，请确保在连接前已加载密钥。");
@@ -316,7 +304,7 @@ namespace FreeWPFShell.Services
             var conn = new ConnectionInfo(
                 HostInfo.IpAddress, HostInfo.SshPort, HostInfo.SshUser,
                 authMethods.ToArray());
-            conn.Encoding = System.Text.Encoding.UTF8;
+            conn.Encoding = Encoding.UTF8;
             return conn;
         }
 
@@ -330,7 +318,10 @@ namespace FreeWPFShell.Services
             return new SftpClient(BuildConnectionInfo(preloadedKey));
         }
 
-        private async void OnMonitorTick(object? sender, ElapsedEventArgs e)
+        // 复用 StringBuilder 避免频繁分配（仅在监控线程使用，无需加锁）
+        private readonly StringBuilder _cmdBuilder = new StringBuilder(512);
+
+        private async void OnMonitorTick(object? sender, System.Timers.ElapsedEventArgs e)
         {
             if (!IsConnected || MasterClient == null || !MasterClient.IsConnected) return;
             _tickCount++;
@@ -339,16 +330,19 @@ namespace FreeWPFShell.Services
             {
                 if (LinuxMonitorLocalPort > 0)
                 {
-                    using var hc = CreateMonitorHttpClient();
-                    hc.Timeout = TimeSpan.FromSeconds(1);
+                    var hc = _monitorHttpClient;
+                    if (hc == null) return;
                     string json = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/stats");
                     ParseLinuxMonitorJson(json);
                     return;
                 }
-                string cmdStr = "echo \"==STAT==\"; head -n 1 /proc/stat; echo \"==TOP==\"; top -b -n 1 | head -n 5; echo \"==PROC==\"; ps axo %mem,%cpu,command --sort=-%cpu | head -n 11; echo \"==NET==\"; cat /proc/net/dev";
+
+                // 复用 StringBuilder 构建命令
+                _cmdBuilder.Clear();
+                _cmdBuilder.Append("echo \"==STAT==\"; head -n 1 /proc/stat; echo \"==TOP==\"; top -b -n 1 | head -n 5; echo \"==PROC==\"; ps axo %mem,%cpu,command --sort=-%cpu | head -n 11; echo \"==NET==\"; cat /proc/net/dev");
                 if (_tickCount % 60 == 1)
-                    cmdStr += "; echo \"==DISK==\"; df -h --output=target,avail,size";
-                var cmd = MasterClient.CreateCommand(cmdStr);
+                    _cmdBuilder.Append("; echo \"==DISK==\"; df -h --output=target,avail,size");
+                var cmd = MasterClient.CreateCommand(_cmdBuilder.ToString());
                 var result = await Task.Run(() => cmd.Execute());
                 ParseTopOutput(result);
             }
@@ -359,8 +353,7 @@ namespace FreeWPFShell.Services
         {
             try
             {
-                using var p = new System.Net.NetworkInformation.Ping();
-                var reply = await p.SendPingAsync(HostInfo.IpAddress, 2000);
+                var reply = await s_sharedPing.SendPingAsync(HostInfo.IpAddress, 2000);
                 Monitor.Ping = reply.Status == System.Net.NetworkInformation.IPStatus.Success
                     ? $"{reply.RoundtripTime}ms" : "超时";
             }
@@ -392,18 +385,15 @@ namespace FreeWPFShell.Services
             Monitor.NetDown = FormatNetSpeed(stats.rx_speed) + "/s";
             Monitor.NetIface = stats.iface;
 
-            var history = new List<(double, double)>(Monitor.NetHistory) { (stats.rx_speed, stats.tx_speed) };
-            if (history.Count > 50) history.RemoveAt(0);
-            double maxVal = history.Max(x => Math.Max(x.Item1, x.Item2));
-            if (maxVal < 1024) maxVal = 1024;
+            Monitor.AddNetHistoryEntry(stats.rx_speed, stats.tx_speed);
+            double maxVal = Monitor.GetNetHistoryMax();
             Monitor.NetMax = FormatNetSpeed(maxVal);
             Monitor.NetMid = FormatNetSpeed(maxVal / 2);
-            Monitor.NetHistory = history;
 
             if (stats.processes != null && stats.processes.Count > 0)
-                Monitor.Processes = stats.processes.ToList();
+                Monitor.UpdateProcesses(stats.processes);
             if (stats.disks != null && stats.disks.Count > 0)
-                Monitor.Disks = stats.disks.ToList();
+                Monitor.UpdateDisks(stats.disks);
 
             MonitorUpdated?.Invoke(this, Monitor);
         }
@@ -455,19 +445,19 @@ namespace FreeWPFShell.Services
                 }
                 if (sections.Length > 3)
                 {
-                    var procs = new List<ProcessItem>();
                     var procLines = sections[3].Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                    var procs = new List<ProcessItem>(procLines.Length - 1);
                     for (int i = 1; i < procLines.Length; i++)
                     {
                         var p = procLines[i].Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
                         if (p.Length >= 3)
                         {
                             string cmd = string.Join(" ", p.Skip(2));
-                            if (cmd.Length > 30) cmd = cmd.Substring(0, 30) + "...";
+                            if (cmd.Length > 30) cmd = string.Concat(cmd.AsSpan(0, 30), "...");
                             procs.Add(new ProcessItem { Mem = p[0] + "%", Cpu = p[1] + "%", Cmd = cmd });
                         }
                     }
-                    if (procs.Count > 0) Monitor.Processes = procs;
+                    if (procs.Count > 0) Monitor.UpdateProcesses(procs);
                 }
                 if (sections.Length > 4)
                 {
@@ -492,11 +482,9 @@ namespace FreeWPFShell.Services
                                         {
                                             Monitor.NetRxSpeed = rxSpeed; Monitor.NetTxSpeed = txSpeed;
                                             Monitor.NetDown = FormatNetSpeed(rxSpeed) + "/s"; Monitor.NetUp = FormatNetSpeed(txSpeed) + "/s";
-                                            var history = new List<(double, double)>(Monitor.NetHistory) { (rxSpeed, txSpeed) };
-                                            if (history.Count > 50) history.RemoveAt(0);
-                                            double maxVal = history.Max(x => Math.Max(x.Item1, x.Item2));
-                                            if (maxVal < 1024) maxVal = 1024;
-                                            Monitor.NetMax = FormatNetSpeed(maxVal); Monitor.NetMid = FormatNetSpeed(maxVal / 2); Monitor.NetHistory = history;
+                                            Monitor.AddNetHistoryEntry(rxSpeed, txSpeed);
+                                            double maxVal = Monitor.GetNetHistoryMax();
+                                            Monitor.NetMax = FormatNetSpeed(maxVal); Monitor.NetMid = FormatNetSpeed(maxVal / 2);
                                         }
                                     }
                                 }
@@ -508,14 +496,14 @@ namespace FreeWPFShell.Services
                 }
                 if (sections.Length > 5)
                 {
-                    var disks = new List<DiskItem>();
                     var diskLines = sections[5].Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                    var disks = new List<DiskItem>(diskLines.Length - 1);
                     for (int i = 1; i < diskLines.Length; i++)
                     {
                         var p = diskLines[i].Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
                         if (p.Length >= 3) disks.Add(new DiskItem { Path = p[0], Avail = p[1], Size = p[2] });
                     }
-                    if (disks.Count > 0) Monitor.Disks = disks;
+                    if (disks.Count > 0) Monitor.UpdateDisks(disks);
                 }
                 MonitorUpdated?.Invoke(this, Monitor);
             }
@@ -547,7 +535,7 @@ namespace FreeWPFShell.Services
             try
             {
                 ConnectionStatus = "建立 ssh 隧道...";
-                LinuxMonitorLocalPort = (uint)(new Random().Next(40000, 60000));
+                LinuxMonitorLocalPort = (uint)(System.Security.Cryptography.RandomNumberGenerator.GetInt32(40000, 60001));
                 var port = new ForwardedPortLocal("127.0.0.1", LinuxMonitorLocalPort, "127.0.0.1", LinuxMonitorLocalPort);
                 MasterClient.AddForwardedPort(port);
                 port.Start();
@@ -564,8 +552,8 @@ namespace FreeWPFShell.Services
 
                 RegisterTunnel(tunnelInfo);
 
-                string binPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "linux-monitor\\linux-monitor");
-                if (System.IO.File.Exists(binPath))
+                string binPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "linux-monitor", "linux-monitor");
+                if (File.Exists(binPath))
                 {
                     ConnectionStatus = "上传 Linux_Monitor...";
                     string remotePath = $"/tmp/linux-monitor_{LinuxMonitorLocalPort}";
@@ -575,19 +563,18 @@ namespace FreeWPFShell.Services
                     MasterClient.CreateCommand($"pkill -9 -f {remotePath}").Execute();
                     lock (_sftpLock)
                     {
-                        using (var fs = System.IO.File.OpenRead(binPath)) SftpClient.UploadFile(fs, remotePath, true);
+                        using (var fs = File.OpenRead(binPath)) SftpClient.UploadFile(fs, remotePath, true);
 
-                        // 写入 Token 文件并设置 600 权限 (仅所有者可读)
-                        using (var ms = new System.IO.MemoryStream(System.Text.Encoding.UTF8.GetBytes(_monitorToken)))
+                        using (var ms = new MemoryStream(Encoding.UTF8.GetBytes(_monitorToken)))
                             SftpClient.UploadFile(ms, tokenPath, true);
                     }
-                    
+
                     MasterClient.CreateCommand($"chmod 600 {tokenPath}").Execute();
                     MasterClient.CreateCommand($"chmod +x {remotePath}").Execute();
                     MasterClient.CreateCommand($"nohup {remotePath} {LinuxMonitorLocalPort} {tokenPath} >/dev/null 2>&1 &").Execute();
                 }
             }
-            catch (Exception ex) { System.Diagnostics.Debug.WriteLine("Monitor Deploy Failed: " + ex.Message); }
+            catch (Exception ex) { Debug.WriteLine("Monitor Deploy Failed: " + ex.Message); }
         }
 
         public void RegisterTunnel(SshTunnelInfo tunnel)
@@ -609,8 +596,8 @@ namespace FreeWPFShell.Services
             if (LinuxMonitorLocalPort == 0) return null;
             try
             {
-                using var hc = CreateMonitorHttpClient();
-                hc.Timeout = TimeSpan.FromSeconds(2);
+                var hc = _monitorHttpClient;
+                if (hc == null) return null;
                 string json = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/process_detail?pid={pid}");
                 return JsonSerializer.Deserialize<ProcessDetail>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             }
@@ -622,7 +609,8 @@ namespace FreeWPFShell.Services
             if (LinuxMonitorLocalPort == 0) return false;
             try
             {
-                using var hc = CreateMonitorHttpClient();
+                var hc = _monitorHttpClient;
+                if (hc == null) return false;
                 string result = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/kill?pid={pid}&sig={signal}");
                 return result.ToLower() == "true";
             }
@@ -634,8 +622,8 @@ namespace FreeWPFShell.Services
             if (LinuxMonitorLocalPort == 0) return new List<ProcessItem>();
             try
             {
-                using var hc = CreateMonitorHttpClient();
-                hc.Timeout = TimeSpan.FromSeconds(3);
+                var hc = _monitorHttpClient;
+                if (hc == null) return new List<ProcessItem>();
                 string json = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/all_processes");
                 return JsonSerializer.Deserialize<List<ProcessItem>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<ProcessItem>();
             }
@@ -647,8 +635,8 @@ namespace FreeWPFShell.Services
             if (LinuxMonitorLocalPort == 0) return new List<LoginRecord>();
             try
             {
-                using var hc = CreateMonitorHttpClient();
-                hc.Timeout = TimeSpan.FromSeconds(5);
+                var hc = _monitorHttpClient;
+                if (hc == null) return new List<LoginRecord>();
                 string json = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}{endpoint}");
                 return JsonSerializer.Deserialize<List<LoginRecord>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<LoginRecord>();
             }
@@ -660,8 +648,8 @@ namespace FreeWPFShell.Services
             if (LinuxMonitorLocalPort == 0) return new List<ServiceItem>();
             try
             {
-                using var hc = CreateMonitorHttpClient();
-                hc.Timeout = TimeSpan.FromSeconds(10);
+                var hc = _monitorHttpClient;
+                if (hc == null) return new List<ServiceItem>();
                 string json = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/services");
                 return JsonSerializer.Deserialize<List<ServiceItem>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<ServiceItem>();
             }
@@ -673,8 +661,8 @@ namespace FreeWPFShell.Services
             if (LinuxMonitorLocalPort == 0) return false;
             try
             {
-                using var hc = CreateMonitorHttpClient();
-                hc.Timeout = TimeSpan.FromSeconds(15);
+                var hc = _monitorHttpClient;
+                if (hc == null) return false;
                 string encodedName = System.Net.WebUtility.UrlEncode(serviceName);
                 string result = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/service_{action}?name={encodedName}");
                 return result.ToLower() == "true";
@@ -687,8 +675,8 @@ namespace FreeWPFShell.Services
             if (LinuxMonitorLocalPort == 0) return "";
             try
             {
-                using var hc = CreateMonitorHttpClient();
-                hc.Timeout = TimeSpan.FromSeconds(5);
+                var hc = _monitorHttpClient;
+                if (hc == null) return "";
                 string encodedName = System.Net.WebUtility.UrlEncode(serviceName);
                 return await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/service_log?name={encodedName}");
             }
@@ -700,7 +688,8 @@ namespace FreeWPFShell.Services
             if (LinuxMonitorLocalPort == 0) return false;
             try
             {
-                using var hc = CreateMonitorHttpClient();
+                var hc = _monitorHttpClient;
+                if (hc == null) return false;
                 string encodedPath = System.Net.WebUtility.UrlEncode(fullPath);
                 string result = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/killall?path={encodedPath}&sig={signal}");
                 return result.ToLower() == "true";
@@ -713,8 +702,8 @@ namespace FreeWPFShell.Services
             if (LinuxMonitorLocalPort == 0) return new List<NetConnItem>();
             try
             {
-                using var hc = CreateMonitorHttpClient();
-                hc.Timeout = TimeSpan.FromSeconds(5);
+                var hc = _monitorHttpClient;
+                if (hc == null) return new List<NetConnItem>();
                 string json = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/net_conns");
                 return JsonSerializer.Deserialize<List<NetConnItem>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<NetConnItem>();
             }
@@ -726,8 +715,8 @@ namespace FreeWPFShell.Services
             if (LinuxMonitorLocalPort == 0) return new List<CronJobItem>();
             try
             {
-                using var hc = CreateMonitorHttpClient();
-                hc.Timeout = TimeSpan.FromSeconds(3);
+                var hc = _monitorHttpClient;
+                if (hc == null) return new List<CronJobItem>();
                 string json = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/cron_list");
                 return JsonSerializer.Deserialize<List<CronJobItem>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<CronJobItem>();
             }
@@ -739,8 +728,8 @@ namespace FreeWPFShell.Services
             if (LinuxMonitorLocalPort == 0) return false;
             try
             {
-                using var hc = CreateMonitorHttpClient();
-                hc.Timeout = TimeSpan.FromSeconds(5);
+                var hc = _monitorHttpClient;
+                if (hc == null) return false;
                 string encoded = System.Net.WebUtility.UrlEncode(rawLine);
                 string result = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/cron_add?raw={encoded}");
                 return result.ToLower() == "true";
@@ -753,7 +742,8 @@ namespace FreeWPFShell.Services
             if (LinuxMonitorLocalPort == 0) return false;
             try
             {
-                using var hc = CreateMonitorHttpClient();
+                var hc = _monitorHttpClient;
+                if (hc == null) return false;
                 string result = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/cron_remove?line={lineIndex}");
                 return result.ToLower() == "true";
             }
@@ -765,7 +755,8 @@ namespace FreeWPFShell.Services
             if (LinuxMonitorLocalPort == 0) return false;
             try
             {
-                using var hc = CreateMonitorHttpClient();
+                var hc = _monitorHttpClient;
+                if (hc == null) return false;
                 string result = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/cron_toggle?line={lineIndex}&enabled={enabled.ToString().ToLowerInvariant()}");
                 return result.ToLower() == "true";
             }
@@ -777,8 +768,8 @@ namespace FreeWPFShell.Services
             if (LinuxMonitorLocalPort == 0) return "未连接";
             try
             {
-                using var hc = CreateMonitorHttpClient();
-                hc.Timeout = TimeSpan.FromSeconds(3);
+                var hc = _monitorHttpClient;
+                if (hc == null) return "未知";
                 return await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/cron_status");
             }
             catch { return "未知"; }
@@ -786,30 +777,29 @@ namespace FreeWPFShell.Services
 
         public void Disconnect()
         {
-            _cts.Cancel();
+            _monitorCts?.Cancel();
             _monitorTimer?.Stop();
             _monitorTimer?.Dispose();
             _monitorTimer = null;
 
-            // 停止所有文件监听
+            _monitorHttpClient?.Dispose();
+            _monitorHttpClient = null;
+
             lock (_activeWatchers)
             {
                 foreach (var w in _activeWatchers.Values) w.Dispose();
                 _activeWatchers.Clear();
             }
 
-            // 尝试删除会话临时文件夹
             try
             {
                 string localDir = Path.Combine(Path.GetTempPath(), "FreeWPFShell", SessionId);
                 if (Directory.Exists(localDir)) Directory.Delete(localDir, true);
             }
-            catch { /* 如果文件被占用则忽略删除，等待下次启动或系统自动清理 */ }
+            catch { }
 
-            // 立即标记为未连接，让 UI 得到即时反馈
             IsConnected = false;
 
-            // 将耗时的网络清理工作移至后台，避免阻塞 UI 线程（尤其是高延迟场景）
             Task.Run(() =>
             {
                 try
@@ -841,7 +831,7 @@ namespace FreeWPFShell.Services
                     }
                     MasterClient?.Disconnect(); MasterClient?.Dispose();
                 }
-                catch { } // 忽略后台清理过程中的任何异常
+                catch { }
             });
 
             TerminalConnection?.Close();
@@ -852,11 +842,11 @@ namespace FreeWPFShell.Services
 
         private static string FormatNetSpeed(double bps)
         {
-            if (bps > 1024 * 1024) return (bps / 1024 / 1024).ToString("0.0") + "M";
-            if (bps > 1024) return (bps / 1024).ToString("0") + "K";
-            return bps.ToString("0") + "B";
+            if (bps > 1024 * 1024) return $"{(bps / 1024 / 1024):0.0}M";
+            if (bps > 1024) return $"{(bps / 1024):0}K";
+            return $"{bps:0}B";
         }
-        private static double ExtractDouble(string s) { var m = Regex.Match(s, @"[\d\.]+"); return m.Success && double.TryParse(m.Value, out double v) ? v : 0; }
+        private static double ExtractDouble(string s) { var m = s_doubleRegex.Match(s); return m.Success && double.TryParse(m.Value, out double v) ? v : 0; }
         private static string FormatMemSize(double kb) { return kb > 1024 * 1024 ? (kb / 1024 / 1024).ToString("0.0") + "G" : (kb / 1024).ToString("0") + "M"; }
     }
 }

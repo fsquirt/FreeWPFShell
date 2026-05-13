@@ -56,7 +56,7 @@ namespace FreeWPFShell.Share
             _geoLite2City = LoadDb(Path.Combine(dbPath, "GeoLite2-City.mmdb"), "City");
         }
 
-        private Reader? LoadDb(string path, string name)
+        private static Reader? LoadDb(string path, string name)
         {
             if (!File.Exists(path)) return null;
             try { return new Reader(path); } catch { return null; }
@@ -72,7 +72,6 @@ namespace FreeWPFShell.Share
             {
                 bool isChinese = false;
 
-                // 1. GeoCN
                 if (_geoCN != null)
                 {
                     var raw = _geoCN.Find<Dictionary<string, object>>(ipAddr);
@@ -90,7 +89,6 @@ namespace FreeWPFShell.Share
                     }
                 }
 
-                // 2. GeoLite2-ASN
                 if (_geoLite2ASN != null)
                 {
                     var raw = _geoLite2ASN.Find<Dictionary<string, object>>(ipAddr);
@@ -101,7 +99,6 @@ namespace FreeWPFShell.Share
                     }
                 }
 
-                // 3. GeoLite2-City
                 if (_geoLite2City != null)
                 {
                     var raw = _geoLite2City.Find<Dictionary<string, object>>(ipAddr);
@@ -171,54 +168,127 @@ namespace FreeWPFShell.Share
         }
 
         private static string? TryGet(Dictionary<string, object> d, string key) => d.TryGetValue(key, out var val) ? val?.ToString() : null;
-        private static double? TryGetDouble(Dictionary<string, object> d, string key) => d.TryGetValue(key, out var val) ? (val is double dv ? dv : val is float fv ? (double)fv : double.TryParse(val?.ToString(), out var p) ? p : (double?)null) : null;
-        private static bool? TryGetBool(Dictionary<string, object> d, string key) => d.TryGetValue(key, out var val) ? (val is bool bv ? bv : bool.TryParse(val?.ToString(), out var p) ? p : (bool?)null) : null;
-        private static Dictionary<string, object>? GetNested(Dictionary<string, object> d, string key) => d.TryGetValue(key, out var val) && val is Dictionary<string, object> n ? n : null;
-        private static List<object>? GetList(Dictionary<string, object> d, string key) => d.TryGetValue(key, out var val) && val is IList l ? l.Cast<object>().ToList() : null;
 
+        private static double? TryGetDouble(Dictionary<string, object> d, string key)
+        {
+            if (!d.TryGetValue(key, out var val) || val == null) return null;
+            if (val is double dv) return dv;
+            if (val is float fv) return (double)fv;
+            if (val is long lv) return lv;
+            if (val is int iv) return iv;
+            return null;
+        }
+
+        private static bool? TryGetBool(Dictionary<string, object> d, string key)
+        {
+            if (!d.TryGetValue(key, out var val) || val == null) return null;
+            if (val is bool bv) return bv;
+            return null;
+        }
+
+        private static Dictionary<string, object>? GetNested(Dictionary<string, object> d, string key) => d.TryGetValue(key, out var val) && val is Dictionary<string, object> n ? n : null;
+
+        // 不拷贝列表：直接返回 IList，调用方只用 Count 和索引访问
+        private static IList? GetList(Dictionary<string, object> d, string key) => d.TryGetValue(key, out var val) && val is IList l ? l : null;
+
+        /// <summary>不调用 GetAddressBytes（分配 byte[]），直接检查 IP 字符串前两个段。</summary>
         private static bool IsPrivate(IPAddress ip)
         {
-            byte[] b = ip.GetAddressBytes();
-            if (b.Length < 4) return false;
-            if (b[0] == 10) return true;
-            if (b[0] == 172 && b[1] >= 16 && b[1] <= 31) return true;
-            if (b[0] == 192 && b[1] == 168) return true;
-            if (b[0] == 127) return true;
-            if (b[0] == 169 && b[1] == 254) return true;
+            // AddressFamily.InterNetwork (IPv4) → ToString() 返回 a.b.c.d 格式
+            string s = ip.ToString();
+            // 快速路径：检查第一个数字
+            int firstDot = s.IndexOf('.');
+            if (firstDot < 0) return false; // IPv6 不在此判断
+#if NET // .NET 6+ 支持 span 解析
+            if (!int.TryParse(s.AsSpan(0, firstDot), out int first)) return false;
+#else
+            if (!int.TryParse(s.Substring(0, firstDot), out int first)) return false;
+#endif
+            if (first == 10 || first == 127) return true;
+
+            int secondDot = s.IndexOf('.', firstDot + 1);
+            if (secondDot < 0) return false;
+#if NET
+            if (!int.TryParse(s.AsSpan(firstDot + 1, secondDot - firstDot - 1), out int second)) return false;
+#else
+            if (!int.TryParse(s.Substring(firstDot + 1, secondDot - firstDot - 1), out int second)) return false;
+#endif
+            if (first == 172 && second >= 16 && second <= 31) return true;
+            if (first == 192 && second == 168) return true;
+            if (first == 169 && second == 254) return true;
+
             return false;
         }
 
         private static string BuildSimpleGeo(IpGeoResult r, bool isChinese)
         {
-            var p = new List<string>();
-            if (isChinese) { p.Add(r.Province); if (r.City != r.Province) p.Add(r.City); if (!string.IsNullOrEmpty(r.Districts)) p.Add(r.Districts); p.Add(r.ISP); }
-            else { p.Add(r.Country); if (r.Province != r.Country) p.Add(r.Province); if (r.City != r.Province) p.Add(r.City); }
-            return string.Join("", p.Where(s => !string.IsNullOrEmpty(s)));
+            if (isChinese)
+            {
+                bool hasProvince = !string.IsNullOrEmpty(r.Province);
+                bool hasCity = !string.IsNullOrEmpty(r.City) && r.City != r.Province;
+                bool hasDistricts = !string.IsNullOrEmpty(r.Districts);
+                bool hasISP = !string.IsNullOrEmpty(r.ISP);
+
+                // 直接用 + 拼接，编译器/运行时会对少量字符串做优化
+                string result = hasProvince ? r.Province : "";
+                if (hasCity) result += r.City;
+                if (hasDistricts) result += r.Districts;
+                if (hasISP) result += r.ISP;
+                return result;
+            }
+            else
+            {
+                bool hasProvince = !string.IsNullOrEmpty(r.Province) && r.Province != r.Country;
+                if (hasProvince) return r.Country + r.Province;
+                if (!string.IsNullOrEmpty(r.ProvinceCode) && r.ProvinceCode != r.CountryIso) return r.Country + r.ProvinceCode;
+                return r.Country;
+            }
         }
 
         private static string BuildDetailText(IpGeoResult r)
         {
-            var l = new List<string> { $"IP: {r.Ip}" };
-            if (!string.IsNullOrEmpty(r.Continent)) l.Add($"大洲: {r.Continent}");
-            if (!string.IsNullOrEmpty(r.Country)) l.Add($"国家/地区: {r.Country} ({r.CountryIso})");
-            if (!string.IsNullOrEmpty(r.Province)) l.Add($"省份/州: {r.Province}{(string.IsNullOrEmpty(r.ProvinceCode) ? "" : " [" + r.ProvinceCode + "]")}");
-            if (!string.IsNullOrEmpty(r.City)) l.Add($"城市: {r.City}{(string.IsNullOrEmpty(r.CityCode) ? "" : " [" + r.CityCode + "]")}");
-            if (!string.IsNullOrEmpty(r.Districts)) l.Add($"区县: {r.Districts}{(string.IsNullOrEmpty(r.DistrictsCode) ? "" : " [" + r.DistrictsCode + "]")}");
-            if (!string.IsNullOrEmpty(r.ISP)) l.Add($"运营商: {r.ISP}");
-            if (!string.IsNullOrEmpty(r.NetType)) l.Add($"网络类型: {r.NetType}");
-            if (r.Latitude.HasValue && r.Longitude.HasValue) l.Add($"地理坐标: {r.Latitude:F4}, {r.Longitude:F4} (精度半径: {r.AccuracyRadius ?? 0}km)");
-            if (!string.IsNullOrEmpty(r.Timezone)) l.Add($"时区: {r.Timezone}");
-            if (!string.IsNullOrEmpty(r.PostalCode)) l.Add($"邮政编码: {r.PostalCode}");
-            if (!string.IsNullOrEmpty(r.RegisteredCountry)) l.Add($"注册地: {r.RegisteredCountry}");
-            
-            l.Add("\n--- 网络与 AS 信息 ---");
-            if (!string.IsNullOrEmpty(r.TraitsNetwork)) l.Add($"CIDR 网段: {r.TraitsNetwork}");
-            l.Add($"ASN: {(string.IsNullOrEmpty(r.ASN) ? "未知" : "AS" + r.ASN)}");
-            l.Add($"AS 组织: {(string.IsNullOrEmpty(r.ASOrg) ? "未知" : r.ASOrg)}");
-            if (r.IsAnonymousProxy == true) l.Add("⚠ 匿名代理: 是");
-            if (r.IsSatelliteProvider == true) l.Add("⚠ 卫星网络: 是");
-            
-            return string.Join("\n", l);
+            // 预估容量，一次性分配 StringBuilder
+            int est = 256;
+            var sb = new System.Text.StringBuilder(est);
+
+            sb.Append("IP: ").AppendLine(r.Ip);
+            if (!string.IsNullOrEmpty(r.Continent)) sb.Append("大洲: ").AppendLine(r.Continent);
+            if (!string.IsNullOrEmpty(r.Country)) sb.Append("国家/地区: ").Append(r.Country).Append(" (").Append(r.CountryIso).AppendLine(")");
+            if (!string.IsNullOrEmpty(r.Province))
+            {
+                sb.Append("省份/州: ").Append(r.Province);
+                if (!string.IsNullOrEmpty(r.ProvinceCode)) sb.Append(" [").Append(r.ProvinceCode).Append(']');
+                sb.AppendLine();
+            }
+            if (!string.IsNullOrEmpty(r.City))
+            {
+                sb.Append("城市: ").Append(r.City);
+                if (!string.IsNullOrEmpty(r.CityCode)) sb.Append(" [").Append(r.CityCode).Append(']');
+                sb.AppendLine();
+            }
+            if (!string.IsNullOrEmpty(r.Districts))
+            {
+                sb.Append("区县: ").Append(r.Districts);
+                if (!string.IsNullOrEmpty(r.DistrictsCode)) sb.Append(" [").Append(r.DistrictsCode).Append(']');
+                sb.AppendLine();
+            }
+            if (!string.IsNullOrEmpty(r.ISP)) sb.Append("运营商: ").AppendLine(r.ISP);
+            if (!string.IsNullOrEmpty(r.NetType)) sb.Append("网络类型: ").AppendLine(r.NetType);
+            if (r.Latitude.HasValue && r.Longitude.HasValue)
+                sb.Append("地理坐标: ").Append(r.Latitude.Value.ToString("F4")).Append(", ").Append(r.Longitude.Value.ToString("F4"))
+                  .Append(" (精度半径: ").Append((r.AccuracyRadius ?? 0).ToString("F0")).AppendLine("km)");
+            if (!string.IsNullOrEmpty(r.Timezone)) sb.Append("时区: ").AppendLine(r.Timezone);
+            if (!string.IsNullOrEmpty(r.PostalCode)) sb.Append("邮政编码: ").AppendLine(r.PostalCode);
+            if (!string.IsNullOrEmpty(r.RegisteredCountry)) sb.Append("注册地: ").AppendLine(r.RegisteredCountry);
+
+            sb.AppendLine().AppendLine("--- 网络与 AS 信息 ---");
+            if (!string.IsNullOrEmpty(r.TraitsNetwork)) sb.Append("CIDR 网段: ").AppendLine(r.TraitsNetwork);
+            sb.Append("ASN: ").AppendLine(string.IsNullOrEmpty(r.ASN) ? "未知" : "AS" + r.ASN);
+            sb.Append("AS 组织: ").AppendLine(string.IsNullOrEmpty(r.ASOrg) ? "未知" : r.ASOrg);
+            if (r.IsAnonymousProxy == true) sb.AppendLine("⚠ 匿名代理: 是");
+            if (r.IsSatelliteProvider == true) sb.AppendLine("⚠ 卫星网络: 是");
+
+            return sb.ToString();
         }
 
         public void Dispose() { _geoCN?.Dispose(); _geoLite2ASN?.Dispose(); _geoLite2City?.Dispose(); }

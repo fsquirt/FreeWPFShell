@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -15,6 +16,20 @@ namespace FreeWPFShell.Views
         public ObservableCollection<SshSessionService> ActiveSessions { get; } = new();
         private SshSessionService? _currentSession;
 
+        // 复用的画刷
+        private static readonly SolidColorBrush s_activeTabBg = new(Color.FromRgb(0x2D, 0x2D, 0x30));
+        private static readonly SolidColorBrush s_chartRxFill = new(Color.FromArgb(120, 39, 174, 96));
+        private static readonly SolidColorBrush s_chartTxFill = new(Color.FromArgb(180, 216, 67, 21));
+
+        // 预创建的柱状图矩形（复用，不每 tick new）
+        private readonly Rectangle[] _chartRxRects = new Rectangle[50];
+        private readonly Rectangle[] _chartTxRects = new Rectangle[50];
+        private bool _chartInitialized;
+
+        // 侧边栏绑定的 ObservableCollection，直接复用 MonitorData 的集合
+        private readonly ObservableCollection<ProcessItem> _sidebarProcesses = new();
+        private readonly ObservableCollection<DiskItem> _sidebarDisks = new();
+
         public MainForm()
         {
             InitializeComponent();
@@ -25,6 +40,9 @@ namespace FreeWPFShell.Views
             var welcomePage = new WelcomePage();
             WelcomeTab.Tag = welcomePage;
             PagesContainer.Children.Add(welcomePage);
+
+            ProcessGrid.ItemsSource = _sidebarProcesses;
+            DiskGrid.ItemsSource = _sidebarDisks;
 
             if (System.Environment.OSVersion.Version.Build < 22000)
             {
@@ -49,8 +67,7 @@ namespace FreeWPFShell.Views
             {
                 string msg = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
                 UserForm.ModernMessageBox.Show($"无法连接到 {hostInfo.HostName} ({hostInfo.IpAddress})\n\n错误信息: {msg}", "连接失败", MessageBoxButton.OK, MessageBoxImage.Error);
-                
-                // 检查 Tab 是否已被用户手动关闭，防止二次移除导致崩溃
+
                 if (SessionTabs.Items.Contains(tabItem))
                 {
                     PagesContainer.Children.Remove(terminalPage);
@@ -87,7 +104,7 @@ namespace FreeWPFShell.Views
 
             var btnClose = new Button
             {
-                Content = "×", Background = Brushes.Transparent, BorderThickness = new Thickness(0),
+                Content = "\u00d7", Background = Brushes.Transparent, BorderThickness = new Thickness(0),
                 Margin = new Thickness(10, 0, 0, 0), Foreground = Brushes.Gray,
                 Cursor = System.Windows.Input.Cursors.Hand, VerticalAlignment = VerticalAlignment.Center
             };
@@ -97,8 +114,7 @@ namespace FreeWPFShell.Views
             {
                 PagesContainer.Children.Remove(content);
                 SessionTabs.Items.Remove(tabItem);
-                
-                // 处理 SSH 会话资源的彻底释放
+
                 if (content is TerminalAndSFTP termPage)
                 {
                     if (termPage.Session != null)
@@ -162,7 +178,7 @@ namespace FreeWPFShell.Views
         private void OnMonitorPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             if (sender is MonitorData data && data == _currentSession?.Monitor &&
-                (e.PropertyName == nameof(MonitorData.NetHistory) || e.PropertyName == nameof(MonitorData.NetRxSpeed)))
+                (e.PropertyName == nameof(MonitorData.NetHistory)))
                 Dispatcher.BeginInvoke(() => DrawNetChart(data));
         }
 
@@ -180,31 +196,87 @@ namespace FreeWPFShell.Views
             TxtUptime.Text = d.Uptime; TxtPing.Text = d.Ping; TxtLoad.Text = d.Load;
             TxtNetUp.Text = d.NetUp; TxtNetDown.Text = d.NetDown; TxtNetIface.Text = d.NetIface;
             TxtNetMax.Text = d.NetMax; TxtNetMid.Text = d.NetMid;
-            ProcessGrid.ItemsSource = new ObservableCollection<ProcessItem>(d.Processes);
-            DiskGrid.ItemsSource = new ObservableCollection<DiskItem>(d.Disks);
+
+            // 内联更新而不创建新 ObservableCollection
+            SyncCollection(_sidebarProcesses, d.Processes);
+            SyncCollection(_sidebarDisks, d.Disks);
             DrawNetChart(d);
+        }
+
+        /// <summary>内联同步：避免 new ObservableCollection 造成 GC 压力</summary>
+        private static void SyncCollection<T>(ObservableCollection<T> target, System.Collections.Generic.IReadOnlyList<T> source)
+        {
+            int srcCount = source.Count;
+            // 调整大小
+            while (target.Count > srcCount) target.RemoveAt(target.Count - 1);
+            for (int i = 0; i < srcCount; i++)
+            {
+                if (i < target.Count)
+                {
+                    if (!EqualityComparer<T>.Default.Equals(target[i], source[i]))
+                        target[i] = source[i];
+                }
+                else
+                {
+                    target.Add(source[i]);
+                }
+            }
         }
 
         private void DrawNetChart(MonitorData d)
         {
-            NetChartCanvas.Children.Clear();
             var history = d.NetHistory;
-            if (history.Count == 0) return;
-            double maxVal = history.Max(x => Math.Max(x.Item1, x.Item2));
-            if (maxVal < 1024) maxVal = 1024;
+            int count = history.Count;
+            if (count == 0) return;
+
             double width = NetChartCanvas.ActualWidth, height = NetChartCanvas.ActualHeight;
             if (width == 0 || height == 0) return;
+
+            double maxVal = d.GetNetHistoryMax();
+            if (maxVal < 1024) maxVal = 1024;
             double barW = width / 50.0;
-            for (int i = 0; i < history.Count; i++)
+
+            // 懒初始化预分配的矩形
+            if (!_chartInitialized)
             {
-                var (rx, tx) = history[i];
-                double rxH = (rx / maxVal) * height, txH = (tx / maxVal) * height;
-                var rxRect = new Rectangle { Width = Math.Ceiling(barW), Height = rxH, Fill = new SolidColorBrush(Color.FromArgb(120, 39, 174, 96)) };
-                Canvas.SetLeft(rxRect, i * barW); Canvas.SetTop(rxRect, height - rxH);
-                NetChartCanvas.Children.Add(rxRect);
-                var txRect = new Rectangle { Width = Math.Ceiling(barW), Height = txH, Fill = new SolidColorBrush(Color.FromArgb(180, 216, 67, 21)) };
-                Canvas.SetLeft(txRect, i * barW); Canvas.SetTop(txRect, height - txH);
-                NetChartCanvas.Children.Add(txRect);
+                for (int i = 0; i < 50; i++)
+                {
+                    var rxRect = new Rectangle { Width = Math.Ceiling(barW), Fill = s_chartRxFill };
+                    Canvas.SetLeft(rxRect, i * barW);
+                    NetChartCanvas.Children.Add(rxRect);
+                    _chartRxRects[i] = rxRect;
+
+                    var txRect = new Rectangle { Width = Math.Ceiling(barW), Fill = s_chartTxFill };
+                    Canvas.SetLeft(txRect, i * barW);
+                    NetChartCanvas.Children.Add(txRect);
+                    _chartTxRects[i] = txRect;
+                }
+                _chartInitialized = true;
+            }
+
+            // 仅更新高度和底部位置，不创建新对象
+            for (int i = 0; i < 50; i++)
+            {
+                var rxRect = _chartRxRects[i];
+                var txRect = _chartTxRects[i];
+                if (i < count)
+                {
+                    var (rx, tx) = history[i];
+                    double rxH = (rx / maxVal) * height, txH = (tx / maxVal) * height;
+                    rxRect.Height = rxH; rxRect.Visibility = Visibility.Visible;
+                    Canvas.SetTop(rxRect, height - rxH);
+                    txRect.Height = txH; txRect.Visibility = Visibility.Visible;
+                    Canvas.SetTop(txRect, height - txH);
+                    // 更新宽度以防 DPI / 布局变化
+                    double newW = Math.Ceiling(barW);
+                    rxRect.Width = newW; txRect.Width = newW;
+                    Canvas.SetLeft(rxRect, i * barW); Canvas.SetLeft(txRect, i * barW);
+                }
+                else
+                {
+                    rxRect.Visibility = Visibility.Collapsed;
+                    txRect.Visibility = Visibility.Collapsed;
+                }
             }
         }
 
@@ -217,12 +289,13 @@ namespace FreeWPFShell.Views
             ProgSwap.Value = 0; TxtSwapPct.Text = "0%"; TxtSwapText.Text = "0M/0M";
             TxtNetUp.Text = "0K"; TxtNetDown.Text = "0K"; TxtNetIface.Text = "--";
             TxtNetMax.Text = "100K"; TxtNetMid.Text = "50K";
-            NetChartCanvas.Children.Clear(); ProcessGrid.ItemsSource = null; DiskGrid.ItemsSource = null;
+            NetChartCanvas.Children.Clear(); _chartInitialized = false;
+            _sidebarProcesses.Clear(); _sidebarDisks.Clear();
         }
 
         private void BtnCopyIp_Click(object sender, RoutedEventArgs e)
         {
-            if (_currentSession != null) 
+            if (_currentSession != null)
             {
                 try { Clipboard.SetText(_currentSession.HostInfo.IpAddress); }
                 catch (Exception ex) { UserForm.ModernMessageBox.Show("复制到剪切板失败: " + ex.Message); }
@@ -231,7 +304,6 @@ namespace FreeWPFShell.Views
 
         private void MicaWindow_Closed(object sender, EventArgs e)
         {
-            // 5秒后强制退出，防止 UnsubscribeMonitor 卡住残留进程
             _ = Task.Run(async () =>
             {
                 await Task.Delay(5000);

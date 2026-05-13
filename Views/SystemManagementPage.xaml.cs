@@ -17,11 +17,11 @@ namespace FreeWPFShell.Views
     public partial class SystemManagementPage : UserControl, IDisposable
     {
         private readonly SshSessionService _session;
-        
+
         // Login Records
         private readonly ObservableCollection<LoginRecord> _wtmpRecords = new();
         private readonly ObservableCollection<LoginRecord> _btmpRecords = new();
-        
+
         // Services
         private readonly ObservableCollection<ServiceItem> _serviceRecords = new();
         private List<ServiceItem> _allServicesRaw = new();
@@ -40,11 +40,15 @@ namespace FreeWPFShell.Views
         private readonly ObservableCollection<CronJobItem> _cronJobs = new();
         private List<CronJobItem> _allCronJobsRaw = new();
 
+        // 复用的画刷
+        private static readonly SolidColorBrush s_activeTabBg = new(Color.FromRgb(0x2D, 0x2D, 0x30));
+        private static readonly SolidColorBrush s_limeGreen = Brushes.LimeGreen;
+
         public SystemManagementPage(SshSessionService session)
         {
             InitializeComponent();
             _session = session;
-            
+
             WtmpGrid.ItemsSource = _wtmpRecords;
             BtmpGrid.ItemsSource = _btmpRecords;
             ServiceGrid.ItemsSource = _serviceRecords;
@@ -52,7 +56,6 @@ namespace FreeWPFShell.Views
             NetGrid.ItemsSource = _netConns;
             CronGrid.ItemsSource = _cronJobs;
 
-            // Initialize Process Timer
             _processRefreshTimer = new System.Timers.Timer(2000);
             _processRefreshTimer.Elapsed += async (s, e) =>
             {
@@ -63,11 +66,9 @@ namespace FreeWPFShell.Views
             };
             _processRefreshTimer.AutoReset = true;
 
-            // Default Tab
             SwitchToTab("Process");
 
             _ = RefreshProcessData();
-            // Lazy load other tabs on first switch to avoid startup burst
         }
 
         #region Tab Navigation
@@ -94,20 +95,18 @@ namespace FreeWPFShell.Views
             UpdateTabButton(BtnTabService, tabName == "Service");
             UpdateTabButton(BtnTabCron, tabName == "Cron");
 
-            // Only run process timer when process tab is active
             if (tabName == "Process") _processRefreshTimer.Start();
             else _processRefreshTimer.Stop();
 
-            // Lazy load on first visit
             if (tabName == "Login" && !_loginLoaded) { _loginLoaded = true; _ = LoadWtmpAsync(); _ = LoadBtmpAsync(); }
             if (tabName == "Service" && !_servicesLoaded) { _servicesLoaded = true; _ = LoadServicesAsync(); }
             if (tabName == "Net" && !_netLoaded) { _netLoaded = true; _ = LoadNetConnsAsync(); }
             if (tabName == "Cron" && !_cronLoaded) { _cronLoaded = true; _ = LoadCronJobsAsync(); }
         }
 
-        private void UpdateTabButton(MicaWPF.Controls.Button btn, bool isActive)
+        private static void UpdateTabButton(MicaWPF.Controls.Button btn, bool isActive)
         {
-            btn.Background = isActive ? new SolidColorBrush(Color.FromRgb(0x2D, 0x2D, 0x30)) : Brushes.Transparent;
+            btn.Background = isActive ? s_activeTabBg : Brushes.Transparent;
             btn.Foreground = isActive ? Brushes.White : Brushes.Gray;
         }
 
@@ -145,7 +144,7 @@ namespace FreeWPFShell.Views
             }
         }
 
-        private void FillGeoAndAdd(List<LoginRecord> records, ObservableCollection<LoginRecord> target)
+        private static void FillGeoAndAdd(List<LoginRecord> records, ObservableCollection<LoginRecord> target)
         {
             var geoService = IpGeoService.Instance;
             foreach (var r in records)
@@ -241,16 +240,16 @@ namespace FreeWPFShell.Views
         {
             string search = TxtServiceSearch.Text.Trim().ToLower();
             bool onlyRunning = TogFilterInactive.IsChecked == true;
+
             _serviceRecords.Clear();
-            foreach (var s in _allServicesRaw.Where(s =>
+            foreach (var s in _allServicesRaw)
             {
-                if (onlyRunning && (s.ActiveState != "active" || s.SubState != "running")) return false;
-                if (string.IsNullOrEmpty(search)) return true;
-                return s.Name.ToLower().Contains(search) ||
-                       s.Description.ToLower().Contains(search) ||
-                       s.ActiveState.ToLower().Contains(search);
-            }))
-            {
+                if (onlyRunning && (s.ActiveState != "active" || s.SubState != "running")) continue;
+                if (!string.IsNullOrEmpty(search) &&
+                    !s.Name.ToLower().Contains(search) &&
+                    !s.Description.ToLower().Contains(search) &&
+                    !s.ActiveState.ToLower().Contains(search))
+                    continue;
                 _serviceRecords.Add(s);
             }
         }
@@ -266,8 +265,7 @@ namespace FreeWPFShell.Views
                 if (UserForm.ModernMessageBox.Show($"确定要启动服务 {s.Name} 吗？", "启动服务", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
                 {
                     bool ok = await _session.ServiceActionAsync(s.Name, "start");
-                    if (ok) UserForm.ModernMessageBox.Show($"服务 {s.Name} 启动命令已发送。");
-                    else UserForm.ModernMessageBox.Show($"启动服务 {s.Name} 失败，可能权限不足。");
+                    UserForm.ModernMessageBox.Show(ok ? $"服务 {s.Name} 启动命令已发送。" : $"启动服务 {s.Name} 失败，可能权限不足。");
                     await LoadServicesAsync();
                 }
             }
@@ -280,8 +278,7 @@ namespace FreeWPFShell.Views
                 if (UserForm.ModernMessageBox.Show($"确定要停止服务 {s.Name} 吗？", "停止服务", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
                 {
                     bool ok = await _session.ServiceActionAsync(s.Name, "stop");
-                    if (ok) UserForm.ModernMessageBox.Show($"服务 {s.Name} 停止命令已发送。");
-                    else UserForm.ModernMessageBox.Show($"停止服务 {s.Name} 失败，可能权限不足。");
+                    UserForm.ModernMessageBox.Show(ok ? $"服务 {s.Name} 停止命令已发送。" : $"停止服务 {s.Name} 失败，可能权限不足。");
                     await LoadServicesAsync();
                 }
             }
@@ -294,8 +291,7 @@ namespace FreeWPFShell.Views
                 if (UserForm.ModernMessageBox.Show($"确定要重启服务 {s.Name} 吗？", "重启服务", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
                 {
                     bool ok = await _session.ServiceActionAsync(s.Name, "restart");
-                    if (ok) UserForm.ModernMessageBox.Show($"服务 {s.Name} 重启命令已发送。");
-                    else UserForm.ModernMessageBox.Show($"重启服务 {s.Name} 失败，可能权限不足。");
+                    UserForm.ModernMessageBox.Show(ok ? $"服务 {s.Name} 重启命令已发送。" : $"重启服务 {s.Name} 失败，可能权限不足。");
                     await LoadServicesAsync();
                 }
             }
@@ -347,21 +343,23 @@ namespace FreeWPFShell.Views
             bool filterEmpty = TogFilterEmpty.IsChecked == true;
             uint? selectedPid = (ProcessGrid.SelectedItem as ProcessItem)?.Pid;
 
-            var filtered = _allProcessesRaw.Where(p =>
-            {
-                if (filterEmpty && string.IsNullOrEmpty(p.File)) return false;
-                if (string.IsNullOrEmpty(search)) return true;
-                return p.Pid.ToString().Contains(search) ||
-                       p.File.ToLower().Contains(search) ||
-                       p.Cmd.ToLower().Contains(search);
-            }).ToList();
-
+            // 内联过滤，不用 LINQ Where 避免闭包+迭代器分配
             _processes.Clear();
-            foreach (var p in filtered) _processes.Add(p);
+            foreach (var p in _allProcessesRaw)
+            {
+                if (filterEmpty && string.IsNullOrEmpty(p.File)) continue;
+                if (!string.IsNullOrEmpty(search) &&
+                    !p.Pid.ToString().Contains(search) &&
+                    !p.File.ToLower().Contains(search) &&
+                    !p.Cmd.ToLower().Contains(search))
+                    continue;
+                _processes.Add(p);
+            }
 
             if (selectedPid.HasValue)
             {
-                var newSelected = _processes.FirstOrDefault(x => x.Pid == selectedPid.Value);
+                ProcessItem? newSelected = null;
+                foreach (var x in _processes) { if (x.Pid == selectedPid.Value) { newSelected = x; break; } }
                 if (newSelected != null) ProcessGrid.SelectedItem = newSelected;
             }
         }
@@ -378,24 +376,24 @@ namespace FreeWPFShell.Views
                 var detail = await _session.GetProcessDetailAsync(p.Pid);
                 if (detail != null)
                 {
-                    var sb = new StringBuilder();
-                    sb.AppendLine($"PID (Process ID)      : {detail.pid}");
-                    sb.AppendLine($"PPID (Parent PID)     : {detail.ppid}");
-                    sb.AppendLine($"UID/GID (用户/组)     : {detail.uid_gid}");
-                    sb.AppendLine($"进程状态              : {detail.status}");
-                    sb.AppendLine($"优先级与 Nice 值      : {detail.priority_nice}");
-                    sb.AppendLine($"CPU 占用时间          : {detail.cpu_time}");
-                    sb.AppendLine($"文件描述符 (FD) 数量   : {detail.fd_count}");
-                    sb.AppendLine($"内存信息 (statm)       : {detail.mem_info}");
-                    sb.AppendLine($"资源限制 (ulimit)      : \n{detail.ulimit}");
-                    sb.AppendLine($"CWD (当前工作目录)      : {detail.cwd}");
-                    sb.AppendLine($"命令行参数 (argv)      : \n{detail.argv}");
-                    sb.AppendLine($"TTY (终端关联)         : {detail.tty}");
-                    sb.AppendLine($"\n--- 信号处理 (Status/Sig) ---");
+                    // 重用 StringBuilder
+                    var sb = new StringBuilder(1024);
+                    sb.Append("PID (Process ID)      : ").AppendLine(detail.pid.ToString());
+                    sb.Append("PPID (Parent PID)     : ").AppendLine(detail.ppid.ToString());
+                    sb.Append("UID/GID (用户/组)     : ").AppendLine(detail.uid_gid);
+                    sb.Append("进程状态              : ").AppendLine(detail.status);
+                    sb.Append("优先级与 Nice 值      : ").AppendLine(detail.priority_nice);
+                    sb.Append("CPU 占用时间          : ").AppendLine(detail.cpu_time);
+                    sb.Append("文件描述符 (FD) 数量   : ").AppendLine(detail.fd_count.ToString());
+                    sb.Append("内存信息 (statm)       : ").AppendLine(detail.mem_info);
+                    sb.Append("资源限制 (ulimit)      : \n").AppendLine(detail.ulimit);
+                    sb.Append("CWD (当前工作目录)      : ").AppendLine(detail.cwd);
+                    sb.Append("命令行参数 (argv)      : \n").AppendLine(detail.argv);
+                    sb.Append("TTY (终端关联)         : ").AppendLine(detail.tty);
+                    sb.AppendLine("\n--- 信号处理 (Status/Sig) ---");
                     sb.AppendLine(detail.signals);
-                    sb.AppendLine($"\n--- 寄存器上下文 (Kernel Stack) ---");
+                    sb.AppendLine("\n--- 寄存器上下文 (Kernel Stack) ---");
                     sb.AppendLine(detail.context);
-                    // Only update if still the same selection (avoid race on rapid switching)
                     if (ProcessGrid.SelectedItem is ProcessItem cur && cur.Pid == p.Pid)
                         TxtProcessDetail.Text = sb.ToString();
                 }
@@ -418,8 +416,7 @@ namespace FreeWPFShell.Views
                 if (UserForm.ModernMessageBox.Show($"确定要对进程 {p.Pid} ({p.Cmd}) 发送信号 {sig} 吗？", "结束进程", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
                 {
                     bool success = await _session.KillProcessAsync(p.Pid, sig);
-                    if (success) UserForm.ModernMessageBox.Show("信号已发送。");
-                    else UserForm.ModernMessageBox.Show("操作失败，可能权限不足。");
+                    UserForm.ModernMessageBox.Show(success ? "信号已发送。" : "操作失败，可能权限不足。");
                 }
             }
         }
@@ -428,14 +425,13 @@ namespace FreeWPFShell.Views
         {
             if (ProcessGrid.SelectedItem is ProcessItem p)
             {
-                string procName = !string.IsNullOrEmpty(p.File) ? System.IO.Path.GetFileName(p.File) : p.Cmd.Split(' ')[0];
+                string procName = !string.IsNullOrEmpty(p.File) ? Path.GetFileName(p.File) : p.Cmd.Split(' ')[0];
                 if (string.IsNullOrEmpty(procName)) return;
 
                 if (UserForm.ModernMessageBox.Show($"确定要结束所有名为 \"{procName}\" 的进程吗？\n信号: {sig}", "全部结束", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
                 {
                     bool success = await _session.KillAllProcessesAsync(p.File, sig);
-                    if (success) UserForm.ModernMessageBox.Show("批量结束信号已发送。");
-                    else UserForm.ModernMessageBox.Show("操作可能部分失败或权限不足。");
+                    UserForm.ModernMessageBox.Show(success ? "批量结束信号已发送。" : "操作可能部分失败或权限不足。");
                 }
             }
         }
@@ -470,20 +466,19 @@ namespace FreeWPFShell.Views
         {
             string search = TxtNetSearch.Text.Trim().ToLower();
             bool hideEmpty = TogFilterEmptyNet.IsChecked == true;
-            
+
             _netConns.Clear();
-            foreach (var c in _allNetConnsRaw.Where(c =>
+            foreach (var c in _allNetConnsRaw)
             {
-                if (hideEmpty && string.IsNullOrEmpty(c.Program)) return false;
-                if (string.IsNullOrEmpty(search)) return true;
-                return c.Local.ToLower().Contains(search) ||
-                       c.Remote.ToLower().Contains(search) ||
-                       c.Program.ToLower().Contains(search) ||
-                       c.Pid.ToString().Contains(search) ||
-                       c.User.ToLower().Contains(search) ||
-                       c.Proto.ToLower().Contains(search);
-            }))
-            {
+                if (hideEmpty && string.IsNullOrEmpty(c.Program)) continue;
+                if (!string.IsNullOrEmpty(search) &&
+                    !c.Local.ToLower().Contains(search) &&
+                    !c.Remote.ToLower().Contains(search) &&
+                    !c.Program.ToLower().Contains(search) &&
+                    !c.Pid.ToString().Contains(search) &&
+                    !c.User.ToLower().Contains(search) &&
+                    !c.Proto.ToLower().Contains(search))
+                    continue;
                 _netConns.Add(c);
             }
         }
@@ -502,8 +497,7 @@ namespace FreeWPFShell.Views
                 if (UserForm.ModernMessageBox.Show($"确定要结束进程 {c.Pid} ({c.Program}) 吗？\n信号: {sig}", "结束进程", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
                 {
                     bool success = await _session.KillProcessAsync(c.Pid, sig);
-                    if (success) UserForm.ModernMessageBox.Show("信号已发送。");
-                    else UserForm.ModernMessageBox.Show("操作失败，可能权限不足。");
+                    UserForm.ModernMessageBox.Show(success ? "信号已发送。" : "操作失败，可能权限不足。");
                     await LoadNetConnsAsync();
                 }
             }
@@ -523,7 +517,7 @@ namespace FreeWPFShell.Views
                 ApplyCronFilter();
                 string status = await statusTask;
                 TxtCronServiceStatus.Text = status;
-                TxtCronServiceStatus.Foreground = status == "运行中" ? Brushes.LimeGreen : Brushes.Gray;
+                TxtCronServiceStatus.Foreground = status == "运行中" ? s_limeGreen : Brushes.Gray;
             }
             catch (Exception ex)
             {
@@ -536,15 +530,14 @@ namespace FreeWPFShell.Views
             string search = TxtCronSearch.Text.Trim().ToLower();
             bool hideDisabled = TogFilterDisabledCron.IsChecked == true;
             _cronJobs.Clear();
-            foreach (var c in _allCronJobsRaw.Where(c =>
+            foreach (var c in _allCronJobsRaw)
             {
-                if (hideDisabled && !c.Enabled) return false;
-                if (string.IsNullOrEmpty(search)) return true;
-                return c.Schedule.ToLower().Contains(search) ||
-                       c.Command.ToLower().Contains(search) ||
-                       c.Raw.ToLower().Contains(search);
-            }))
-            {
+                if (hideDisabled && !c.Enabled) continue;
+                if (!string.IsNullOrEmpty(search) &&
+                    !c.Schedule.ToLower().Contains(search) &&
+                    !c.Command.ToLower().Contains(search) &&
+                    !c.Raw.ToLower().Contains(search))
+                    continue;
                 _cronJobs.Add(c);
             }
         }
@@ -564,8 +557,7 @@ namespace FreeWPFShell.Views
                 if (UserForm.ModernMessageBox.Show($"确定要{action}该计划任务吗？\n\n{c.Schedule}\n{c.Command}", $"{action}任务", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
                 {
                     bool ok = await _session.ToggleCronJobAsync(c.LineIndex, enabled);
-                    if (ok) UserForm.ModernMessageBox.Show($"计划任务已{action}。");
-                    else UserForm.ModernMessageBox.Show("操作失败，可能权限不足。");
+                    UserForm.ModernMessageBox.Show(ok ? $"计划任务已{action}。" : "操作失败，可能权限不足。");
                     await LoadCronJobsAsync();
                 }
             }
@@ -578,8 +570,7 @@ namespace FreeWPFShell.Views
                 if (UserForm.ModernMessageBox.Show($"确定要删除该计划任务吗？\n\n{c.Schedule}\n{c.Command}", "删除任务", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
                 {
                     bool ok = await _session.RemoveCronJobAsync(c.LineIndex);
-                    if (ok) UserForm.ModernMessageBox.Show("计划任务已删除。");
-                    else UserForm.ModernMessageBox.Show("删除失败，可能权限不足。");
+                    UserForm.ModernMessageBox.Show(ok ? "计划任务已删除。" : "删除失败，可能权限不足。");
                     await LoadCronJobsAsync();
                 }
             }
@@ -614,13 +605,7 @@ namespace FreeWPFShell.Views
                 return;
             }
 
-            string min = TxtCronMin.Text.Trim();
-            string hour = TxtCronHour.Text.Trim();
-            string dom = TxtCronDom.Text.Trim();
-            string month = TxtCronMonth.Text.Trim();
-            string dow = TxtCronDow.Text.Trim();
-            string schedule = $"{min} {hour} {dom} {month} {dow}";
-
+            string schedule = $"{TxtCronMin.Text.Trim()} {TxtCronHour.Text.Trim()} {TxtCronDom.Text.Trim()} {TxtCronMonth.Text.Trim()} {TxtCronDow.Text.Trim()}";
             string raw = $"{schedule} {cmd}";
             bool ok = await _session.AddCronJobAsync(raw);
             if (ok)

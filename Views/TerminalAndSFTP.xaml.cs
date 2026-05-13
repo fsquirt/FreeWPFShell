@@ -26,17 +26,19 @@ namespace FreeWPFShell.Views
         private readonly ObservableCollection<RemoteFile> _remoteFiles = new();
         private string _currentPath = "/";
         private readonly Stack<string> _backHistory = new(), _forwardHistory = new();
-        
-        // 分离上传和下载状态
+
         private int _upActive, _upTotal, _upDone;
         private string _upName = "";
-        private double _upProgress = 0;
+        private double _upProgress;
 
         private int _downActive, _downTotal, _downDone;
         private string _downName = "";
-        private double _downProgress = 0;
+        private double _downProgress;
 
         private CancellationTokenSource? _transferCts;
+
+        // 复用的 StringBuilder（减少 UpdateStatus 分配）
+        private readonly StringBuilder _statusBuilder = new(256);
 
         public SshSessionService Session { get; }
         private SftpClient Sftp => Session.SftpClient!;
@@ -47,7 +49,6 @@ namespace FreeWPFShell.Views
             InitializeComponent();
             Session = session;
 
-            // 监听连接状态和模式变更以更新 UI
             Session.PropertyChanged += (s, e) =>
             {
                 Dispatcher.Invoke(() =>
@@ -82,7 +83,7 @@ namespace FreeWPFShell.Views
         {
             var settings = new Repositories.SettingsRepository().Load();
             var bgColorStr = settings.TerminalBackground ?? "#1E3047";
-            uint bgColorUint = 0x0047301E; 
+            uint bgColorUint = 0x0047301E;
 
             try
             {
@@ -111,8 +112,8 @@ namespace FreeWPFShell.Views
                 DefaultSelectionBackground = 0x00ffffff, CursorStyle = CursorStyle.BlinkingBar,
                 ColorTable = new uint[16] { 0x000c0c0c,0x001f0fc5,0x000ea113,0x00009cc1,0x00da3700,0x00981788,0x00dd963a,0x00cccccc,0x00767676,0x005648e7,0x000cc616,0x00a5f1f9,0x00ff783b,0x009e00b4,0x00d6d661,0x00f2f2f2 }
             }, settings.TerminalFont ?? "Cascadia Code", (short)(settings.TerminalFontSize > 0 ? settings.TerminalFontSize : 10));
-            
-            TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.Loader2Line; 
+
+            TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.Loader2Line;
             TxtStatusIcon.Spin = true;
             StatusIconContainer.ToolTip = "Connecting...";
         }
@@ -120,22 +121,22 @@ namespace FreeWPFShell.Views
         public void BindSession()
         {
             if (Session == null || !Session.IsConnected)
-            { 
-                TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.CloseCircleLine; 
-                TxtStatusIcon.Spin = false; 
-                TxtStatusIcon.Foreground = Brushes.Red; 
+            {
+                TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.CloseCircleLine;
+                TxtStatusIcon.Spin = false;
+                TxtStatusIcon.Foreground = Brushes.Red;
                 StatusIconContainer.ToolTip = "未连接";
-                return; 
+                return;
             }
 
             _currentPath = Sftp.WorkingDirectory ?? "/";
             FileGrid.ItemsSource = _remoteFiles;
             LoadPath(_currentPath);
-            TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.CheckboxCircleLine; 
-            TxtStatusIcon.Spin = false; 
-            TxtStatusIcon.Foreground = Brushes.LimeGreen; 
+            TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.CheckboxCircleLine;
+            TxtStatusIcon.Spin = false;
+            TxtStatusIcon.Foreground = Brushes.LimeGreen;
             StatusIconContainer.ToolTip = "当前没有传输任务";
-            
+
             Terminal.Connection = Session.TerminalConnection;
 
             Dispatcher.InvokeAsync(() => {
@@ -180,14 +181,61 @@ namespace FreeWPFShell.Views
                 if (!isHistory && _currentPath != path) { _backHistory.Push(_currentPath); _forwardHistory.Clear(); }
                 _currentPath = path; TxtCurrentPath.Text = path;
                 _remoteFiles.Clear();
-                foreach (var f in files.Where(f => f.Name != "." && f.Name != "..").OrderByDescending(f => f.IsDirectory).ThenBy(f => f.Name))
-                    _remoteFiles.Add(new RemoteFile { Icon = f.IsDirectory ? "FolderFill" : "FileTextLine", Name = f.Name, Size = f.IsDirectory ? "" : FormatSize(f.Length), Type = f.IsDirectory ? "文件夹" : "文件", Date = f.LastWriteTime.ToString("yyyy/MM/dd HH:mm"), Perms = GetPerms(f), Owner = $"{f.UserId}::{f.GroupId}", IsDirectory = f.IsDirectory, Length = f.Length, FullName = f.FullName });
+
+                // 手动分为目录和文件列表，避免 LINQ Where + OrderByDescending + ThenBy 的多次迭代
+                var dirs = new List<RemoteFile>();
+                var fileItems = new List<RemoteFile>();
+                foreach (var f in files)
+                {
+                    if (f.Name == "." || f.Name == "..") continue;
+                    var rf = new RemoteFile
+                    {
+                        Name = f.Name,
+                        Size = f.IsDirectory ? "" : FormatSize(f.Length),
+                        Type = f.IsDirectory ? "文件夹" : "文件",
+                        Date = f.LastWriteTime.ToString("yyyy/MM/dd HH:mm"),
+                        Perms = GetPermsFast(f),
+                        Owner = f.IsDirectory ? "" : $"{f.UserId}::{f.GroupId}",
+                        IsDirectory = f.IsDirectory,
+                        Length = f.Length,
+                        FullName = f.FullName,
+                        Icon = f.IsDirectory ? "FolderFill" : "FileTextLine"
+                    };
+                    if (f.IsDirectory) dirs.Add(rf);
+                    else fileItems.Add(rf);
+                }
+                dirs.Sort(static (a, b) => string.CompareOrdinal(a.Name, b.Name));
+                fileItems.Sort(static (a, b) => string.CompareOrdinal(a.Name, b.Name));
+                foreach (var d in dirs) _remoteFiles.Add(d);
+                foreach (var f in fileItems) _remoteFiles.Add(f);
             }
             catch (Exception ex) { ModernMessageBox.Show("访问失败: " + ex.Message); }
         }
 
-        private static string GetPerms(ISftpFile f) => (f.IsDirectory ? "d" : "-") + (f.OwnerCanRead ? "r" : "-") + (f.OwnerCanWrite ? "w" : "-") + (f.OwnerCanExecute ? "x" : "-") + (f.GroupCanRead ? "r" : "-") + (f.GroupCanWrite ? "w" : "-") + (f.GroupCanExecute ? "x" : "-") + (f.OthersCanRead ? "r" : "-") + (f.OthersCanWrite ? "w" : "-") + (f.OthersCanExecute ? "x" : "-");
-        private static string FormatSize(long b) { string[] e = { "B", "KB", "MB", "GB", "TB" }; int i = 0; double d = b; while (d >= 1024 && i < e.Length - 1) { d /= 1024; i++; } return $"{d:0.##} {e[i]}"; }
+        private static string GetPermsFast(ISftpFile f)
+        {
+            // 栈分配 char 数组避免 String.Concat 多次分配
+            Span<char> perms = stackalloc char[10];
+            perms[0] = f.IsDirectory ? 'd' : '-';
+            perms[1] = f.OwnerCanRead ? 'r' : '-';
+            perms[2] = f.OwnerCanWrite ? 'w' : '-';
+            perms[3] = f.OwnerCanExecute ? 'x' : '-';
+            perms[4] = f.GroupCanRead ? 'r' : '-';
+            perms[5] = f.GroupCanWrite ? 'w' : '-';
+            perms[6] = f.GroupCanExecute ? 'x' : '-';
+            perms[7] = f.OthersCanRead ? 'r' : '-';
+            perms[8] = f.OthersCanWrite ? 'w' : '-';
+            perms[9] = f.OthersCanExecute ? 'x' : '-';
+            return new string(perms);
+        }
+
+        private static string FormatSize(long b)
+        {
+            string[] e = { "B", "KB", "MB", "GB", "TB" };
+            int i = 0; double d = b;
+            while (d >= 1024 && i < e.Length - 1) { d /= 1024; i++; }
+            return $"{d:0.##} {e[i]}";
+        }
 
         private void BtnBack_Click(object sender, RoutedEventArgs e) { if (_backHistory.Count > 0) { _forwardHistory.Push(_currentPath); LoadPath(_backHistory.Pop(), true); } }
         private void BtnForward_Click(object sender, RoutedEventArgs e) { if (_forwardHistory.Count > 0) { _backHistory.Push(_currentPath); LoadPath(_forwardHistory.Pop(), true); } }
@@ -234,39 +282,45 @@ namespace FreeWPFShell.Views
                 _ = Session.EditRemoteFileAsync(f.FullName, "notepad");
         }
 
-        private void UpdateStatus() => Dispatcher.InvokeAsync(() => 
-        { 
-            bool anyUp = _upActive > 0 || (_upTotal > 0 && _upDone == _upTotal && _upActive == 0 && _downActive > 0);
-            bool anyDown = _downActive > 0 || (_downTotal > 0 && _downDone == _downTotal && _downActive == 0 && _upActive > 0);
+        private void UpdateStatus()
+        {
+            Dispatcher.InvokeAsync(() =>
+            {
+                bool anyUp = _upActive > 0 || (_upTotal > 0 && _upDone == _upTotal && _upActive == 0 && _downActive > 0);
+                bool anyDown = _downActive > 0 || (_downTotal > 0 && _downDone == _downTotal && _downActive == 0 && _upActive > 0);
 
-            if (_upActive > 0 || _downActive > 0) 
-            { 
-                TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.Loader2Line; 
-                TxtStatusIcon.Spin = true;
-                TxtStatusIcon.Foreground = Brushes.Gold;
+                if (_upActive > 0 || _downActive > 0)
+                {
+                    TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.Loader2Line;
+                    TxtStatusIcon.Spin = true;
+                    TxtStatusIcon.Foreground = Brushes.Gold;
 
-                StringBuilder sb = new StringBuilder();
-                if (_upActive > 0 || (_upTotal > 0 && _upDone == _upTotal))
-                    sb.AppendLine($"上传: ({_upDone}/{_upTotal}) [{(_upActive > 0 ? _upProgress : 100):F1}%] - {(_upActive > 0 ? _upName : "已完成")}");
-                if (_downActive > 0 || (_downTotal > 0 && _downDone == _downTotal))
-                    sb.AppendLine($"下载: ({_downDone}/{_downTotal}) [{(_downActive > 0 ? _downProgress : 100):F1}%] - {(_downActive > 0 ? _downName : "已完成")}");
-                
-                sb.Append("\n双击可取消所有任务");
-                StatusIconContainer.ToolTip = sb.ToString().Trim();
-            } 
-            else 
-            { 
-                TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.CheckboxCircleLine; 
-                TxtStatusIcon.Spin = false;
-                TxtStatusIcon.Foreground = Brushes.LimeGreen;
-                StatusIconContainer.ToolTip = "当前没有传输任务"; 
-                // 只有全部完成后才重置统计
-                _upTotal = _upDone = 0;
-                _downTotal = _downDone = 0;
-            } 
-        });
+                    _statusBuilder.Clear();
+                    if (_upActive > 0 || (_upTotal > 0 && _upDone == _upTotal))
+                        _statusBuilder.Append("上传: (").Append(_upDone).Append('/').Append(_upTotal).Append(") [")
+                                      .Append((_upActive > 0 ? _upProgress : 100).ToString("F1")).Append("%] - ")
+                                      .AppendLine(_upActive > 0 ? _upName : "已完成");
+                    if (_downActive > 0 || (_downTotal > 0 && _downDone == _downTotal))
+                        _statusBuilder.Append("下载: (").Append(_downDone).Append('/').Append(_downTotal).Append(") [")
+                                      .Append((_downActive > 0 ? _downProgress : 100).ToString("F1")).Append("%] - ")
+                                      .AppendLine(_downActive > 0 ? _downName : "已完成");
 
-        private int CountLocalFiles(string path)
+                    _statusBuilder.Append("\n双击可取消所有任务");
+                    StatusIconContainer.ToolTip = _statusBuilder.ToString();
+                }
+                else
+                {
+                    TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.CheckboxCircleLine;
+                    TxtStatusIcon.Spin = false;
+                    TxtStatusIcon.Foreground = Brushes.LimeGreen;
+                    StatusIconContainer.ToolTip = "当前没有传输任务";
+                    _upTotal = _upDone = 0;
+                    _downTotal = _downDone = 0;
+                }
+            });
+        }
+
+        private static int CountLocalFiles(string path)
         {
             try
             {
@@ -283,7 +337,7 @@ namespace FreeWPFShell.Views
             int count = 0;
             try
             {
-                var files = await Task.Run(() => Sftp.ListDirectory(path).ToList());
+                var files = await Task.Run(() => Sftp.ListDirectory(path));
                 foreach (var f in files)
                 {
                     if (f.Name == "." || f.Name == "..") continue;
@@ -297,13 +351,13 @@ namespace FreeWPFShell.Views
 
         private async void DownloadItemAsync(RemoteFile item, string localDir)
         {
-            if (_upActive == 0 && _downActive == 0) 
+            if (_upActive == 0 && _downActive == 0)
             {
                 _transferCts = new CancellationTokenSource();
                 _downTotal = 0; _downDone = 0;
                 _upTotal = 0; _upDone = 0;
             }
-            
+
             int count = item.IsDirectory ? await CountRemoteFilesAsync(item.FullName) : 1;
             Interlocked.Add(ref _downTotal, count);
             Interlocked.Increment(ref _downActive);
@@ -318,8 +372,9 @@ namespace FreeWPFShell.Views
                     if (item.IsDirectory)
                     {
                         Directory.CreateDirectory(localPath);
-                        foreach (var c in Sftp.ListDirectory(item.FullName).Where(c => c.Name != "." && c.Name != ".."))
+                        foreach (var c in Sftp.ListDirectory(item.FullName))
                         {
+                            if (c.Name == "." || c.Name == "..") continue;
                             if (_transferCts?.IsCancellationRequested == true) break;
                             DownloadItemSync(c, localPath);
                         }
@@ -351,8 +406,9 @@ namespace FreeWPFShell.Views
             if (item.IsDirectory)
             {
                 Directory.CreateDirectory(lp);
-                foreach (var c in Sftp.ListDirectory(item.FullName).Where(c => c.Name != "." && c.Name != ".."))
+                foreach (var c in Sftp.ListDirectory(item.FullName))
                 {
+                    if (c.Name == "." || c.Name == "..") continue;
                     if (_transferCts?.IsCancellationRequested == true) break;
                     DownloadItemSync(c, lp);
                 }
@@ -375,7 +431,7 @@ namespace FreeWPFShell.Views
 
         private async void UploadLocalItemAsync(string localPath, string remoteDir)
         {
-            if (_upActive == 0 && _downActive == 0) 
+            if (_upActive == 0 && _downActive == 0)
             {
                 _transferCts = new CancellationTokenSource();
                 _upTotal = 0; _upDone = 0;
@@ -419,11 +475,11 @@ namespace FreeWPFShell.Views
             catch (Exception ex) when (ex is OperationCanceledException || ex is IOException || ex is ObjectDisposedException || ex is SshNetException)
             { }
             catch (Exception ex) { Dispatcher.InvokeAsync(() => ModernMessageBox.Show($"上传失败: " + ex.Message)); }
-            finally 
-            { 
+            finally
+            {
                 _upDone++; Interlocked.Decrement(ref _upActive);
-                UpdateStatus(); 
-                Dispatcher.InvokeAsync(() => { if (_upActive == 0 && _downActive == 0) LoadPath(_currentPath, true); }); 
+                UpdateStatus();
+                Dispatcher.InvokeAsync(() => { if (_upActive == 0 && _downActive == 0) LoadPath(_currentPath, true); });
             }
         }
 
@@ -431,7 +487,7 @@ namespace FreeWPFShell.Views
         {
             if (_transferCts?.IsCancellationRequested == true) return;
             var files = Directory.GetFiles(localDir);
-            
+
             Parallel.ForEach(files, new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = _transferCts?.Token ?? default }, f =>
             {
                 try
@@ -492,7 +548,7 @@ namespace FreeWPFShell.Views
             var items = FileGrid.SelectedItems.Cast<RemoteFile>().ToList(); if (items.Count == 0) return;
             if (ModernMessageBox.Show($"确认删除选中的 {items.Count} 个项吗？\n文件夹将会被强行递归删除！", "删除确认", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
             {
-                Interlocked.Increment(ref _upActive); // 借用上传状态锁住 UI 刷新
+                Interlocked.Increment(ref _upActive);
                 await Task.Run(() =>
                 {
                     try { foreach (var item in items) { if (item.IsDirectory) RecursiveDelete(item.FullName); else Sftp.DeleteFile(item.FullName); } }
