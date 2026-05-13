@@ -148,7 +148,7 @@ pub fn get_net_conns() -> Vec<NetConnItem> {
         ("/proc/net/udp6", "UDP6"),
     ];
 
-    let passwd_cache = crate::service_manager::load_passwd_cache();
+    let passwd_cache = crate::service_manager::get_passwd_cache();
 
     for (file, proto) in proc_files {
         if let Ok(content) = fs::read_to_string(file) {

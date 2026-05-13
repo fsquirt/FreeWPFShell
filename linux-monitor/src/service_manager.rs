@@ -16,7 +16,7 @@ pub fn resolve_gid(gid: u32, group_cache: &HashMap<u32, String>) -> String {
     gid.to_string()
 }
 
-pub fn load_passwd_cache() -> HashMap<u32, String> {
+fn load_passwd_map() -> HashMap<u32, String> {
     let mut map = HashMap::new();
     if let Ok(content) = fs::read_to_string("/etc/passwd") {
         for line in content.lines() {
@@ -31,7 +31,7 @@ pub fn load_passwd_cache() -> HashMap<u32, String> {
     map
 }
 
-pub fn load_group_cache() -> HashMap<u32, String> {
+fn load_group_map() -> HashMap<u32, String> {
     let mut map = HashMap::new();
     if let Ok(content) = fs::read_to_string("/etc/group") {
         for line in content.lines() {
@@ -46,6 +46,17 @@ pub fn load_group_cache() -> HashMap<u32, String> {
     map
 }
 
+static PASSWD_CACHE: OnceLock<HashMap<u32, String>> = OnceLock::new();
+static GROUP_CACHE: OnceLock<HashMap<u32, String>> = OnceLock::new();
+
+pub fn get_passwd_cache() -> &'static HashMap<u32, String> {
+    PASSWD_CACHE.get_or_init(load_passwd_map)
+}
+
+pub fn get_group_cache() -> &'static HashMap<u32, String> {
+    GROUP_CACHE.get_or_init(load_group_map)
+}
+
 pub async fn list_systemd_services() -> Result<Vec<ServiceItem>, Box<dyn std::error::Error>> {
     let connection = zbus::Connection::system().await?;
     let proxy = zbus::Proxy::new(
@@ -58,8 +69,8 @@ pub async fn list_systemd_services() -> Result<Vec<ServiceItem>, Box<dyn std::er
     let units: Vec<(String, String, String, String, String, String, zbus::zvariant::OwnedObjectPath, u32, String, zbus::zvariant::OwnedObjectPath)> =
         proxy.call_method("ListUnits", &()).await?.body().deserialize()?;
 
-    let passwd_cache = load_passwd_cache();
-    let group_cache = load_group_cache();
+    let passwd_cache = get_passwd_cache();
+    let group_cache = get_group_cache();
 
     let mut services = Vec::new();
 

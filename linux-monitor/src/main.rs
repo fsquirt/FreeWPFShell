@@ -54,6 +54,8 @@ fn main() {
         );
         let mut networks = Networks::new_with_refreshed_list();
         let mut disks = Disks::new_with_refreshed_list();
+        let mut all_processes = Vec::new();
+        let mut disk_items = Vec::new();
 
         loop {
             thread::sleep(Duration::from_secs(1));
@@ -71,31 +73,31 @@ fn main() {
 
             let cpu_pct = sys.global_cpu_info().cpu_usage();
             let mem_total = sys.total_memory();
-            
-            let mut all_processes = Vec::new();
-            let mut procs: Vec<_> = sys.processes().iter().collect();
-            
-            procs.sort_by(|a, b| {
-                let cpu_cmp = b.1.cpu_usage().partial_cmp(&a.1.cpu_usage()).unwrap_or(std::cmp::Ordering::Equal);
-                if cpu_cmp == std::cmp::Ordering::Equal {
-                    a.0.as_u32().cmp(&b.0.as_u32())
-                } else { cpu_cmp }
-            });
-            
-            for (pid, p) in procs.iter() {
-                let cmd = p.cmd().join(" ");
-                let p_mem = format!("{:.1}%", (p.memory() as f32 / mem_total as f32) * 100.0);
-                all_processes.push(ProcessItem {
-                    pid: pid.as_u32(),
-                    user: p.user_id().map(|u| u.to_string()).unwrap_or_else(|| "root".to_string()),
-                    mem: p_mem,
-                    cpu: format!("{:.1}%", p.cpu_usage()),
-                    file: p.exe().map(|e| e.to_string_lossy().into_owned()).unwrap_or_default(),
-                    cmd: if cmd.is_empty() { p.name().to_string() } else { cmd },
+
+            all_processes.clear();
+            {
+                let mut procs: Vec<_> = sys.processes().iter().collect();
+                procs.sort_by(|a, b| {
+                    let cpu_cmp = b.1.cpu_usage().partial_cmp(&a.1.cpu_usage()).unwrap_or(std::cmp::Ordering::Equal);
+                    if cpu_cmp == std::cmp::Ordering::Equal {
+                        a.0.as_u32().cmp(&b.0.as_u32())
+                    } else { cpu_cmp }
                 });
+                for (pid, p) in procs.iter() {
+                    let cmd = p.cmd().join(" ");
+                    let p_mem = format!("{:.1}%", (p.memory() as f32 / mem_total as f32) * 100.0);
+                    all_processes.push(ProcessItem {
+                        pid: pid.as_u32(),
+                        user: p.user_id().map(|u| u.to_string()).unwrap_or_else(|| "root".to_string()),
+                        mem: p_mem,
+                        cpu: format!("{:.1}%", p.cpu_usage()),
+                        file: p.exe().map(|e| e.to_string_lossy().into_owned()).unwrap_or_default(),
+                        cmd: if cmd.is_empty() { p.name().to_string() } else { cmd },
+                    });
+                }
             }
 
-            let top_15 = all_processes.iter().take(15).cloned().collect();
+            let top_15: Vec<ProcessItem> = all_processes.iter().take(15).cloned().collect();
 
             let mut best_rx = 0;
             let mut best_tx = 0;
@@ -107,6 +109,13 @@ fn main() {
                     best_rx = rx; best_tx = tx; best_iface = iface.clone();
                 }
             }
+
+            disk_items.clear();
+            disk_items.extend(disks.iter().map(|d| DiskItem {
+                path: d.mount_point().to_string_lossy().to_string(),
+                avail: format_size(d.available_space()),
+                size: format_size(d.total_space())
+            }));
 
             let new_stats = SysStats {
                 cpu_pct,
@@ -120,15 +129,11 @@ fn main() {
                 tx_speed: best_tx,
                 iface: best_iface,
                 processes: top_15,
-                disks: disks.iter().map(|d| DiskItem { 
-                    path: d.mount_point().to_string_lossy().to_string(), 
-                    avail: format_size(d.available_space()), 
-                    size: format_size(d.total_space()) 
-                }).collect(),
+                disks: disk_items.clone(),
             };
 
             if let Ok(mut g) = stats_clone.lock() { *g = Some(new_stats); }
-            if let Ok(mut g) = all_procs_clone.lock() { *g = all_processes; }
+            if let Ok(mut g) = all_procs_clone.lock() { std::mem::swap(&mut *g, &mut all_processes); }
         }
     });
 
