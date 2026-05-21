@@ -127,7 +127,7 @@ namespace FreeWPFShell.Services
                                 }
                                 break;
                             }
-                            catch { await Task.Delay(300); }
+                            catch { await Task.Delay(100); }
                         }
                     }
                     catch (Exception ex) { Debug.WriteLine($"[Editor] Upload Error: {ex.Message}"); }

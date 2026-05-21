@@ -80,8 +80,8 @@ namespace FreeWPFShell
         public async Task InjectLocaleAsync()
         {
             if (_shellStream == null) return;
-            await Task.Delay(200); // 等待 shell 准备就绪
-            WriteInput("export LANG=zh_CN.UTF-8\nexport LC_ALL=zh_CN.UTF-8\nclear\n");
+            await Task.Delay(100); // 等待 shell 准备就绪
+            WriteInput("export LANG=zh_CN.UTF-8\nexport LC_ALL=zh_CN.UTF-8\n");
         }
 
         private async Task ReadOutputAsync(CancellationToken token)
