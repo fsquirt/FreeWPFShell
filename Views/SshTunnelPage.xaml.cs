@@ -24,7 +24,7 @@ namespace FreeWPFShell.Views
             }
         }
 
-        private void BtnAddTunnel_Click(object sender, RoutedEventArgs e)
+        private async void BtnAddTunnel_Click(object sender, RoutedEventArgs e)
         {
             if (CmbHosts.SelectedItem == null) { UserForm.ModernMessageBox.Show("请选择一个活跃的主机连接。", "提示", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
             var session = (SshSessionService)CmbHosts.SelectedItem;
@@ -42,7 +42,7 @@ namespace FreeWPFShell.Views
                     // 在本机 127.0.0.1:bindPort 监听，转发到服务器能访问的 destAddr:destPort
                     port = new ForwardedPortLocal("127.0.0.1", bindPort, TxtDestAddr.Text, destPort);
                     client.AddForwardedPort(port);
-                    port.Start();
+                    await Task.Run(() => port.Start());
                 }
                 else
                 {
@@ -51,7 +51,7 @@ namespace FreeWPFShell.Views
                     // 常见的需求是将本机的 bindPort 映射到服务器的 destPort
                     port = new ForwardedPortRemote(destPort, TxtDestAddr.Text, bindPort);
                     client.AddForwardedPort(port);
-                    port.Start();
+                    await Task.Run(() => port.Start());
                 }
 
                 session.RegisterTunnel(new SshTunnelInfo

@@ -49,6 +49,11 @@ namespace FreeWPFShell.Services
         public Action<string>? ConnectionStatusCallback { get; set; }
         public Action<SshTunnelInfo>? RegisterTunnelCallback { get; set; }
 
+        private void NotifyStatus(string status)
+        {
+            ConnectionStatusCallback?.Invoke(status);
+        }
+
         public SshMonitorService(SshClient sshClient, SftpClient sftpClient, SshConnectionInfo hostInfo, string sessionId, SettingsRepository settingsRepo, object sftpLock, MonitorData monitor)
         {
             _sshClient = sshClient;
@@ -60,11 +65,11 @@ namespace FreeWPFShell.Services
             Monitor = monitor;
         }
 
-        public void Start()
+        public async Task StartAsync()
         {
             try
             {
-                DeployLinuxMonitor();
+                await DeployLinuxMonitorAsync();
             }
             catch (Exception ex)
             {
@@ -288,13 +293,13 @@ namespace FreeWPFShell.Services
             total *= multiplier; used *= multiplier;
         }
 
-        private void DeployLinuxMonitor()
+        private async Task DeployLinuxMonitorAsync()
         {
             var settings = _settingsRepo.Load();
             if (!settings.UseLinuxMonitor) return;
             if (!_sshClient.IsConnected || !_sftpClient.IsConnected) return;
 
-            ConnectionStatusCallback?.Invoke("建立 ssh 隧道...");
+            NotifyStatus("建立 ssh 隧道...");
             LinuxMonitorLocalPort = (uint)(System.Security.Cryptography.RandomNumberGenerator.GetInt32(40000, 60001));
             var port = new ForwardedPortLocal("127.0.0.1", LinuxMonitorLocalPort, "127.0.0.1", LinuxMonitorLocalPort);
             port.Exception += (sender, e) =>
@@ -302,7 +307,9 @@ namespace FreeWPFShell.Services
                 try { Debug.WriteLine($"[ForwardedPort Exception] {e.Exception?.Message}"); } catch { }
             };
             _sshClient.AddForwardedPort(port);
-            port.Start();
+
+            // 异步启动端口转发，绝不阻塞 UI
+            await Task.Run(() => port.Start());
 
             var tunnelInfo = new SshTunnelInfo
             {
@@ -317,60 +324,77 @@ namespace FreeWPFShell.Services
             RegisterTunnelCallback?.Invoke(tunnelInfo);
 
             string binPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "linux-monitor", "linux-monitor");
-            if (File.Exists(binPath))
+            if (!File.Exists(binPath)) return;
+
+            // 异步计算 MD5，避免阻塞
+            string localHash = "";
+            await Task.Run(() =>
             {
-                string localHash = "";
                 using (var md5 = MD5.Create())
+                using (var stream = File.OpenRead(binPath))
                 {
-                    using (var stream = File.OpenRead(binPath))
-                    {
-                        var hashBytes = md5.ComputeHash(stream);
-                        localHash = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
-                    }
+                    var hashBytes = md5.ComputeHash(stream);
+                    localHash = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
                 }
+            });
 
-                _sshClient.CreateCommand("mkdir -p /tmp/FreeWPFShell").Execute();
+            // 异步执行远程命令
+            await Task.Run(() => _sshClient.CreateCommand("mkdir -p /tmp/FreeWPFShell").Execute());
 
-                bool needsUpload = true;
-                try
+            bool needsUpload = true;
+            try
+            {
+                string hashResult = "";
+                await Task.Run(() =>
                 {
                     using (var hashCmd = _sshClient.CreateCommand("md5sum /tmp/FreeWPFShell/linux-monitor"))
-                    {
-                        string hashResult = hashCmd.Execute()?.Trim();
-                        if (!string.IsNullOrEmpty(hashResult))
-                        {
-                            var parts = hashResult.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
-                            if (parts.Length > 0 && parts[0].ToLowerInvariant() == localHash)
-                                needsUpload = false;
-                        }
-                    }
-                }
-                catch { needsUpload = true; }
-
-                if (needsUpload)
+                        hashResult = hashCmd.Execute()?.Trim() ?? "";
+                });
+                if (!string.IsNullOrEmpty(hashResult))
                 {
-                    ConnectionStatusCallback?.Invoke("上传 Linux_Monitor...");
+                    var parts = hashResult.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length > 0 && parts[0].ToLowerInvariant() == localHash)
+                        needsUpload = false;
+                }
+            }
+            catch { needsUpload = true; }
+
+            if (needsUpload)
+            {
+                NotifyStatus("上传 Linux_Monitor...");
+                // 在后台读文件到内存，减小锁内操作
+                byte[] fileBytes = await Task.Run(() => File.ReadAllBytes(binPath));
+                await Task.Run(() =>
+                {
                     lock (_sftpLock)
                     {
-                        using (var fs = File.OpenRead(binPath))
-                            _sftpClient.UploadFile(fs, "/tmp/FreeWPFShell/linux-monitor", true);
+                        using (var ms = new MemoryStream(fileBytes))
+                            _sftpClient.UploadFile(ms, "/tmp/FreeWPFShell/linux-monitor", true);
                     }
-                }
+                });
+            }
 
-                string tokenPath = $"/tmp/FreeWPFShell/.mon_token_{LinuxMonitorLocalPort}";
-                _monitorToken = Guid.NewGuid().ToString("N");
+            string tokenPath = $"/tmp/FreeWPFShell/.mon_token_{LinuxMonitorLocalPort}";
+            _monitorToken = Guid.NewGuid().ToString("N");
 
+            byte[] tokenBytes = Encoding.UTF8.GetBytes(_monitorToken);
+            await Task.Run(() =>
+            {
                 lock (_sftpLock)
                 {
-                    using (var ms = new MemoryStream(Encoding.UTF8.GetBytes(_monitorToken)))
+                    using (var ms = new MemoryStream(tokenBytes))
                         _sftpClient.UploadFile(ms, tokenPath, true);
                 }
+            });
 
+            // 异步执行远程命令链
+            await Task.Run(() =>
+            {
                 _sshClient.CreateCommand($"chmod 600 {tokenPath}").Execute();
                 _sshClient.CreateCommand("chmod +x /tmp/FreeWPFShell/linux-monitor").Execute();
                 _sshClient.CreateCommand($"pkill -9 -f \"linux-monitor {LinuxMonitorLocalPort}\"").Execute();
                 _sshClient.CreateCommand($"nohup /tmp/FreeWPFShell/linux-monitor {LinuxMonitorLocalPort} {tokenPath} >/dev/null 2>&1 &").Execute();
-            }
+            });
         }
 
         private HttpClient CreateMonitorHttpClient()

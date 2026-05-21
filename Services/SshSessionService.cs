@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Diagnostics;
 using System.Threading.Tasks;
+using System.Windows;
 using FreeWPFShell.Models;
 using FreeWPFShell.Repositories;
 using FreeWPFShell.Share;
@@ -44,7 +45,16 @@ namespace FreeWPFShell.Services
         public string ConnectionStatus
         {
             get => _connectionStatus;
-            set { if (_connectionStatus != value) { _connectionStatus = value; OnPropertyChanged(); } }
+            set
+            {
+                if (_connectionStatus == value) return;
+                _connectionStatus = value;
+                var dispatcher = Application.Current?.Dispatcher;
+                if (dispatcher != null && !dispatcher.CheckAccess())
+                    dispatcher.InvokeAsync(() => OnPropertyChanged(nameof(ConnectionStatus)));
+                else
+                    OnPropertyChanged();
+            }
         }
 
         private bool _isAppCursorMode;
@@ -96,6 +106,7 @@ namespace FreeWPFShell.Services
             try
             {
                 ConnectionStatus = "SSH.NET 建立连接...";
+                var settings = await Task.Run(() => _settingsRepo.Load());
                 await Task.Run(() =>
                 {
                     MasterClient = BuildSshClient(preloadedKey);
@@ -104,7 +115,7 @@ namespace FreeWPFShell.Services
 
                 IsConnected = true;
                 TerminalConnection = new SshTerminalConnection(MasterClient!, 120, 30);
-                TerminalConnection.InjectChineseLocale = _settingsRepo.Load().InjectChineseLocale;
+                TerminalConnection.InjectChineseLocale = settings.InjectChineseLocale;
                 TerminalConnection.AppCursorModeChanged += (isApp) =>
                 {
                     IsAppCursorMode = isApp;
@@ -135,7 +146,7 @@ namespace FreeWPFShell.Services
                             _monitorService.MonitorUpdated += (s, e) => MonitorUpdated?.Invoke(this, e);
                             _monitorService.ConnectionStatusCallback = (status) => ConnectionStatus = status;
                             _monitorService.RegisterTunnelCallback = RegisterTunnel;
-                            _monitorService.Start();
+                            await _monitorService.StartAsync();
                         }
                     }
                     catch (Exception ex)
