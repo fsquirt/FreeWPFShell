@@ -41,6 +41,13 @@ namespace FreeWPFShell.Services
 
         public bool IsConnected { get; private set; }
 
+        private bool _isSftpConnected;
+        public bool IsSftpConnected
+        {
+            get => _isSftpConnected;
+            private set { if (_isSftpConnected != value) { _isSftpConnected = value; OnPropertyChanged(); } }
+        }
+
         private string _connectionStatus = "准备连接...";
         public string ConnectionStatus
         {
@@ -225,47 +232,66 @@ namespace FreeWPFShell.Services
 
             try
             {
+                ConnectionStatus = "SSH.NET 建立连接...";
                 await Task.Run(() =>
-                    {
-                        ConnectionStatus = "SSH.NET 建立连接...";
-                        MasterClient = BuildSshClient(preloadedKey);
-                        MasterClient.Connect();
+                {
+                    MasterClient = BuildSshClient(preloadedKey);
+                    MasterClient.Connect();
+                });
 
-                        ConnectionStatus = "SFTP 建立连接...";
-                        SftpClient = BuildSftpClient(preloadedKey);
-                        SftpClient.Connect();
-
-                        DeployLinuxMonitor();
-
-                        if (_settingsRepo.Load().InjectChineseLocale)
-                        {
-                            ConnectionStatus = "设置中文环境变量...";
-                            using var cmd = MasterClient.CreateCommand("export LANG=zh_CN.UTF-8; export LC_ALL=zh_CN.UTF-8");
-                            cmd.Execute();
-                        }
-                    }
-                );
                 IsConnected = true;
-
-                TerminalConnection = new SshTerminalConnection(MasterClient, 120, 30);
-
+                TerminalConnection = new SshTerminalConnection(MasterClient!, 120, 30);
+                TerminalConnection.InjectChineseLocale = _settingsRepo.Load().InjectChineseLocale;
                 TerminalConnection.AppCursorModeChanged += (isApp) =>
                 {
                     IsAppCursorMode = isApp;
                 };
 
-                _monitorHttpClient = CreateMonitorHttpClient();
-                _monitorHttpClient.Timeout = TimeSpan.FromSeconds(10); // 固定超时，避免多线程竞态
-                _monitorCts = new CancellationTokenSource();
-                _monitorTimer = new Timer(2000) { AutoReset = true, Enabled = true };
-                _monitorTimer.Elapsed += OnMonitorTick;
+                // Asynchronously initialize SFTP, deploy monitor, and settings
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        ConnectionStatus = "SFTP 建立连接...";
+                        var sftp = BuildSftpClient(preloadedKey);
+                        await Task.Run(() => sftp.Connect());
+                        SftpClient = sftp;
+                        IsSftpConnected = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine("SFTP Connection Failed: " + ex.Message);
+                    }
 
-                ConnectionStatus = "已连接";
+                    try
+                    {
+                        DeployLinuxMonitor();
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine("Deploy Linux Monitor Failed: " + ex.Message);
+                    }
 
+                    try
+                    {
+                        _monitorHttpClient = CreateMonitorHttpClient();
+                        _monitorHttpClient.Timeout = TimeSpan.FromSeconds(10);
+                        _monitorCts = new CancellationTokenSource();
+                        _monitorTimer = new Timer(2000) { AutoReset = true, Enabled = true };
+                        _monitorTimer.Elapsed += OnMonitorTick;
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine("Monitor Init Failed: " + ex.Message);
+                    }
+
+                    ConnectionStatus = "已连接";
+                });
             }
             catch (Exception ex)
             {
                 ConnectionStatus = "连接失败: " + ex.Message;
+                throw;
             }
         }
 
@@ -310,12 +336,30 @@ namespace FreeWPFShell.Services
 
         private SshClient BuildSshClient(PrivateKeyFile? preloadedKey = null)
         {
-            return new SshClient(BuildConnectionInfo(preloadedKey));
+            var client = new SshClient(BuildConnectionInfo(preloadedKey));
+            client.ErrorOccurred += (sender, e) =>
+            {
+                try
+                {
+                    Debug.WriteLine($"[SshClient Error] {e.Exception?.Message}");
+                }
+                catch { }
+            };
+            return client;
         }
 
         private SftpClient BuildSftpClient(PrivateKeyFile? preloadedKey = null)
         {
-            return new SftpClient(BuildConnectionInfo(preloadedKey));
+            var client = new SftpClient(BuildConnectionInfo(preloadedKey));
+            client.ErrorOccurred += (sender, e) =>
+            {
+                try
+                {
+                    Debug.WriteLine($"[SftpClient Error] {e.Exception?.Message}");
+                }
+                catch { }
+            };
+            return client;
         }
 
         // 复用 StringBuilder 避免频繁分配（仅在监控线程使用，无需加锁）
@@ -537,6 +581,14 @@ namespace FreeWPFShell.Services
                 ConnectionStatus = "建立 ssh 隧道...";
                 LinuxMonitorLocalPort = (uint)(System.Security.Cryptography.RandomNumberGenerator.GetInt32(40000, 60001));
                 var port = new ForwardedPortLocal("127.0.0.1", LinuxMonitorLocalPort, "127.0.0.1", LinuxMonitorLocalPort);
+                port.Exception += (sender, e) =>
+                {
+                    try
+                    {
+                        Debug.WriteLine($"[ForwardedPort Exception] {e.Exception?.Message}");
+                    }
+                    catch { }
+                };
                 MasterClient.AddForwardedPort(port);
                 port.Start();
 
@@ -555,23 +607,65 @@ namespace FreeWPFShell.Services
                 string binPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "linux-monitor", "linux-monitor");
                 if (File.Exists(binPath))
                 {
-                    ConnectionStatus = "上传 Linux_Monitor...";
-                    string remotePath = $"/tmp/linux-monitor_{LinuxMonitorLocalPort}";
-                    string tokenPath = $"/tmp/.mon_token_{LinuxMonitorLocalPort}";
+                    // Compute local hash
+                    string localHash = "";
+                    using (var md5 = MD5.Create())
+                    {
+                        using (var stream = File.OpenRead(binPath))
+                        {
+                            var hashBytes = md5.ComputeHash(stream);
+                            localHash = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
+                        }
+                    }
+
+                    // Create remote directory
+                    MasterClient.CreateCommand("mkdir -p /tmp/FreeWPFShell").Execute();
+
+                    // Check remote hash
+                    bool needsUpload = true;
+                    try
+                    {
+                        using (var hashCmd = MasterClient.CreateCommand("md5sum /tmp/FreeWPFShell/linux-monitor"))
+                        {
+                            string hashResult = hashCmd.Execute()?.Trim();
+                            if (!string.IsNullOrEmpty(hashResult))
+                            {
+                                var parts = hashResult.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                                if (parts.Length > 0 && parts[0].ToLowerInvariant() == localHash)
+                                {
+                                    needsUpload = false;
+                                }
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        needsUpload = true;
+                    }
+
+                    if (needsUpload)
+                    {
+                        ConnectionStatus = "上传 Linux_Monitor...";
+                        lock (_sftpLock)
+                        {
+                            using (var fs = File.OpenRead(binPath))
+                                SftpClient.UploadFile(fs, "/tmp/FreeWPFShell/linux-monitor", true);
+                        }
+                    }
+
+                    string tokenPath = $"/tmp/FreeWPFShell/.mon_token_{LinuxMonitorLocalPort}";
                     _monitorToken = Guid.NewGuid().ToString("N");
 
-                    MasterClient.CreateCommand($"pkill -9 -f {remotePath}").Execute();
                     lock (_sftpLock)
                     {
-                        using (var fs = File.OpenRead(binPath)) SftpClient.UploadFile(fs, remotePath, true);
-
                         using (var ms = new MemoryStream(Encoding.UTF8.GetBytes(_monitorToken)))
                             SftpClient.UploadFile(ms, tokenPath, true);
                     }
 
                     MasterClient.CreateCommand($"chmod 600 {tokenPath}").Execute();
-                    MasterClient.CreateCommand($"chmod +x {remotePath}").Execute();
-                    MasterClient.CreateCommand($"nohup {remotePath} {LinuxMonitorLocalPort} {tokenPath} >/dev/null 2>&1 &").Execute();
+                    MasterClient.CreateCommand("chmod +x /tmp/FreeWPFShell/linux-monitor").Execute();
+                    MasterClient.CreateCommand($"pkill -9 -f \"linux-monitor {LinuxMonitorLocalPort}\"").Execute();
+                    MasterClient.CreateCommand($"nohup /tmp/FreeWPFShell/linux-monitor {LinuxMonitorLocalPort} {tokenPath} >/dev/null 2>&1 &").Execute();
                 }
             }
             catch (Exception ex) { Debug.WriteLine("Monitor Deploy Failed: " + ex.Message); }
@@ -799,6 +893,7 @@ namespace FreeWPFShell.Services
             catch { }
 
             IsConnected = false;
+            IsSftpConnected = false;
 
             Task.Run(() =>
             {
@@ -820,7 +915,8 @@ namespace FreeWPFShell.Services
 
                     if (LinuxMonitorLocalPort > 0 && MasterClient != null && MasterClient.IsConnected)
                     {
-                        try { MasterClient.CreateCommand($"pkill -9 -f linux-monitor_{LinuxMonitorLocalPort}")?.Execute(); } catch { }
+                        try { MasterClient.CreateCommand($"pkill -9 -f \"linux-monitor {LinuxMonitorLocalPort}\"")?.Execute(); } catch { }
+                        try { MasterClient.CreateCommand($"rm -f /tmp/FreeWPFShell/.mon_token_{LinuxMonitorLocalPort}")?.Execute(); } catch { }
                     }
 
                     lock (_sftpLock)

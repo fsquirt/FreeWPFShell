@@ -16,6 +16,7 @@ namespace FreeWPFShell
         private CancellationTokenSource? _cts;
         private uint _columns;
         private uint _rows;
+        private bool _connectionLostTriggered = false;
 
         public event EventHandler<TerminalOutputEventArgs>? TerminalOutput;
 
@@ -25,12 +26,17 @@ namespace FreeWPFShell
         /// </summary>
         public event Action<bool>? AppCursorModeChanged;
 
+        /// <summary>
+        /// 当连接中途断开时触发
+        /// </summary>
+        public event EventHandler? ConnectionLost;
+
         public bool IsConnected => _client?.IsConnected ?? false;
 
         public bool InjectChineseLocale { get; set; } = true;
 
         /// <summary>
-        /// 使用已连接的 SshClient 创建终端连接（不拥有 client 生命周期）。
+        /// 使用已连接 of SshClient 创建终端连接（不拥有 client 生命周期）。
         /// </summary>
         public SshTerminalConnection(SshClient existingClient, uint initialColumns = 120, uint initialRows = 30)
         {
@@ -38,6 +44,13 @@ namespace FreeWPFShell
             _ownsClient = false;
             _columns = initialColumns;
             _rows = initialRows;
+        }
+
+        private void RaiseConnectionLost()
+        {
+            if (_connectionLostTriggered) return;
+            _connectionLostTriggered = true;
+            ConnectionLost?.Invoke(this, EventArgs.Empty);
         }
 
         public void Start()
@@ -55,6 +68,11 @@ namespace FreeWPFShell
                 65536,                       // 增大缓冲区
                 termModes);
 
+            if (InjectChineseLocale)
+            {
+                _ = InjectLocaleAsync();
+            }
+
             _cts = new CancellationTokenSource();
             Task.Run(() => ReadOutputAsync(_cts.Token));
         }
@@ -62,9 +80,8 @@ namespace FreeWPFShell
         public async Task InjectLocaleAsync()
         {
             if (_shellStream == null) return;
-            await Task.Delay(500); // 等待 shell 准备就绪
+            await Task.Delay(200); // 等待 shell 准备就绪
             WriteInput("export LANG=zh_CN.UTF-8\nexport LC_ALL=zh_CN.UTF-8\nclear\n");
-            await Task.Delay(300); // 等待命令执行完成
         }
 
         private async Task ReadOutputAsync(CancellationToken token)
@@ -91,13 +108,23 @@ namespace FreeWPFShell
                     }
                     else
                     {
+                        if (!token.IsCancellationRequested)
+                        {
+                            RaiseConnectionLost();
+                        }
                         break;
                     }
                 }
             }
             catch (OperationCanceledException) { }
             catch (ObjectDisposedException) { }
-            catch (Exception) { }
+            catch (Exception)
+            {
+                if (!token.IsCancellationRequested)
+                {
+                    RaiseConnectionLost();
+                }
+            }
         }
 
         private void DetectCursorMode(string data)
@@ -113,11 +140,23 @@ namespace FreeWPFShell
 
         public void WriteInput(string data)
         {
-            if (_shellStream != null && _shellStream.CanWrite)
+            try
             {
-                byte[] bytes = Encoding.UTF8.GetBytes(data);
-                _shellStream.Write(bytes, 0, bytes.Length);
-                _shellStream.Flush();
+                if (_shellStream != null && _shellStream.CanWrite)
+                {
+                    byte[] bytes = Encoding.UTF8.GetBytes(data);
+                    _shellStream.Write(bytes, 0, bytes.Length);
+                    _shellStream.Flush();
+                }
+                else
+                {
+                    RaiseConnectionLost();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[SshTerminalConnection WriteInput Error] {ex.Message}");
+                RaiseConnectionLost();
             }
         }
 
@@ -136,6 +175,7 @@ namespace FreeWPFShell
         public void Close()
         {
             _cts?.Cancel();
+            _connectionLostTriggered = false;
             try { _shellStream?.Dispose(); } catch { }
             _shellStream = null;
 

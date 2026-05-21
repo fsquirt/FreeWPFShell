@@ -61,6 +61,13 @@ namespace FreeWPFShell.Views
                     {
                         TxtCursorMode.Text = Session.IsAppCursorMode ? "APP MODE" : "NORMAL MODE";
                     }
+                    else if (e.PropertyName == nameof(SshSessionService.IsSftpConnected))
+                    {
+                        if (Session.IsSftpConnected)
+                        {
+                            BindSftp();
+                        }
+                    }
                 });
             };
         }
@@ -129,15 +136,13 @@ namespace FreeWPFShell.Views
                 return;
             }
 
-            _currentPath = Sftp.WorkingDirectory ?? "/";
-            FileGrid.ItemsSource = _remoteFiles;
-            LoadPath(_currentPath);
-            TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.CheckboxCircleLine;
-            TxtStatusIcon.Spin = false;
-            TxtStatusIcon.Foreground = Brushes.LimeGreen;
-            StatusIconContainer.ToolTip = "当前没有传输任务";
-
             Terminal.Connection = Session.TerminalConnection;
+
+            if (Session.TerminalConnection != null)
+            {
+                Session.TerminalConnection.ConnectionLost -= TerminalConnection_ConnectionLost;
+                Session.TerminalConnection.ConnectionLost += TerminalConnection_ConnectionLost;
+            }
 
             Dispatcher.InvokeAsync(() => {
                 Session.TerminalConnection?.Resize(
@@ -145,6 +150,45 @@ namespace FreeWPFShell.Views
             }, System.Windows.Threading.DispatcherPriority.Loaded);
 
             Terminal.Focus();
+
+            if (Session.IsSftpConnected)
+            {
+                BindSftp();
+            }
+            else
+            {
+                TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.Loader2Line;
+                TxtStatusIcon.Spin = true;
+                TxtStatusIcon.Foreground = Brushes.Orange;
+                StatusIconContainer.ToolTip = "SFTP 连接中...";
+            }
+        }
+
+        private void BindSftp()
+        {
+            try
+            {
+                if (Session == null || !Session.IsSftpConnected || Session.SftpClient == null || !Session.SftpClient.IsConnected)
+                {
+                    return;
+                }
+
+                _currentPath = Sftp.WorkingDirectory ?? "/";
+                FileGrid.ItemsSource = _remoteFiles;
+                LoadPath(_currentPath);
+
+                TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.CheckboxCircleLine;
+                TxtStatusIcon.Spin = false;
+                TxtStatusIcon.Foreground = Brushes.LimeGreen;
+                StatusIconContainer.ToolTip = "当前没有传输任务";
+            }
+            catch (Exception ex)
+            {
+                TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.CloseCircleLine;
+                TxtStatusIcon.Spin = false;
+                TxtStatusIcon.Foreground = Brushes.Red;
+                StatusIconContainer.ToolTip = $"SFTP 初始化失败: {ex.Message}";
+            }
         }
 
         private void Terminal_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -241,7 +285,11 @@ namespace FreeWPFShell.Views
         private void BtnForward_Click(object sender, RoutedEventArgs e) { if (_forwardHistory.Count > 0) { _backHistory.Push(_currentPath); LoadPath(_forwardHistory.Pop(), true); } }
         private void BtnRefresh_Click(object sender, RoutedEventArgs e) => LoadPath(_currentPath, true);
         private void BtnUp_Click(object sender, RoutedEventArgs e) { if (_currentPath != "/") { int i = _currentPath.TrimEnd('/').LastIndexOf('/'); LoadPath(i > 0 ? _currentPath.Substring(0, i) : "/"); } }
-        private void BtnNewFolder_Click(object sender, RoutedEventArgs e) { try { Sftp.CreateDirectory(_currentPath == "/" ? "/NewFolder" : _currentPath.TrimEnd('/') + "/NewFolder"); LoadPath(_currentPath, true); } catch (Exception ex) { ModernMessageBox.Show("新建文件夹失败: " + ex.Message); } }
+        private void BtnNewFolder_Click(object sender, RoutedEventArgs e)
+        {
+            if (Sftp == null || !Sftp.IsConnected) return;
+            try { Sftp.CreateDirectory(_currentPath == "/" ? "/NewFolder" : _currentPath.TrimEnd('/') + "/NewFolder"); LoadPath(_currentPath, true); } catch (Exception ex) { ModernMessageBox.Show("新建文件夹失败: " + ex.Message); }
+        }
         private void FileGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
             if (FileGrid.SelectedItem is RemoteFile f)
@@ -253,6 +301,12 @@ namespace FreeWPFShell.Views
 
         private void FileGrid_DragOver(object sender, DragEventArgs e)
         {
+            if (Sftp == null || !Sftp.IsConnected)
+            {
+                e.Effects = DragDropEffects.None;
+                e.Handled = true;
+                return;
+            }
             if (e.Data.GetDataPresent(DataFormats.FileDrop))
                 e.Effects = DragDropEffects.Copy;
             else
@@ -262,6 +316,7 @@ namespace FreeWPFShell.Views
 
         private void FileGrid_Drop(object sender, DragEventArgs e)
         {
+            if (Sftp == null || !Sftp.IsConnected) return;
             if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
             var files = (string[])e.Data.GetData(DataFormats.FileDrop)!;
             if (files == null || files.Length == 0) return;
@@ -527,9 +582,23 @@ namespace FreeWPFShell.Views
 
         private static string GetUniqueLocalPath(string p) { if (!File.Exists(p) && !Directory.Exists(p)) return p; string dir = Path.GetDirectoryName(p) ?? "", name = Path.GetFileNameWithoutExtension(p), ext = Path.GetExtension(p); int c = 1; while (File.Exists(p) || Directory.Exists(p)) { p = Path.Combine(dir, $"{name} ({c}){ext}"); c++; } return p; }
 
-        private void BtnUpload_Click(object sender, RoutedEventArgs e) => BtnUpload.ContextMenu.IsOpen = true;
-        private void CtxUploadFile_Click(object sender, RoutedEventArgs e) { var dlg = new Microsoft.Win32.OpenFileDialog { Multiselect = true, Title = "选择要上传的文件" }; if (dlg.ShowDialog() == true) foreach (string f in dlg.FileNames) UploadLocalItemAsync(f, _currentPath); }
-        private void CtxUploadFolder_Click(object sender, RoutedEventArgs e) { var dlg = new Microsoft.Win32.OpenFolderDialog { Title = "选择要上传的文件夹" }; if (dlg.ShowDialog() == true) UploadLocalItemAsync(dlg.FolderName, _currentPath); }
+        private void BtnUpload_Click(object sender, RoutedEventArgs e)
+        {
+            if (Sftp == null || !Sftp.IsConnected) return;
+            BtnUpload.ContextMenu.IsOpen = true;
+        }
+        private void CtxUploadFile_Click(object sender, RoutedEventArgs e)
+        {
+            if (Sftp == null || !Sftp.IsConnected) return;
+            var dlg = new Microsoft.Win32.OpenFileDialog { Multiselect = true, Title = "选择要上传的文件" };
+            if (dlg.ShowDialog() == true) foreach (string f in dlg.FileNames) UploadLocalItemAsync(f, _currentPath);
+        }
+        private void CtxUploadFolder_Click(object sender, RoutedEventArgs e)
+        {
+            if (Sftp == null || !Sftp.IsConnected) return;
+            var dlg = new Microsoft.Win32.OpenFolderDialog { Title = "选择要上传的文件夹" };
+            if (dlg.ShowDialog() == true) UploadLocalItemAsync(dlg.FolderName, _currentPath);
+        }
         private void BtnDownload_Click(object sender, RoutedEventArgs e) => TriggerDownloadSelected();
         private void BtnSshTunnel_Click(object sender, RoutedEventArgs e) { (Application.Current.MainWindow as Views.MainForm)?.OpenSshTunnelManager(); }
         private void BtnTraceroute_Click(object sender, RoutedEventArgs e) { (Application.Current.MainWindow as Views.MainForm)?.OpenTraceroutePage(Session?.HostInfo?.IpAddress); }
@@ -538,6 +607,7 @@ namespace FreeWPFShell.Views
 
         private void TriggerDownloadSelected()
         {
+            if (Sftp == null || !Sftp.IsConnected) return;
             var items = FileGrid.SelectedItems.Cast<RemoteFile>().ToList(); if (items.Count == 0) return;
             string saveDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "FreeWPFShell"); Directory.CreateDirectory(saveDir);
             foreach (var item in items) DownloadItemAsync(item, saveDir);
@@ -545,6 +615,7 @@ namespace FreeWPFShell.Views
 
         private async void CtxGridDelete_Click(object sender, RoutedEventArgs e)
         {
+            if (Sftp == null || !Sftp.IsConnected) return;
             var items = FileGrid.SelectedItems.Cast<RemoteFile>().ToList(); if (items.Count == 0) return;
             if (ModernMessageBox.Show($"确认删除选中的 {items.Count} 个项吗？\n文件夹将会被强行递归删除！", "删除确认", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
             {
@@ -562,6 +633,7 @@ namespace FreeWPFShell.Views
 
         private void CtxGridRename_Click(object sender, RoutedEventArgs e)
         {
+            if (Sftp == null || !Sftp.IsConnected) return;
             if (FileGrid.SelectedItem is RemoteFile f)
             {
                 var dlg = new UserForm.RenameDialog(f.Name); dlg.Owner = Window.GetWindow(this);
@@ -571,6 +643,7 @@ namespace FreeWPFShell.Views
 
         private void CtxGridCopy_Click(object sender, RoutedEventArgs e)
         {
+            if (Sftp == null || !Sftp.IsConnected) return;
             var items = FileGrid.SelectedItems.Cast<RemoteFile>().ToList(); if (items.Count == 0) return;
             try
             {
@@ -584,6 +657,7 @@ namespace FreeWPFShell.Views
 
         private async void CtxGridPaste_Click(object sender, RoutedEventArgs e)
         {
+            if (Sftp == null || !Sftp.IsConnected) return;
             try
             {
                 if (Clipboard.ContainsFileDropList()) { foreach (string? f in Clipboard.GetFileDropList()) { if (f != null) UploadLocalItemAsync(f, _currentPath); } }
@@ -607,6 +681,33 @@ namespace FreeWPFShell.Views
             {
                 ModernMessageBox.Show("访问剪切板失败: " + ex.Message);
             }
+        }
+
+        private void TerminalConnection_ConnectionLost(object? sender, EventArgs e)
+        {
+            if (Session.TerminalConnection != null)
+            {
+                Session.TerminalConnection.ConnectionLost -= TerminalConnection_ConnectionLost;
+            }
+            HandleConnectionLost();
+        }
+
+        private void HandleConnectionLost()
+        {
+            Dispatcher.InvokeAsync(() =>
+            {
+                ModernMessageBox.Show(
+                    "与服务器的连接已断开，将关闭当前终端窗口。",
+                    "连接已断开",
+                    MessageBoxButton.OKCancel,
+                    MessageBoxImage.Error);
+
+                var mainWindow = Application.Current.MainWindow as MainForm;
+                if (mainWindow != null)
+                {
+                    mainWindow.CloseTab(this);
+                }
+            });
         }
     }
 }

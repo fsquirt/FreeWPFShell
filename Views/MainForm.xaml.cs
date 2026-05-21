@@ -97,6 +97,38 @@ namespace FreeWPFShell.Views
             AddTab($"系统管理-{session.DisplayName}", page);
         }
 
+        public void CloseTab(UIElement content)
+        {
+            TabItem? targetTab = null;
+            foreach (TabItem item in SessionTabs.Items)
+            {
+                if (item.Tag == content)
+                {
+                    targetTab = item;
+                    break;
+                }
+            }
+
+            if (targetTab != null)
+            {
+                PagesContainer.Children.Remove(content);
+                SessionTabs.Items.Remove(targetTab);
+
+                if (content is TerminalAndSFTP termPage)
+                {
+                    if (termPage.Session != null)
+                    {
+                        ActiveSessions.Remove(termPage.Session);
+                        termPage.Session.Dispose();
+                    }
+                }
+
+                if (content is IDisposable d) d.Dispose();
+                else if (content is FrameworkElement fe && fe.DataContext is IDisposable disposable)
+                    disposable.Dispose();
+            }
+        }
+
         private TabItem AddTab(string header, UIElement content)
         {
             var headerPanel = new StackPanel { Orientation = Orientation.Horizontal };
@@ -112,21 +144,7 @@ namespace FreeWPFShell.Views
             var tabItem = new TabItem { Header = headerPanel, Tag = content };
             btnClose.Click += (s, e) =>
             {
-                PagesContainer.Children.Remove(content);
-                SessionTabs.Items.Remove(tabItem);
-
-                if (content is TerminalAndSFTP termPage)
-                {
-                    if (termPage.Session != null)
-                    {
-                        ActiveSessions.Remove(termPage.Session);
-                        termPage.Session.Dispose();
-                    }
-                }
-
-                if (content is IDisposable d) d.Dispose();
-                else if (content is FrameworkElement fe && fe.DataContext is IDisposable disposable)
-                    disposable.Dispose();
+                CloseTab(content);
             };
             headerPanel.Children.Add(btnClose);
             PagesContainer.Children.Add(content);
