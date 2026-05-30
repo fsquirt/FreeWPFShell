@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -44,36 +45,75 @@ namespace FreeWPFShell.Views
         // 复用的 StringBuilder（减少 UpdateStatus 分配）
         private readonly StringBuilder _statusBuilder = new(256);
 
-        public SshSessionService Session { get; }
-        private SftpClient Sftp => Session.SftpClient!;
-        private SshClient Ssh => Session.MasterClient!;
+        public SshSessionService? Session { get; private set; }
+        private SftpClient? Sftp => Session?.SftpClient;
+        private SshClient? Ssh => Session?.MasterClient;
+
+        private PropertyChangedEventHandler? _sessionPropertyChangedHandler;
 
         public TerminalAndSFTP(SshSessionService session)
         {
             InitializeComponent();
             Session = session;
 
-            Session.PropertyChanged += (s, e) =>
+            _sessionPropertyChangedHandler = (s, e) =>
             {
+                var session = Session;
+                if (session == null) return;
                 Dispatcher.Invoke(() =>
                 {
                     if (e.PropertyName == nameof(SshSessionService.ConnectionStatus))
                     {
-                        TxtConnStatus.Text = Session.ConnectionStatus;
+                        TxtConnStatus.Text = session.ConnectionStatus;
                     }
                     else if (e.PropertyName == nameof(SshSessionService.IsAppCursorMode))
                     {
-                        TxtCursorMode.Text = Session.IsAppCursorMode ? "APP MODE" : "NORMAL MODE";
+                        TxtCursorMode.Text = session.IsAppCursorMode ? "APP MODE" : "NORMAL MODE";
                     }
                     else if (e.PropertyName == nameof(SshSessionService.IsSftpConnected))
                     {
-                        if (Session.IsSftpConnected)
+                        if (session.IsSftpConnected)
                         {
                             BindSftp();
                         }
                     }
                 });
             };
+            Session.PropertyChanged += _sessionPropertyChangedHandler;
+        }
+
+        /// <summary>关Tab时必须调用，断开所有引用链，释放 Terminal 原生资源</summary>
+        public void Cleanup()
+        {
+            // 1. 退订 Session 事件，断开 Session ↔ this 的循环引用
+            if (Session != null && _sessionPropertyChangedHandler != null)
+            {
+                Session.PropertyChanged -= _sessionPropertyChangedHandler;
+                _sessionPropertyChangedHandler = null;
+            }
+
+            // 2. 退订 ConnectionLost
+            if (Session?.TerminalConnection != null)
+            {
+                Session.TerminalConnection.ConnectionLost -= TerminalConnection_ConnectionLost;
+            }
+
+            // 3. 清空 Terminal.Connection → 触发 Terminal 控件释放原生渲染资源（GPU纹理等）
+            Terminal.Connection = null;
+
+            // 4. 取消进行中的传输
+            _transferCts?.Cancel();
+
+            // 5. 清空集合，断开 WPF ItemsSource 绑定持有的引用
+            _remoteFiles.Clear();
+            _userMap.Clear();
+            _groupMap.Clear();
+            _backHistory.Clear();
+            _forwardHistory.Clear();
+            FileGrid.ItemsSource = null;
+
+            // 6. 断开 Session 引用，让 GC 能回收整条引用链
+            Session = null;
         }
 
         private void TxtStatusIcon_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -131,7 +171,7 @@ namespace FreeWPFShell.Views
 
         public void BindSession()
         {
-            if (Session == null || !Session.IsConnected)
+            if (Session?.IsConnected != true)
             {
                 TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.CloseCircleLine;
                 TxtStatusIcon.Spin = false;
@@ -170,19 +210,23 @@ namespace FreeWPFShell.Views
 
         private void BindSftp()
         {
-            if (Session == null || !Session.IsSftpConnected || Session.SftpClient == null || !Session.SftpClient.IsConnected)
+            if (Session?.IsSftpConnected != true || Session.SftpClient == null || !Session.SftpClient.IsConnected)
                 return;
 
             FileGrid.ItemsSource = _remoteFiles;
+
+            var sftp = Sftp;
+            var ssh = Ssh;
+            if (sftp == null || ssh == null) return;
 
             new Thread(() =>
             {
                 try
                 {
-                    FetchUserGroupMaps();
+                    FetchUserGroupMaps(ssh);
 
-                    var workingDir = Sftp.WorkingDirectory ?? "/";
-                    var files = Sftp.ListDirectory(workingDir);
+                    var workingDir = sftp.WorkingDirectory ?? "/";
+                    var files = sftp.ListDirectory(workingDir);
                     var items = BuildFileList(files);
 
                     Dispatcher.BeginInvoke(() =>
@@ -239,7 +283,8 @@ namespace FreeWPFShell.Views
 
         private void LoadPath(string path, bool isHistory = false)
         {
-            if (Sftp == null || !Sftp.IsConnected) return;
+            var sftp = Sftp;
+            if (sftp == null || !sftp.IsConnected) return;
 
             if (!isHistory && _currentPath != path) { _backHistory.Push(_currentPath); _forwardHistory.Clear(); }
             _currentPath = path;
@@ -249,7 +294,7 @@ namespace FreeWPFShell.Views
             {
                 try
                 {
-                    var files = Sftp.ListDirectory(path);
+                    var files = sftp.ListDirectory(path);
                     var items = BuildFileList(files);
 
                     Dispatcher.BeginInvoke(() =>
@@ -304,14 +349,14 @@ namespace FreeWPFShell.Views
             return result;
         }
 
-        private void FetchUserGroupMaps()
+        private void FetchUserGroupMaps(SshClient ssh)
         {
             try
             {
                 var userMap = new Dictionary<int, string>();
                 var groupMap = new Dictionary<int, string>();
 
-                var passwdResult = Ssh.CreateCommand("cat /etc/passwd").Execute();
+                var passwdResult = ssh.CreateCommand("cat /etc/passwd").Execute();
                 foreach (var line in passwdResult.Split('\n', StringSplitOptions.RemoveEmptyEntries))
                 {
                     var parts = line.Split(':');
@@ -319,7 +364,7 @@ namespace FreeWPFShell.Views
                         userMap[uid] = parts[0];
                 }
 
-                var groupResult = Ssh.CreateCommand("cat /etc/group").Execute();
+                var groupResult = ssh.CreateCommand("cat /etc/group").Execute();
                 foreach (var line in groupResult.Split('\n', StringSplitOptions.RemoveEmptyEntries))
                 {
                     var parts = line.Split(':');
@@ -373,7 +418,7 @@ namespace FreeWPFShell.Views
             if (FileGrid.SelectedItem is RemoteFile f)
             {
                 if (f.IsDirectory) LoadPath(f.FullName);
-                else { _ = Session.EditRemoteFileAsync(f.FullName, "code"); }
+                else { _ = Session?.EditRemoteFileAsync(f.FullName, "code"); }
             }
         }
 
@@ -406,13 +451,13 @@ namespace FreeWPFShell.Views
         private void CtxGridEditVSCode_Click(object sender, RoutedEventArgs e)
         {
             if (FileGrid.SelectedItem is RemoteFile f && !f.IsDirectory)
-                _ = Session.EditRemoteFileAsync(f.FullName, "code");
+                _ = Session?.EditRemoteFileAsync(f.FullName, "code");
         }
 
         private void CtxGridEditNotepad_Click(object sender, RoutedEventArgs e)
         {
             if (FileGrid.SelectedItem is RemoteFile f && !f.IsDirectory)
-                _ = Session.EditRemoteFileAsync(f.FullName, "notepad");
+                _ = Session?.EditRemoteFileAsync(f.FullName, "notepad");
         }
 
         private void UpdateStatus()
@@ -467,10 +512,12 @@ namespace FreeWPFShell.Views
 
         private async Task<int> CountRemoteFilesAsync(string path)
         {
+            var sftp = Sftp;
+            if (sftp == null) return 0;
             int count = 0;
             try
             {
-                var files = await Task.Run(() => Sftp.ListDirectory(path));
+                var files = await Task.Run(() => sftp.ListDirectory(path));
                 foreach (var f in files)
                 {
                     if (f.Name == "." || f.Name == "..") continue;
@@ -484,6 +531,9 @@ namespace FreeWPFShell.Views
 
         private async void DownloadItemAsync(RemoteFile item, string localDir)
         {
+            var sftp = Sftp;
+            if (sftp == null || !sftp.IsConnected) return;
+
             if (_upActive == 0 && _downActive == 0)
             {
                 _transferCts = new CancellationTokenSource();
@@ -505,11 +555,11 @@ namespace FreeWPFShell.Views
                     if (item.IsDirectory)
                     {
                         Directory.CreateDirectory(localPath);
-                        foreach (var c in Sftp.ListDirectory(item.FullName))
+                        foreach (var c in sftp.ListDirectory(item.FullName))
                         {
                             if (c.Name == "." || c.Name == "..") continue;
                             if (_transferCts?.IsCancellationRequested == true) break;
-                            DownloadItemSync(c, localPath);
+                            DownloadItemSync(c, localPath, sftp);
                         }
                     }
                     else
@@ -517,7 +567,7 @@ namespace FreeWPFShell.Views
                         using var s = File.Create(localPath);
                         using (var reg = _transferCts?.Token.Register(() => { try { s.Close(); } catch { } }))
                         {
-                            Sftp.DownloadFile(item.FullName, s, uploaded => {
+                            sftp.DownloadFile(item.FullName, s, uploaded => {
                                 _downProgress = item.Length > 0 ? (double)uploaded / item.Length * 100 : 0;
                                 Dispatcher.InvokeAsync(UpdateStatus);
                             });
@@ -531,7 +581,7 @@ namespace FreeWPFShell.Views
             });
         }
 
-        private void DownloadItemSync(ISftpFile item, string localDir)
+        private void DownloadItemSync(ISftpFile item, string localDir, SftpClient sftp)
         {
             if (_transferCts?.IsCancellationRequested == true) return;
             string lp = Path.Combine(localDir, item.Name);
@@ -539,11 +589,11 @@ namespace FreeWPFShell.Views
             if (item.IsDirectory)
             {
                 Directory.CreateDirectory(lp);
-                foreach (var c in Sftp.ListDirectory(item.FullName))
+                foreach (var c in sftp.ListDirectory(item.FullName))
                 {
                     if (c.Name == "." || c.Name == "..") continue;
                     if (_transferCts?.IsCancellationRequested == true) break;
-                    DownloadItemSync(c, lp);
+                    DownloadItemSync(c, lp, sftp);
                 }
             }
             else
@@ -552,7 +602,7 @@ namespace FreeWPFShell.Views
                     using var s = File.Create(lp);
                     using (var reg = _transferCts?.Token.Register(() => { try { s.Close(); } catch { } }))
                     {
-                        Sftp.DownloadFile(item.FullName, s, uploaded => {
+                        sftp.DownloadFile(item.FullName, s, uploaded => {
                             _downProgress = item.Length > 0 ? (double)uploaded / item.Length * 100 : 0;
                             Dispatcher.InvokeAsync(UpdateStatus);
                         });
@@ -564,6 +614,10 @@ namespace FreeWPFShell.Views
 
         private async void UploadLocalItemAsync(string localPath, string remoteDir)
         {
+            var session = Session;
+            var sftp = Sftp;
+            if (session == null || sftp == null || !sftp.IsConnected) return;
+
             if (_upActive == 0 && _downActive == 0)
             {
                 _transferCts = new CancellationTokenSource();
@@ -585,8 +639,8 @@ namespace FreeWPFShell.Views
                     _upName = name;
                     if (isDir)
                     {
-                        lock (Session.SftpLock) { if (!Sftp.Exists(rp)) Sftp.CreateDirectory(rp); }
-                        UploadDirSync(localPath, rp);
+                        lock (session.SftpLock) { if (!sftp.Exists(rp)) sftp.CreateDirectory(rp); }
+                        UploadDirSync(localPath, rp, session, sftp);
                     }
                     else
                     {
@@ -594,9 +648,9 @@ namespace FreeWPFShell.Views
                         using var s = File.OpenRead(localPath);
                         using (var reg = _transferCts?.Token.Register(() => { try { s.Close(); } catch { } }))
                         {
-                            lock (Session.SftpLock)
+                            lock (session.SftpLock)
                             {
-                                Sftp.UploadFile(s, rp, uploaded => {
+                                sftp.UploadFile(s, rp, uploaded => {
                                     _upProgress = fileSize > 0 ? (double)uploaded / fileSize * 100 : 0;
                                     Dispatcher.InvokeAsync(UpdateStatus);
                                 });
@@ -616,7 +670,7 @@ namespace FreeWPFShell.Views
             }
         }
 
-        private void UploadDirSync(string localDir, string remoteDir)
+        private void UploadDirSync(string localDir, string remoteDir, SshSessionService session, SftpClient sftp)
         {
             if (_transferCts?.IsCancellationRequested == true) return;
             var files = Directory.GetFiles(localDir);
@@ -634,9 +688,9 @@ namespace FreeWPFShell.Views
                     using var s = File.OpenRead(f);
                     using (var reg = _transferCts?.Token.Register(() => { try { s.Close(); } catch { } }))
                     {
-                        lock (Session.SftpLock)
+                        lock (session.SftpLock)
                         {
-                            Sftp.UploadFile(s, remoteDir.TrimEnd('/') + "/" + fileName,
+                            sftp.UploadFile(s, remoteDir.TrimEnd('/') + "/" + fileName,
                                 uploaded => {
                                     _upProgress = fileSize > 0 ? (double)uploaded / fileSize * 100 : 0;
                                     Dispatcher.InvokeAsync(UpdateStatus);
@@ -653,8 +707,8 @@ namespace FreeWPFShell.Views
             {
                 if (_transferCts?.IsCancellationRequested == true) break;
                 string rp = remoteDir.TrimEnd('/') + "/" + Path.GetFileName(d);
-                lock (Session.SftpLock) { if (!Sftp.Exists(rp)) Sftp.CreateDirectory(rp); }
-                UploadDirSync(d, rp);
+                lock (session.SftpLock) { if (!sftp.Exists(rp)) sftp.CreateDirectory(rp); }
+                UploadDirSync(d, rp, session, sftp);
             }
         }
 
@@ -680,7 +734,7 @@ namespace FreeWPFShell.Views
         private void BtnDownload_Click(object sender, RoutedEventArgs e) => TriggerDownloadSelected();
         private void BtnSshTunnel_Click(object sender, RoutedEventArgs e) { (Application.Current.MainWindow as Views.MainForm)?.OpenSshTunnelManager(); }
         private void BtnTraceroute_Click(object sender, RoutedEventArgs e) { (Application.Current.MainWindow as Views.MainForm)?.OpenTraceroutePage(Session?.HostInfo?.IpAddress); }
-        private void BtnSysManagement_Click(object sender, RoutedEventArgs e) { (Application.Current.MainWindow as Views.MainForm)?.OpenSystemManagementPage(Session); }
+        private void BtnSysManagement_Click(object sender, RoutedEventArgs e) { if (Session != null) (Application.Current.MainWindow as Views.MainForm)?.OpenSystemManagementPage(Session); }
         private void CtxGridDownload_Click(object sender, RoutedEventArgs e) => TriggerDownloadSelected();
 
         private void TriggerDownloadSelected()
@@ -693,21 +747,22 @@ namespace FreeWPFShell.Views
 
         private async void CtxGridDelete_Click(object sender, RoutedEventArgs e)
         {
-            if (Sftp == null || !Sftp.IsConnected) return;
+            var sftp = Sftp;
+            if (sftp == null || !sftp.IsConnected) return;
             var items = FileGrid.SelectedItems.Cast<RemoteFile>().ToList(); if (items.Count == 0) return;
             if (ModernMessageBox.Show($"确认删除选中的 {items.Count} 个项吗？\n文件夹将会被强行递归删除！", "删除确认", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
             {
                 Interlocked.Increment(ref _upActive);
                 await Task.Run(() =>
                 {
-                    try { foreach (var item in items) { if (item.IsDirectory) RecursiveDelete(item.FullName); else Sftp.DeleteFile(item.FullName); } }
+                    try { foreach (var item in items) { if (item.IsDirectory) RecursiveDelete(item.FullName, sftp); else sftp.DeleteFile(item.FullName); } }
                     catch (Exception ex) { Dispatcher.InvokeAsync(() => ModernMessageBox.Show($"删除失败: " + ex.Message)); }
                     finally { Interlocked.Decrement(ref _upActive); Dispatcher.InvokeAsync(() => LoadPath(_currentPath, true)); }
                 });
             }
         }
 
-        private void RecursiveDelete(string dir) { foreach (var f in Sftp.ListDirectory(dir)) { if (f.Name != "." && f.Name != "..") { if (f.IsDirectory) RecursiveDelete(f.FullName); else Sftp.DeleteFile(f.FullName); } } Sftp.DeleteDirectory(dir); }
+        private void RecursiveDelete(string dir, SftpClient sftp) { foreach (var f in sftp.ListDirectory(dir)) { if (f.Name != "." && f.Name != "..") { if (f.IsDirectory) RecursiveDelete(f.FullName, sftp); else sftp.DeleteFile(f.FullName); } } sftp.DeleteDirectory(dir); }
 
         private void CtxGridRename_Click(object sender, RoutedEventArgs e)
         {
@@ -735,7 +790,9 @@ namespace FreeWPFShell.Views
 
         private async void CtxGridPaste_Click(object sender, RoutedEventArgs e)
         {
-            if (Sftp == null || !Sftp.IsConnected) return;
+            var sftp = Sftp;
+            var ssh = Ssh;
+            if (sftp == null || ssh == null || !sftp.IsConnected) return;
             try
             {
                 if (Clipboard.ContainsFileDropList()) { foreach (string? f in Clipboard.GetFileDropList()) { if (f != null) UploadLocalItemAsync(f, _currentPath); } }
@@ -747,7 +804,7 @@ namespace FreeWPFShell.Views
                         Interlocked.Increment(ref _upActive); TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.Loader2Line; TxtStatusIcon.ToolTip = "正在服务器端复制...";
                         await Task.Run(() =>
                         {
-                            try { foreach (var src in text.Split('|').Skip(2)) Ssh.CreateCommand($"cp -a \"{src}\" \"{_currentPath}/\"").Execute(); }
+                            try { foreach (var src in text.Split('|').Skip(2)) ssh.CreateCommand($"cp -a \"{src}\" \"{_currentPath}/\"").Execute(); }
                             catch (Exception ex) { Dispatcher.InvokeAsync(() => ModernMessageBox.Show($"粘贴失败: " + ex.Message)); }
                             finally { Interlocked.Decrement(ref _upActive); UpdateStatus(); Dispatcher.InvokeAsync(() => LoadPath(_currentPath, true)); }
                         });
@@ -763,10 +820,7 @@ namespace FreeWPFShell.Views
 
         private void TerminalConnection_ConnectionLost(object? sender, EventArgs e)
         {
-            if (Session.TerminalConnection != null)
-            {
-                Session.TerminalConnection.ConnectionLost -= TerminalConnection_ConnectionLost;
-            }
+            Session?.TerminalConnection?.ConnectionLost -= TerminalConnection_ConnectionLost;
             HandleConnectionLost();
         }
 

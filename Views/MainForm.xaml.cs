@@ -1,7 +1,9 @@
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -13,6 +15,9 @@ namespace FreeWPFShell.Views
 {
     public partial class MainForm
     {
+        [DllImport("kernel32.dll")]
+        private static extern bool SetProcessWorkingSetSize(IntPtr hProcess, IntPtr dwMinimumWorkingSetSize, IntPtr dwMaximumWorkingSetSize);
+
         public ObservableCollection<SshSessionService> ActiveSessions { get; } = new();
         private SshSessionService? _currentSession;
 
@@ -118,6 +123,8 @@ namespace FreeWPFShell.Views
 
                 if (content is TerminalAndSFTP termPage)
                 {
+                    // 先清理引用链（退订事件、释放 Terminal 原生资源），再断开连接
+                    termPage.Cleanup();
                     if (termPage.Session != null)
                     {
                         ActiveSessions.Remove(termPage.Session);
@@ -128,6 +135,17 @@ namespace FreeWPFShell.Views
                 if (content is IDisposable d) d.Dispose();
                 else if (content is FrameworkElement fe && fe.DataContext is IDisposable disposable)
                     disposable.Dispose();
+
+                // 等后台断开线程跑完，然后GC回收 + 强制trim工作集
+                Task.Run(async () =>
+                {
+                    await Task.Delay(3000);
+                    GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+                    GC.WaitForPendingFinalizers();
+                    GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+                    // 等效于 memreduct：强制OS回收进程的物理页面
+                    SetProcessWorkingSetSize(Process.GetCurrentProcess().Handle, (IntPtr)(-1), (IntPtr)(-1));
+                });
             }
         }
 

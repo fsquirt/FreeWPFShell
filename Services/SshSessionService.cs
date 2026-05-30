@@ -263,6 +263,10 @@ namespace FreeWPFShell.Services
             IsConnected = false;
             IsSftpConnected = false;
 
+            // 清掉回调，断开 session → terminalPage 的引用链
+            OnConnected = null;
+            OnConnectFailed = null;
+
             new Thread(() =>
             {
                 try { TerminalConnection?.Close(); } catch { }

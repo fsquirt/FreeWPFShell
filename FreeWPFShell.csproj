@@ -15,6 +15,9 @@
     <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
     <ApplicationIcon>MainIcon.ico</ApplicationIcon>
 
+    <!-- Workstation GC：单堆段，提交大小远小于 Server GC（多核每核一个堆段） -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+
 	  <Optimize>true</Optimize>
 	  <TieredCompilation>true</TieredCompilation>
 	  <TieredPGO>true</TieredPGO>
