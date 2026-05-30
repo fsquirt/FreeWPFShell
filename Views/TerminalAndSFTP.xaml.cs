@@ -350,12 +350,13 @@ namespace FreeWPFShell.Views
             return new string(perms);
         }
 
+        private static readonly string[] s_sizeUnits = { "B", "KB", "MB", "GB", "TB" };
+
         private static string FormatSize(long b)
         {
-            string[] e = { "B", "KB", "MB", "GB", "TB" };
             int i = 0; double d = b;
-            while (d >= 1024 && i < e.Length - 1) { d /= 1024; i++; }
-            return $"{d:0.##} {e[i]}";
+            while (d >= 1024 && i < s_sizeUnits.Length - 1) { d /= 1024; i++; }
+            return $"{d:0.##} {s_sizeUnits[i]}";
         }
 
         private void BtnBack_Click(object sender, RoutedEventArgs e) { if (_backHistory.Count > 0) { _forwardHistory.Push(_currentPath); LoadPath(_backHistory.Pop(), true); } }

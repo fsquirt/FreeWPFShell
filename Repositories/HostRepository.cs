@@ -16,6 +16,7 @@ namespace FreeWPFShell.Repositories
     public class HostRepository
     {
         private const string VAULT_RESOURCE_NAME = "MySecureSshManager";
+        private static readonly JsonSerializerOptions s_writeIndented = new() { WriteIndented = true };
         private readonly string _filePath;
         private readonly SettingsRepository _settingsRepo;
         private List<SshConnectionInfo> _hosts = new();
@@ -38,8 +39,7 @@ namespace FreeWPFShell.Repositories
 
         private void Save()
         {
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            File.WriteAllText(_filePath, JsonSerializer.Serialize(_hosts, options));
+            File.WriteAllText(_filePath, JsonSerializer.Serialize(_hosts, s_writeIndented));
         }
 
         private string GenerateShortId() => Guid.NewGuid().ToString("N").Substring(0, 8);

@@ -17,6 +17,7 @@ namespace FreeWPFShell.Repositories
     public class KeyRepository
     {
         private const string VAULT_RESOURCE_NAME = "FreeWPFShell_Keys";
+        private static readonly JsonSerializerOptions s_writeIndented = new() { WriteIndented = true };
 
         private readonly string _filePath;
         private readonly SettingsRepository _settingsRepo;
@@ -44,8 +45,7 @@ namespace FreeWPFShell.Repositories
 
         private void Save()
         {
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            File.WriteAllText(_filePath, JsonSerializer.Serialize(_keys, options));
+            File.WriteAllText(_filePath, JsonSerializer.Serialize(_keys, s_writeIndented));
         }
 
         public List<SshKeyInfo> GetAll() => _keys.ToList();

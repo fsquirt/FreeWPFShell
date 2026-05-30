@@ -44,7 +44,23 @@ namespace FreeWPFShell.Services
 
         private static readonly System.Net.NetworkInformation.Ping s_sharedPing = new();
         private static readonly Regex s_doubleRegex = new(@"[\d\.]+", RegexOptions.Compiled);
+        private static readonly Regex s_uptimeRegex = new(@"up\s+(.*?),?\s+\d+\s+user", RegexOptions.Compiled);
         private readonly StringBuilder _cmdBuilder = new StringBuilder(512);
+
+        // 静态复用的分割字符数组，避免每次 Split 分配新数组
+        private static readonly char[] s_newlineChars = { '\n', '\r' };
+        private static readonly char[] s_spaceChars = { ' ' };
+        private static readonly char[] s_semicolonComma = { ':', ',' };
+        private static readonly string[] s_topSections = { "==STAT==", "==TOP==", "==PROC==", "==NET==", "==DISK==" };
+        private static readonly char[] s_colonSpace = { ':', ' ' };
+        private static readonly char[] s_spaceTab = { ' ', '\t' };
+
+        // 复用的 Json 选项，避免每次反序列化创建
+        private static readonly JsonSerializerOptions s_jsonOptions = new() { PropertyNameCaseInsensitive = true };
+
+        // 复用列表，避免每 tick 分配新 List
+        private readonly List<ProcessItem> _reusableProcs = new(16);
+        private readonly List<DiskItem> _reusableDisks = new(8);
 
         public Action<string>? ConnectionStatusCallback { get; set; }
         public Action<SshTunnelInfo>? RegisterTunnelCallback { get; set; }
@@ -130,8 +146,7 @@ namespace FreeWPFShell.Services
 
         private void ParseLinuxMonitorJson(string json)
         {
-            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-            var stats = JsonSerializer.Deserialize<SysStats>(json, options);
+            var stats = JsonSerializer.Deserialize<SysStats>(json, s_jsonOptions);
             if (stats == null) return;
 
             Monitor.CpuPct = stats.cpu_pct;
@@ -168,16 +183,16 @@ namespace FreeWPFShell.Services
 
         private void ParseTopOutput(string output)
         {
-            var sections = output.Split(new[] { "==STAT==", "==TOP==", "==PROC==", "==NET==", "==DISK==" }, StringSplitOptions.None);
+            var sections = output.Split(s_topSections, StringSplitOptions.None);
             if (sections.Length == 0) return;
             try
             {
                 if (sections.Length > 1)
                 {
-                    var statLines = sections[1].Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                    var statLines = sections[1].Split(s_newlineChars, StringSplitOptions.RemoveEmptyEntries);
                     if (statLines.Length > 0 && statLines[0].StartsWith("cpu "))
                     {
-                        var parts = statLines[0].Substring(4).Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                        var parts = statLines[0].AsSpan(4).Trim().ToString().Split(s_spaceChars, StringSplitOptions.RemoveEmptyEntries);
                         if (parts.Length >= 4)
                         {
                             ulong total = 0;
@@ -196,11 +211,11 @@ namespace FreeWPFShell.Services
                 }
                 if (sections.Length > 2)
                 {
-                    var lines = sections[2].Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                    var lines = sections[2].Split(s_newlineChars, StringSplitOptions.RemoveEmptyEntries);
                     if (lines.Length > 0)
                     {
                         var topStr = lines[0];
-                        var upMatch = Regex.Match(topStr, @"up\s+(.*?),?\s+\d+\s+user");
+                        var upMatch = s_uptimeRegex.Match(topStr);
                         if (upMatch.Success) Monitor.Uptime = "运行 " + upMatch.Groups[1].Value.Trim();
                         int loadIdx = topStr.IndexOf("average:");
                         if (loadIdx > 0) Monitor.Load = "负载 " + topStr.Substring(loadIdx + 8).Trim();
@@ -213,28 +228,28 @@ namespace FreeWPFShell.Services
                 }
                 if (sections.Length > 3)
                 {
-                    var procLines = sections[3].Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-                    var procs = new List<ProcessItem>(procLines.Length - 1);
+                    var procLines = sections[3].Split(s_newlineChars, StringSplitOptions.RemoveEmptyEntries);
+                    _reusableProcs.Clear();
                     for (int i = 1; i < procLines.Length; i++)
                     {
-                        var p = procLines[i].Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                        var p = procLines[i].Trim().Split(s_spaceChars, StringSplitOptions.RemoveEmptyEntries);
                         if (p.Length >= 3)
                         {
                             string cmd = string.Join(" ", p.Skip(2));
                             if (cmd.Length > 30) cmd = string.Concat(cmd.AsSpan(0, 30), "...");
-                            procs.Add(new ProcessItem { Mem = p[0] + "%", Cpu = p[1] + "%", Cmd = cmd });
+                            _reusableProcs.Add(new ProcessItem { Mem = p[0] + "%", Cpu = p[1] + "%", Cmd = cmd });
                         }
                     }
-                    if (procs.Count > 0) Monitor.UpdateProcesses(procs);
+                    if (_reusableProcs.Count > 0) Monitor.UpdateProcesses(_reusableProcs);
                 }
                 if (sections.Length > 4)
                 {
-                    var netLines = sections[4].Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                    var netLines = sections[4].Split(s_newlineChars, StringSplitOptions.RemoveEmptyEntries);
                     foreach (var nl in netLines)
                     {
-                        if (nl.Contains(":") && !nl.Contains("lo:"))
+                        if (nl.Contains(':') && !nl.Contains("lo:"))
                         {
-                            var p = nl.Trim().Split(new[] { ':', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                            var p = nl.Trim().Split(s_colonSpace, StringSplitOptions.RemoveEmptyEntries);
                             if (p.Length >= 10 && ulong.TryParse(p[1], out ulong rx) && ulong.TryParse(p[9], out ulong tx))
                             {
                                 Monitor.NetIface = p[0];
@@ -264,14 +279,14 @@ namespace FreeWPFShell.Services
                 }
                 if (sections.Length > 5)
                 {
-                    var diskLines = sections[5].Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-                    var disks = new List<DiskItem>(diskLines.Length - 1);
+                    var diskLines = sections[5].Split(s_newlineChars, StringSplitOptions.RemoveEmptyEntries);
+                    _reusableDisks.Clear();
                     for (int i = 1; i < diskLines.Length; i++)
                     {
-                        var p = diskLines[i].Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-                        if (p.Length >= 3) disks.Add(new DiskItem { Path = p[0], Avail = p[1], Size = p[2] });
+                        var p = diskLines[i].Trim().Split(s_spaceChars, StringSplitOptions.RemoveEmptyEntries);
+                        if (p.Length >= 3) _reusableDisks.Add(new DiskItem { Path = p[0], Avail = p[1], Size = p[2] });
                     }
-                    if (disks.Count > 0) Monitor.UpdateDisks(disks);
+                    if (_reusableDisks.Count > 0) Monitor.UpdateDisks(_reusableDisks);
                 }
                 MonitorUpdated?.Invoke(this, Monitor);
             }
@@ -284,7 +299,7 @@ namespace FreeWPFShell.Services
             if (line == null) return;
             if (line.StartsWith("MiB")) multiplier = 1024.0;
             else if (line.StartsWith("GiB")) multiplier = 1024.0 * 1024.0;
-            var parts = line.Split(new[] { ':', ',' }, StringSplitOptions.RemoveEmptyEntries);
+            var parts = line.Split(s_semicolonComma, StringSplitOptions.RemoveEmptyEntries);
             foreach (var part in parts)
             {
                 if (part.Contains("total")) total = ExtractDouble(part);
@@ -352,7 +367,7 @@ namespace FreeWPFShell.Services
                 });
                 if (!string.IsNullOrEmpty(hashResult))
                 {
-                    var parts = hashResult.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                    var parts = hashResult.Split(s_spaceTab, StringSplitOptions.RemoveEmptyEntries);
                     if (parts.Length > 0 && parts[0].ToLowerInvariant() == localHash)
                         needsUpload = false;
                 }
@@ -413,7 +428,7 @@ namespace FreeWPFShell.Services
                 var hc = _monitorHttpClient;
                 if (hc == null) return null;
                 string json = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/process_detail?pid={pid}");
-                return JsonSerializer.Deserialize<ProcessDetail>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                return JsonSerializer.Deserialize<ProcessDetail>(json, s_jsonOptions);
             }
             catch { return null; }
         }
@@ -439,7 +454,7 @@ namespace FreeWPFShell.Services
                 var hc = _monitorHttpClient;
                 if (hc == null) return new List<ProcessItem>();
                 string json = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/all_processes");
-                return JsonSerializer.Deserialize<List<ProcessItem>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<ProcessItem>();
+                return JsonSerializer.Deserialize<List<ProcessItem>>(json, s_jsonOptions) ?? new List<ProcessItem>();
             }
             catch { return new List<ProcessItem>(); }
         }
@@ -452,7 +467,7 @@ namespace FreeWPFShell.Services
                 var hc = _monitorHttpClient;
                 if (hc == null) return new List<LoginRecord>();
                 string json = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}{endpoint}");
-                return JsonSerializer.Deserialize<List<LoginRecord>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<LoginRecord>();
+                return JsonSerializer.Deserialize<List<LoginRecord>>(json, s_jsonOptions) ?? new List<LoginRecord>();
             }
             catch { return new List<LoginRecord>(); }
         }
@@ -465,7 +480,7 @@ namespace FreeWPFShell.Services
                 var hc = _monitorHttpClient;
                 if (hc == null) return new List<ServiceItem>();
                 string json = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/services");
-                return JsonSerializer.Deserialize<List<ServiceItem>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<ServiceItem>();
+                return JsonSerializer.Deserialize<List<ServiceItem>>(json, s_jsonOptions) ?? new List<ServiceItem>();
             }
             catch { return new List<ServiceItem>(); }
         }
@@ -519,7 +534,7 @@ namespace FreeWPFShell.Services
                 var hc = _monitorHttpClient;
                 if (hc == null) return new List<NetConnItem>();
                 string json = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/net_conns");
-                return JsonSerializer.Deserialize<List<NetConnItem>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<NetConnItem>();
+                return JsonSerializer.Deserialize<List<NetConnItem>>(json, s_jsonOptions) ?? new List<NetConnItem>();
             }
             catch { return new List<NetConnItem>(); }
         }
@@ -532,7 +547,7 @@ namespace FreeWPFShell.Services
                 var hc = _monitorHttpClient;
                 if (hc == null) return new List<CronJobItem>();
                 string json = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/cron_list");
-                return JsonSerializer.Deserialize<List<CronJobItem>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<CronJobItem>();
+                return JsonSerializer.Deserialize<List<CronJobItem>>(json, s_jsonOptions) ?? new List<CronJobItem>();
             }
             catch { return new List<CronJobItem>(); }
         }

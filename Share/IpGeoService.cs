@@ -48,6 +48,9 @@ namespace FreeWPFShell.Share
         private readonly Reader? _geoLite2ASN;
         private readonly Reader? _geoLite2City;
 
+        // IP 查询缓存，避免重复查询相同 IP 创建大量对象
+        private readonly Dictionary<string, IpGeoResult> _queryCache = new(32);
+
         private IpGeoService()
         {
             var dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "IPDataBase");
@@ -64,9 +67,11 @@ namespace FreeWPFShell.Share
 
         public IpGeoResult Query(string ip)
         {
+            if (_queryCache.TryGetValue(ip, out var cached)) return cached;
+
             var r = new IpGeoResult { Ip = ip };
             if (!IPAddress.TryParse(ip, out var ipAddr)) return r;
-            if (IsPrivate(ipAddr)) { r.SimpleGeo = "内网IP"; r.DetailText = $"IP: {ip}\n这是内网私有地址，无法查询归属地。"; return r; }
+            if (IsPrivate(ipAddr)) { r.SimpleGeo = "内网IP"; r.DetailText = $"IP: {ip}\n这是内网私有地址，无法查询归属地。"; _queryCache[ip] = r; return r; }
 
             try
             {
@@ -164,6 +169,7 @@ namespace FreeWPFShell.Share
                 r.DetailText = BuildDetailText(r);
             }
             catch { }
+            _queryCache[ip] = r;
             return r;
         }
 
