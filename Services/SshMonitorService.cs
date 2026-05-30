@@ -42,7 +42,7 @@ namespace FreeWPFShell.Services
         private DateTime _lastNetTime = DateTime.MinValue;
         private double _memMultiplier = 1.0, _swapMultiplier = 1.0;
 
-        private static readonly System.Net.NetworkInformation.Ping s_sharedPing = new();
+        private readonly System.Net.NetworkInformation.Ping _ping = new();
         private static readonly Regex s_doubleRegex = new(@"[\d\.]+", RegexOptions.Compiled);
         private static readonly Regex s_uptimeRegex = new(@"up\s+(.*?),?\s+\d+\s+user", RegexOptions.Compiled);
         private readonly StringBuilder _cmdBuilder = new StringBuilder(512);
@@ -137,7 +137,7 @@ namespace FreeWPFShell.Services
         {
             try
             {
-                var reply = await s_sharedPing.SendPingAsync(_hostInfo.IpAddress, 2000);
+                var reply = await _ping.SendPingAsync(_hostInfo.IpAddress, 2000);
                 Monitor.Ping = reply.Status == System.Net.NetworkInformation.IPStatus.Success
                     ? $"{reply.RoundtripTime}ms" : "超时";
             }
@@ -612,6 +612,7 @@ namespace FreeWPFShell.Services
             _monitorTimer = null;
 
             _monitorHttpClient?.Dispose();
+            try { _ping.Dispose(); } catch { }
             _monitorHttpClient = null;
 
             if (LinuxMonitorLocalPort > 0 && _sshClient != null && _sshClient.IsConnected)
