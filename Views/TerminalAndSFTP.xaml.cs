@@ -166,29 +166,44 @@ namespace FreeWPFShell.Views
 
         private void BindSftp()
         {
-            try
+            if (Session == null || !Session.IsSftpConnected || Session.SftpClient == null || !Session.SftpClient.IsConnected)
+                return;
+
+            FileGrid.ItemsSource = _remoteFiles;
+
+            new Thread(() =>
             {
-                if (Session == null || !Session.IsSftpConnected || Session.SftpClient == null || !Session.SftpClient.IsConnected)
+                try
                 {
-                    return;
+                    var workingDir = Sftp.WorkingDirectory ?? "/";
+                    var files = Sftp.ListDirectory(workingDir);
+                    var items = BuildFileList(files);
+
+                    Dispatcher.BeginInvoke(() =>
+                    {
+                        _currentPath = workingDir;
+                        TxtCurrentPath.Text = workingDir;
+                        _remoteFiles.Clear();
+                        foreach (var item in items) _remoteFiles.Add(item);
+
+                        TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.CheckboxCircleLine;
+                        TxtStatusIcon.Spin = false;
+                        TxtStatusIcon.Foreground = Brushes.LimeGreen;
+                        StatusIconContainer.ToolTip = "当前没有传输任务";
+                    });
                 }
-
-                _currentPath = Sftp.WorkingDirectory ?? "/";
-                FileGrid.ItemsSource = _remoteFiles;
-                LoadPath(_currentPath);
-
-                TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.CheckboxCircleLine;
-                TxtStatusIcon.Spin = false;
-                TxtStatusIcon.Foreground = Brushes.LimeGreen;
-                StatusIconContainer.ToolTip = "当前没有传输任务";
-            }
-            catch (Exception ex)
-            {
-                TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.CloseCircleLine;
-                TxtStatusIcon.Spin = false;
-                TxtStatusIcon.Foreground = Brushes.Red;
-                StatusIconContainer.ToolTip = $"SFTP 初始化失败: {ex.Message}";
-            }
+                catch (Exception ex)
+                {
+                    Dispatcher.BeginInvoke(() =>
+                    {
+                        TxtStatusIcon.Kind = MahApps.Metro.IconPacks.PackIconRemixIconKind.CloseCircleLine;
+                        TxtStatusIcon.Spin = false;
+                        TxtStatusIcon.Foreground = Brushes.Red;
+                        StatusIconContainer.ToolTip = $"SFTP 初始化失败: {ex.Message}";
+                    });
+                }
+            })
+            { IsBackground = true }.Start();
         }
 
         private void Terminal_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -219,41 +234,61 @@ namespace FreeWPFShell.Views
         private void LoadPath(string path, bool isHistory = false)
         {
             if (Sftp == null || !Sftp.IsConnected) return;
-            try
-            {
-                var files = Sftp.ListDirectory(path);
-                if (!isHistory && _currentPath != path) { _backHistory.Push(_currentPath); _forwardHistory.Clear(); }
-                _currentPath = path; TxtCurrentPath.Text = path;
-                _remoteFiles.Clear();
 
-                // 手动分为目录和文件列表，避免 LINQ Where + OrderByDescending + ThenBy 的多次迭代
-                var dirs = new List<RemoteFile>();
-                var fileItems = new List<RemoteFile>();
-                foreach (var f in files)
+            if (!isHistory && _currentPath != path) { _backHistory.Push(_currentPath); _forwardHistory.Clear(); }
+            _currentPath = path;
+            TxtCurrentPath.Text = path;
+
+            new Thread(() =>
+            {
+                try
                 {
-                    if (f.Name == "." || f.Name == "..") continue;
-                    var rf = new RemoteFile
+                    var files = Sftp.ListDirectory(path);
+                    var items = BuildFileList(files);
+
+                    Dispatcher.BeginInvoke(() =>
                     {
-                        Name = f.Name,
-                        Size = f.IsDirectory ? "" : FormatSize(f.Length),
-                        Type = f.IsDirectory ? "文件夹" : "文件",
-                        Date = f.LastWriteTime.ToString("yyyy/MM/dd HH:mm"),
-                        Perms = GetPermsFast(f),
-                        Owner = f.IsDirectory ? "" : $"{f.UserId}::{f.GroupId}",
-                        IsDirectory = f.IsDirectory,
-                        Length = f.Length,
-                        FullName = f.FullName,
-                        Icon = f.IsDirectory ? "FolderFill" : "FileTextLine"
-                    };
-                    if (f.IsDirectory) dirs.Add(rf);
-                    else fileItems.Add(rf);
+                        _remoteFiles.Clear();
+                        foreach (var item in items) _remoteFiles.Add(item);
+                    });
                 }
-                dirs.Sort(static (a, b) => string.CompareOrdinal(a.Name, b.Name));
-                fileItems.Sort(static (a, b) => string.CompareOrdinal(a.Name, b.Name));
-                foreach (var d in dirs) _remoteFiles.Add(d);
-                foreach (var f in fileItems) _remoteFiles.Add(f);
+                catch (Exception ex)
+                {
+                    Dispatcher.BeginInvoke(() => ModernMessageBox.Show("访问失败: " + ex.Message));
+                }
+            })
+            { IsBackground = true }.Start();
+        }
+
+        private static List<RemoteFile> BuildFileList(IEnumerable<Renci.SshNet.Sftp.ISftpFile> files)
+        {
+            var dirs = new List<RemoteFile>();
+            var fileItems = new List<RemoteFile>();
+            foreach (var f in files)
+            {
+                if (f.Name == "." || f.Name == "..") continue;
+                var rf = new RemoteFile
+                {
+                    Name = f.Name,
+                    Size = f.IsDirectory ? "" : FormatSize(f.Length),
+                    Type = f.IsDirectory ? "文件夹" : "文件",
+                    Date = f.LastWriteTime.ToString("yyyy/MM/dd HH:mm"),
+                    Perms = GetPermsFast(f),
+                    Owner = f.IsDirectory ? "" : $"{f.UserId}::{f.GroupId}",
+                    IsDirectory = f.IsDirectory,
+                    Length = f.Length,
+                    FullName = f.FullName,
+                    Icon = f.IsDirectory ? "FolderFill" : "FileTextLine"
+                };
+                if (f.IsDirectory) dirs.Add(rf);
+                else fileItems.Add(rf);
             }
-            catch (Exception ex) { ModernMessageBox.Show("访问失败: " + ex.Message); }
+            dirs.Sort(static (a, b) => string.CompareOrdinal(a.Name, b.Name));
+            fileItems.Sort(static (a, b) => string.CompareOrdinal(a.Name, b.Name));
+            var result = new List<RemoteFile>(dirs.Count + fileItems.Count);
+            result.AddRange(dirs);
+            result.AddRange(fileItems);
+            return result;
         }
 
         private static string GetPermsFast(ISftpFile f)

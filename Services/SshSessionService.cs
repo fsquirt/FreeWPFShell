@@ -91,46 +91,55 @@ namespace FreeWPFShell.Services
                 await _fileService.EditRemoteFileAsync(remotePath, editorCommand);
         }
 
-        public async Task ConnectAsync()
+        public Action? OnConnected { get; set; }
+        public Action<Exception>? OnConnectFailed { get; set; }
+
+        public void ConnectAsync()
         {
             PrivateKeyFile? preloadedKey = null;
             if (HostInfo.AuthMethod == SshAuthMethod.PrivateKey)
             {
                 if (string.IsNullOrEmpty(HostInfo.SshKeyId))
-                    throw new Exception("未配置 SSH 密钥，请在连接设置中选择一个已导入的密钥。");
-
-                var keyRepo = new Repositories.KeyRepository();
-                preloadedKey = await keyRepo.LoadPrivateKeyFileAsync(HostInfo.SshKeyId);
+                {
+                    OnConnectFailed?.Invoke(new Exception("未配置 SSH 密钥，请在连接设置中选择一个已导入的密钥。"));
+                    return;
+                }
+                var keyRepo = new KeyRepository();
+                preloadedKey = keyRepo.LoadPrivateKeyFileAsync(HostInfo.SshKeyId).GetAwaiter().GetResult();
             }
 
-            try
+            ConnectionStatus = "SSH.NET 建立连接...";
+
+            new Thread(() =>
             {
-                ConnectionStatus = "SSH.NET 建立连接...";
-                var settings = await Task.Run(() => _settingsRepo.Load());
-                await Task.Run(() =>
+                try
                 {
+                    var settings = _settingsRepo.Load();
+
                     MasterClient = BuildSshClient(preloadedKey);
                     MasterClient.Connect();
-                });
 
-                IsConnected = true;
-                TerminalConnection = new SshTerminalConnection(MasterClient!, 120, 30);
-                TerminalConnection.InjectChineseLocale = settings.InjectChineseLocale;
-                TerminalConnection.AppCursorModeChanged += (isApp) =>
-                {
-                    IsAppCursorMode = isApp;
-                };
+                    TerminalConnection = new SshTerminalConnection(MasterClient!, 120, 30);
+                    TerminalConnection.InjectChineseLocale = settings.InjectChineseLocale;
+                    TerminalConnection.AppCursorModeChanged += (isApp) =>
+                    {
+                        IsAppCursorMode = isApp;
+                    };
 
-                _ = Task.Run(async () =>
-                {
+                    // 先在后台线程建好 ShellStream，UI 线程设 Connection 时不会卡
+                    TerminalConnection.Start();
+
+                    IsConnected = true;
+                    Application.Current?.Dispatcher.BeginInvoke(() => OnConnected?.Invoke());
+
+                    // SFTP
                     try
                     {
                         ConnectionStatus = "SFTP 建立连接...";
                         var sftp = BuildSftpClient(preloadedKey);
-                        await Task.Run(() => sftp.Connect());
+                        sftp.Connect();
                         SftpClient = sftp;
                         IsSftpConnected = true;
-
                         _fileService = new RemoteFileService(SftpClient, _sftpLock, SessionId);
                     }
                     catch (Exception ex)
@@ -138,6 +147,7 @@ namespace FreeWPFShell.Services
                         Debug.WriteLine("SFTP Connection Failed: " + ex.Message);
                     }
 
+                    // Monitor
                     try
                     {
                         if (MasterClient != null && SftpClient != null)
@@ -146,7 +156,7 @@ namespace FreeWPFShell.Services
                             _monitorService.MonitorUpdated += (s, e) => MonitorUpdated?.Invoke(this, e);
                             _monitorService.ConnectionStatusCallback = (status) => ConnectionStatus = status;
                             _monitorService.RegisterTunnelCallback = RegisterTunnel;
-                            await _monitorService.StartAsync();
+                            _monitorService.StartAsync().GetAwaiter().GetResult();
                         }
                     }
                     catch (Exception ex)
@@ -155,13 +165,14 @@ namespace FreeWPFShell.Services
                     }
 
                     ConnectionStatus = "已连接";
-                });
-            }
-            catch (Exception ex)
-            {
-                ConnectionStatus = "连接失败: " + ex.Message;
-                throw;
-            }
+                }
+                catch (Exception ex)
+                {
+                    ConnectionStatus = "连接失败: " + ex.Message;
+                    Application.Current?.Dispatcher.BeginInvoke(() => OnConnectFailed?.Invoke(ex));
+                }
+            })
+            { IsBackground = true }.Start();
         }
 
         private ConnectionInfo BuildConnectionInfo(PrivateKeyFile? preloadedKey = null)
@@ -249,24 +260,27 @@ namespace FreeWPFShell.Services
 
         public void Disconnect()
         {
-            _fileService?.Dispose();
-            _fileService = null;
-
-            _monitorService?.Stop();
-            _monitorService = null;
-
-            try
-            {
-                string localDir = Path.Combine(Path.GetTempPath(), "FreeWPFShell", SessionId);
-                if (Directory.Exists(localDir)) Directory.Delete(localDir, true);
-            }
-            catch { }
-
             IsConnected = false;
             IsSftpConnected = false;
 
-            Task.Run(() =>
+            new Thread(() =>
             {
+                try { TerminalConnection?.Close(); } catch { }
+                TerminalConnection = null;
+
+                try { _monitorService?.Stop(); } catch { }
+                _monitorService = null;
+
+                try { _fileService?.Dispose(); } catch { }
+                _fileService = null;
+
+                try
+                {
+                    string localDir = Path.Combine(Path.GetTempPath(), "FreeWPFShell", SessionId);
+                    if (Directory.Exists(localDir)) Directory.Delete(localDir, true);
+                }
+                catch { }
+
                 try
                 {
                     lock (_associatedTunnels)
@@ -282,20 +296,28 @@ namespace FreeWPFShell.Services
                         }
                         _associatedTunnels.Clear();
                     }
+                }
+                catch { }
 
+                try
+                {
                     lock (_sftpLock)
                     {
                         SftpClient?.Disconnect();
                         SftpClient?.Dispose();
                         SftpClient = null;
                     }
-                    MasterClient?.Disconnect(); MasterClient?.Dispose();
                 }
                 catch { }
-            });
 
-            TerminalConnection?.Close();
-            TerminalConnection = null;
+                try
+                {
+                    MasterClient?.Disconnect();
+                    MasterClient?.Dispose();
+                }
+                catch { }
+            })
+            { IsBackground = true }.Start();
         }
 
         public void Dispose() => Disconnect();

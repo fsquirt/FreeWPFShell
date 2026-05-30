@@ -50,7 +50,7 @@ namespace FreeWPFShell.Views
             }
         }
 
-        public async void OpenSession(SshConnectionInfo hostInfo)
+        public void OpenSession(SshConnectionInfo hostInfo)
         {
             var session = new SshSessionService(hostInfo);
             ActiveSessions.Add(session);
@@ -58,12 +58,12 @@ namespace FreeWPFShell.Views
             var terminalPage = new TerminalAndSFTP(session);
             var tabItem = AddTab(session.DisplayName, terminalPage);
 
-            try
+            session.OnConnected = () =>
             {
-                await session.ConnectAsync();
                 terminalPage.BindSession();
-            }
-            catch (Exception ex)
+            };
+
+            session.OnConnectFailed = (ex) =>
             {
                 string msg = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
                 UserForm.ModernMessageBox.Show($"无法连接到 {hostInfo.HostName} ({hostInfo.IpAddress})\n\n错误信息: {msg}", "连接失败", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -73,9 +73,11 @@ namespace FreeWPFShell.Views
                     PagesContainer.Children.Remove(terminalPage);
                     SessionTabs.Items.Remove(tabItem);
                     ActiveSessions.Remove(session);
-                    session.Dispose();
+                    session.Disconnect();
                 }
-            }
+            };
+
+            session.ConnectAsync();
         }
 
         public void OpenSshTunnelManager()

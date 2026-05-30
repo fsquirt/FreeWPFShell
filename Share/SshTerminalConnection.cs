@@ -17,6 +17,7 @@ namespace FreeWPFShell
         private uint _columns;
         private uint _rows;
         private bool _connectionLostTriggered = false;
+        private bool _started;
 
         public event EventHandler<TerminalOutputEventArgs>? TerminalOutput;
 
@@ -55,6 +56,9 @@ namespace FreeWPFShell
 
         public void Start()
         {
+            if (_started) return;
+            _started = true;
+
             if (!_client.IsConnected)
                 _client.Connect();
 
@@ -175,6 +179,7 @@ namespace FreeWPFShell
         public void Close()
         {
             _cts?.Cancel();
+            _started = false;
             _connectionLostTriggered = false;
             try { _shellStream?.Dispose(); } catch { }
             _shellStream = null;
