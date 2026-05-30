@@ -85,7 +85,9 @@ namespace FreeWPFShell
         {
             if (_shellStream == null) return;
             await Task.Delay(100); // 等待 shell 准备就绪
-            WriteInput("export LANG=zh_CN.UTF-8\nexport LC_ALL=zh_CN.UTF-8\n");
+            // 自动检测服务器上实际存在的 UTF-8 locale，优先中文 → en_US → 任意 UTF-8
+            // 避免硬编码 zh_CN.UTF-8（服务器可能没装，导致 setlocale 失败 → ls 中文文件名显示为转义序列）
+            WriteInput("_l=$(locale -a 2>/dev/null | grep -im1 'zh_cn\\.utf-\\?8'); [ -z \"$_l\" ] && _l=$(locale -a 2>/dev/null | grep -im1 'en_us\\.utf-\\?8'); [ -z \"$_l\" ] && _l=$(locale -a 2>/dev/null | grep -im1 '\\.utf-\\?8'); [ -n \"$_l\" ] && { export LANG=$_l; export LC_ALL=$_l; }; unset _l\n");
         }
 
         private async Task ReadOutputAsync(CancellationToken token)
