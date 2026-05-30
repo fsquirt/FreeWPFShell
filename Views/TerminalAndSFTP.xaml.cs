@@ -37,6 +37,10 @@ namespace FreeWPFShell.Views
 
         private CancellationTokenSource? _transferCts;
 
+        // UID/GID → 用户名/组名 缓存
+        private Dictionary<int, string> _userMap = new();
+        private Dictionary<int, string> _groupMap = new();
+
         // 复用的 StringBuilder（减少 UpdateStatus 分配）
         private readonly StringBuilder _statusBuilder = new(256);
 
@@ -175,6 +179,8 @@ namespace FreeWPFShell.Views
             {
                 try
                 {
+                    FetchUserGroupMaps();
+
                     var workingDir = Sftp.WorkingDirectory ?? "/";
                     var files = Sftp.ListDirectory(workingDir);
                     var items = BuildFileList(files);
@@ -260,13 +266,20 @@ namespace FreeWPFShell.Views
             { IsBackground = true }.Start();
         }
 
-        private static List<RemoteFile> BuildFileList(IEnumerable<Renci.SshNet.Sftp.ISftpFile> files)
+        private List<RemoteFile> BuildFileList(IEnumerable<Renci.SshNet.Sftp.ISftpFile> files)
         {
             var dirs = new List<RemoteFile>();
             var fileItems = new List<RemoteFile>();
             foreach (var f in files)
             {
                 if (f.Name == "." || f.Name == "..") continue;
+                string owner = "";
+                if (!f.IsDirectory)
+                {
+                    string user = _userMap.TryGetValue((int)f.UserId, out var u) ? u : f.UserId.ToString();
+                    string group = _groupMap.TryGetValue((int)f.GroupId, out var g) ? g : f.GroupId.ToString();
+                    owner = $"{user}:{group}";
+                }
                 var rf = new RemoteFile
                 {
                     Name = f.Name,
@@ -274,7 +287,7 @@ namespace FreeWPFShell.Views
                     Type = f.IsDirectory ? "文件夹" : "文件",
                     Date = f.LastWriteTime.ToString("yyyy/MM/dd HH:mm"),
                     Perms = GetPermsFast(f),
-                    Owner = f.IsDirectory ? "" : $"{f.UserId}::{f.GroupId}",
+                    Owner = owner,
                     IsDirectory = f.IsDirectory,
                     Length = f.Length,
                     FullName = f.FullName,
@@ -289,6 +302,35 @@ namespace FreeWPFShell.Views
             result.AddRange(dirs);
             result.AddRange(fileItems);
             return result;
+        }
+
+        private void FetchUserGroupMaps()
+        {
+            try
+            {
+                var userMap = new Dictionary<int, string>();
+                var groupMap = new Dictionary<int, string>();
+
+                var passwdResult = Ssh.CreateCommand("cat /etc/passwd").Execute();
+                foreach (var line in passwdResult.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var parts = line.Split(':');
+                    if (parts.Length >= 3 && int.TryParse(parts[2], out int uid))
+                        userMap[uid] = parts[0];
+                }
+
+                var groupResult = Ssh.CreateCommand("cat /etc/group").Execute();
+                foreach (var line in groupResult.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var parts = line.Split(':');
+                    if (parts.Length >= 3 && int.TryParse(parts[2], out int gid))
+                        groupMap[gid] = parts[0];
+                }
+
+                _userMap = userMap;
+                _groupMap = groupMap;
+            }
+            catch { }
         }
 
         private static string GetPermsFast(ISftpFile f)
