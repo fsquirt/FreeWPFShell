@@ -30,9 +30,11 @@ namespace FreeWPFShell.Models
         public int Port { get; set; }
         public string Username { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
+        /// <summary>SSH 隧道代理（跳板机）使用密钥登录时引用的 Key ID</summary>
+        public string? SshKeyId { get; set; }
     }
 
-    public enum ProxyType { None, Http, Socks4, Socks5 }
+    public enum ProxyType { None, Http, Socks4, Socks5, Ssh }
 
     public enum PixelShaderImageStretchMode
     {

@@ -94,42 +94,91 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="80"/>
                         <ColumnDefinition/>
-                        <ColumnDefinition Width="Auto" MinWidth="40"/>
-                        <ColumnDefinition Width="63"/>
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0" Text="类型:" VerticalAlignment="Center" Height="20"/>
-                    <ComboBox Grid.Column="1" x:Name="cmbProxyType" Margin="5,0,0,0" SelectedIndex="0" Height="30">
+                    <ComboBox Grid.Column="1" x:Name="cmbProxyType" Margin="5,0,0,0" SelectedIndex="0" Height="30" SelectionChanged="CmbProxyType_SelectionChanged">
                         <ComboBoxItem Content="HTTP"/>
                         <ComboBoxItem Content="SOCKS4"/>
                         <ComboBoxItem Content="SOCKS5"/>
+                        <ComboBoxItem Content="SSH隧道"/>
                     </ComboBox>
-                    <TextBlock Grid.Column="2" Text="端口:" VerticalAlignment="Center" Margin="5,0,5,0" Height="20"/>
-                    <mica:TextBox Grid.Column="3" x:Name="txtProxyPort" Text="10808" Margin="0,3,0,3"/>
                 </Grid>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="80"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="代理IP:" VerticalAlignment="Center"/>
-                    <mica:TextBox Grid.Column="1" x:Name="txtProxyHost" Margin="5,3"/>
-                </Grid>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="80"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="用户名:" VerticalAlignment="Center"/>
-                    <mica:TextBox Grid.Column="1" x:Name="txtProxyUsername" Margin="5,3"/>
-                </Grid>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="80"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="密码:" VerticalAlignment="Center"/>
-                    <mica:TextBox Grid.Column="1" x:Name="txtProxyPassword" Margin="5,3"/>
-                </Grid>
+
+                <!-- HTTP/SOCKS 代理面板 -->
+                <StackPanel x:Name="pnlNetProxy">
+                    <Grid Margin="0,5">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="80"/>
+                            <ColumnDefinition/>
+                            <ColumnDefinition Width="Auto" MinWidth="40"/>
+                            <ColumnDefinition Width="63"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="代理IP:" VerticalAlignment="Center"/>
+                        <mica:TextBox Grid.Column="1" x:Name="txtProxyHost" Margin="5,3"/>
+                        <TextBlock Grid.Column="2" Text="端口:" VerticalAlignment="Center" Margin="5,0,5,0" Height="20"/>
+                        <mica:TextBox Grid.Column="3" x:Name="txtProxyPort" Text="10808" Margin="0,3,0,3"/>
+                    </Grid>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="80"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="用户名:" VerticalAlignment="Center"/>
+                        <mica:TextBox Grid.Column="1" x:Name="txtProxyUsername" Margin="5,3"/>
+                    </Grid>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="80"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="密码:" VerticalAlignment="Center"/>
+                        <mica:TextBox Grid.Column="1" x:Name="txtProxyPassword" Margin="5,3"/>
+                    </Grid>
+                </StackPanel>
+
+                <!-- SSH 隧道（跳板机）面板 -->
+                <StackPanel x:Name="pnlSshProxy" Visibility="Collapsed">
+                    <Grid Margin="0,5">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="80"/>
+                            <ColumnDefinition/>
+                            <ColumnDefinition Width="60"/>
+                            <ColumnDefinition Width="80"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="跳板机IP:" VerticalAlignment="Center"/>
+                        <mica:TextBox Grid.Column="1" x:Name="txtJumpHost" Margin="5,3"/>
+                        <TextBlock Grid.Column="2" Text="端口:" VerticalAlignment="Center" Margin="5,0"/>
+                        <mica:TextBox Grid.Column="3" x:Name="txtJumpPort" Text="22" Margin="0,3"/>
+                    </Grid>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="80"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="用户名:" VerticalAlignment="Center"/>
+                        <mica:TextBox Grid.Column="1" x:Name="txtJumpUser" Text="root" Margin="5,3"/>
+                    </Grid>
+                    <mica:ToggleSwitch x:Name="rbJumpPassword" Content="密码登录" IsChecked="True" Margin="0,5" Checked="rbJumpPassword_Checked"/>
+                    <StackPanel x:Name="pnlJumpPassword" Margin="20,0,0,5">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="80"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="密码:" VerticalAlignment="Center"/>
+                            <mica:TextBox Grid.Column="1" x:Name="txtJumpPassword" Margin="0,3"/>
+                        </Grid>
+                    </StackPanel>
+                    <mica:ToggleSwitch x:Name="rbJumpKey" Content="密钥登录" Margin="0,5" Checked="rbJumpKey_Checked"/>
+                    <StackPanel x:Name="pnlJumpKey" Visibility="Collapsed" Margin="20,0,0,5">
+                        <ComboBox x:Name="cmbJumpKeySelect" Margin="0,3" Height="30"
+                                  DisplayMemberPath="DisplayText" SelectedValuePath="Id"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                            <icon:PackIconRemixIcon Kind="InformationLine" Foreground="#78909C" Width="12" Height="12" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                            <TextBlock Text="请先在主界面的「密钥管理」中导入密钥" FontSize="11" Foreground="#78909C" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
             </StackPanel>
         </StackPanel>
 

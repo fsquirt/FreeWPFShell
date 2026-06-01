@@ -67,6 +67,10 @@ namespace FreeWPFShell.Services
         private readonly List<SshTunnelInfo> _associatedTunnels = new();
         private readonly SettingsRepository _settingsRepo;
         private readonly object _sftpLock = new();
+
+        // SSH 隧道代理（跳板机）
+        private SshClient? _jumpClient;
+        private ForwardedPortLocal? _jumpPort;
         public object SftpLock => _sftpLock;
 
         private RemoteFileService? _fileService;
@@ -108,6 +112,14 @@ namespace FreeWPFShell.Services
                 preloadedKey = keyRepo.LoadPrivateKeyFileAsync(HostInfo.SshKeyId).GetAwaiter().GetResult();
             }
 
+            // SSH 隧道代理：预加载跳板机密钥
+            PrivateKeyFile? jumpKey = null;
+            if (HostInfo.UseProxy && HostInfo.Proxy?.Type == ProxyType.Ssh && !string.IsNullOrEmpty(HostInfo.Proxy.SshKeyId))
+            {
+                var keyRepo = new KeyRepository();
+                jumpKey = keyRepo.LoadPrivateKeyFileAsync(HostInfo.Proxy.SshKeyId).GetAwaiter().GetResult();
+            }
+
             ConnectionStatus = "SSH.NET 建立连接...";
 
             new Thread(() =>
@@ -116,7 +128,43 @@ namespace FreeWPFShell.Services
                 {
                     var settings = _settingsRepo.Load();
 
-                    MasterClient = BuildSshClient(preloadedKey);
+                    // SSH 隧道代理：先连接跳板机，建立端口转发
+                    if (HostInfo.UseProxy && HostInfo.Proxy?.Type == ProxyType.Ssh)
+                    {
+                        ConnectionStatus = "连接跳板机...";
+                        _jumpClient = BuildJumpClient(jumpKey);
+                        _jumpClient.Connect();
+
+                        ConnectionStatus = "建立SSH隧道...";
+                        uint localPort = (uint)Random.Shared.Next(40000, 60000);
+                        _jumpPort = new ForwardedPortLocal("127.0.0.1", localPort, HostInfo.IpAddress, (uint)HostInfo.SshPort);
+                        _jumpClient.AddForwardedPort(_jumpPort);
+                        _jumpPort.Start();
+
+                        // 注册隧道到管理器
+                        var tunnelInfo = new SshTunnelInfo
+                        {
+                            Id = $"Jump_{SessionId}",
+                            HostId = HostInfo.Id,
+                            HostName = HostInfo.HostName ?? HostInfo.IpAddress,
+                            Type = "本地(跳板机)",
+                            BindAddress = "127.0.0.1",
+                            BindPort = localPort,
+                            DestAddress = HostInfo.IpAddress,
+                            DestPort = (uint)HostInfo.SshPort,
+                            Remark = $"跳板机 {HostInfo.Proxy.ServerAddress} → {HostInfo.IpAddress}:{HostInfo.SshPort}",
+                            PortConfig = _jumpPort
+                        };
+                        RegisterTunnel(tunnelInfo);
+
+                        // 通过转发端口连接目标主机（BuildConnectionInfo 会自动检测 _jumpPort 并使用转发端口）
+                        MasterClient = BuildSshClient(preloadedKey);
+                    }
+                    else
+                    {
+                        MasterClient = BuildSshClient(preloadedKey);
+                    }
+
                     MasterClient.Connect();
 
                     TerminalConnection = new SshTerminalConnection(MasterClient!, 120, 30);
@@ -191,6 +239,17 @@ namespace FreeWPFShell.Services
                 authMethods.Add(new PrivateKeyAuthenticationMethod(HostInfo.SshUser, preloadedKey));
             }
 
+            // SSH 隧道代理：通过本地转发端口连接，不使用 SSH.NET 的 Proxy 机制
+            if (HostInfo.UseProxy && HostInfo.Proxy?.Type == ProxyType.Ssh && _jumpPort != null)
+            {
+                var conn = new ConnectionInfo(
+                    "127.0.0.1", (int)_jumpPort.BoundPort, HostInfo.SshUser,
+                    authMethods.ToArray());
+                conn.Encoding = Encoding.UTF8;
+                conn.Timeout = TimeSpan.FromSeconds(30);
+                return conn;
+            }
+
             if (HostInfo.UseProxy && HostInfo.Proxy != null)
             {
                 ProxyTypes proxyType = HostInfo.Proxy.Type switch
@@ -207,11 +266,11 @@ namespace FreeWPFShell.Services
                     authMethods.ToArray());
             }
 
-            var conn = new ConnectionInfo(
+            var defaultConn = new ConnectionInfo(
                 HostInfo.IpAddress, HostInfo.SshPort, HostInfo.SshUser,
                 authMethods.ToArray());
-            conn.Encoding = Encoding.UTF8;
-            return conn;
+            defaultConn.Encoding = Encoding.UTF8;
+            return defaultConn;
         }
 
         private SshClient BuildSshClient(PrivateKeyFile? preloadedKey = null)
@@ -230,6 +289,31 @@ namespace FreeWPFShell.Services
             client.ErrorOccurred += (sender, e) =>
             {
                 try { Debug.WriteLine($"[SftpClient Error] {e.Exception?.Message}"); } catch { }
+            };
+            return client;
+        }
+
+        private SshClient BuildJumpClient(PrivateKeyFile? jumpKey = null)
+        {
+            if (HostInfo.Proxy == null || HostInfo.Proxy.Type != ProxyType.Ssh)
+                throw new Exception("跳板机配置无效。");
+
+            var authMethods = new List<AuthenticationMethod>(1);
+            if (jumpKey != null)
+                authMethods.Add(new PrivateKeyAuthenticationMethod(HostInfo.Proxy.Username, jumpKey));
+            else
+                authMethods.Add(new PasswordAuthenticationMethod(HostInfo.Proxy.Username, HostInfo.Proxy.Password));
+
+            var connInfo = new ConnectionInfo(
+                HostInfo.Proxy.ServerAddress, HostInfo.Proxy.Port, HostInfo.Proxy.Username,
+                authMethods.ToArray());
+            connInfo.Encoding = Encoding.UTF8;
+            connInfo.Timeout = TimeSpan.FromSeconds(15);
+
+            var client = new SshClient(connInfo);
+            client.ErrorOccurred += (sender, e) =>
+            {
+                try { Debug.WriteLine($"[JumpClient Error] {e.Exception?.Message}"); } catch { }
             };
             return client;
         }
@@ -271,6 +355,12 @@ namespace FreeWPFShell.Services
             {
                 try { TerminalConnection?.Close(); } catch { }
                 TerminalConnection = null;
+
+                // 清理跳板机资源
+                try { _jumpPort?.Stop(); } catch { }
+                _jumpPort = null;
+                try { _jumpClient?.Disconnect(); _jumpClient?.Dispose(); } catch { }
+                _jumpClient = null;
 
                 try { _monitorService?.Stop(); } catch { }
                 _monitorService = null;

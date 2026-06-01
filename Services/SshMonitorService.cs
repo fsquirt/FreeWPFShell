@@ -316,7 +316,10 @@ namespace FreeWPFShell.Services
 
             NotifyStatus("建立 ssh 隧道...");
             LinuxMonitorLocalPort = (uint)(System.Security.Cryptography.RandomNumberGenerator.GetInt32(40000, 60001));
-            var port = new ForwardedPortLocal("127.0.0.1", LinuxMonitorLocalPort, "127.0.0.1", LinuxMonitorLocalPort);
+            // 通过跳板机连接时，remoteHost 用 "0.0.0.0" 确保目标 SSH 服务器在所有接口监听
+            // 直连时 "127.0.0.1" 和 "0.0.0.0" 效果相同（SSH.NET 内部会转换）
+            string monitorRemoteHost = _hostInfo.UseProxy && _hostInfo.Proxy?.Type == ProxyType.Ssh ? "0.0.0.0" : "127.0.0.1";
+            var port = new ForwardedPortLocal("127.0.0.1", LinuxMonitorLocalPort, monitorRemoteHost, LinuxMonitorLocalPort);
             port.Exception += (sender, e) =>
             {
                 try { Debug.WriteLine($"[ForwardedPort Exception] {e.Exception?.Message}"); } catch { }
