@@ -19,9 +19,6 @@ namespace FreeWPFShell.Views
         private CancellationTokenSource? _cts;
         private bool _isTracing;
 
-        // 实例级复用 Ping（SendPingAsync 线程安全）
-        private Ping? _sharedPing;
-
         public TraceroutePage()
         {
             InitializeComponent();
@@ -33,8 +30,6 @@ namespace FreeWPFShell.Views
         {
             _cts?.Cancel();
             _cts?.Dispose();
-            _sharedPing?.Dispose();
-            _sharedPing = null;
             _isTracing = false;
         }
 
@@ -80,8 +75,6 @@ namespace FreeWPFShell.Views
                 for (int i = 1; i <= maxHops; i++)
                     _hops.Add(new TracerouteHop { Hop = i, Ip = "*", Latency = "*", Status = "探测中..." });
 
-                _sharedPing = new Ping();
-
                 for (int startTtl = 1; startTtl <= maxHops; startTtl += parallelLimit)
                 {
                     if (foundDest || _cts.Token.IsCancellationRequested) break;
@@ -123,6 +116,8 @@ namespace FreeWPFShell.Views
         private async Task<bool> ProbeHopAsync(IPAddress destIp, int ttl, int timeoutMs, CancellationToken ct)
         {
             var hop = _hops[ttl - 1];
+            // Ping 实例非线程安全，每个探测任务必须独立实例
+            using var ping = new Ping();
             try
             {
                 var buffer = new byte[32];
@@ -131,7 +126,7 @@ namespace FreeWPFShell.Views
                 for (int i = 0; i < 3; i++)
                 {
                     if (ct.IsCancellationRequested) return false;
-                    var reply = await _sharedPing!.SendPingAsync(destIp, timeoutMs, buffer, options);
+                    var reply = await ping.SendPingAsync(destIp, timeoutMs, buffer, options);
 
                     if (reply.Status == IPStatus.TtlExpired || reply.Status == IPStatus.Success)
                     {
