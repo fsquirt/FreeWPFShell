@@ -1,0 +1,24 @@
+  正在确定要还原的项目…
+  所有项目均是最新的，无法还原。
+  "正在运行Rust编译批处理..."
+  " _       ______  ___________ __  __________    __ "
+  "| |     / / __ \/ ____/ ___// / / / ____/ /   / / "
+  "| | /| / / /_/ / /_   \__ \/ /_/ / __/ / /   / /  "
+  "| |/ |/ / ____/ __/  ___/ / __  / /___/ /___/ /___"
+  "|__/|__/_/   /_/    /____/_/ /_/_____/_____/_____/"
+  "                                                  "
+  [INFO] Cargo工作目录: D:\FreeWPFShell\linux-monitor
+  [INFO] 开始执行 Cargo Release 编译...
+EXEC : warning : linker stderr: ignoring deprecated linker optimization setting '1' [D:\FreeWPFShell\FreeWPFShell.csproj]
+    |
+    = note: `#[warn(linker_messages)]` on by default
+  
+EXEC : warning : `linux-monitor` (bin "linux-monitor") generated 1 warning [D:\FreeWPFShell\FreeWPFShell.csproj]
+      Finished `release` profile [optimized] target(s) in 0.09s
+  [INFO] 移动 linux-monitor 到当前目录...
+  已复制         1 个文件。
+  [SUCCESS] Rust 模块已就绪。
+  "Rust编译成功"
+  FreeWPFShell -> D:\FreeWPFShell\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64\FreeWPFShell.dll
+D:\FreeWPFShell\Tests\FreeWPFShell.Tests\Integration\SftpIntegrationTests.cs(286,24): error CS1501: “UploadFile”方法没有采用 5 个参数的重载 [D:\FreeWPFShell\Tests\FreeWPFShell.Tests\FreeWPFShell.Tests.csproj]
+D:\FreeWPFShell\Tests\FreeWPFShell.Tests\Integration\SftpIntegrationTests.cs(366,45): error CS1501: “UploadFile”方法没有采用 5 个参数的重载 [D:\FreeWPFShell\Tests\FreeWPFShell.Tests\FreeWPFShell.Tests.csproj]

@@ -8,4 +8,7 @@
   <Project Path="FreeWPFShell.csproj">
     <Platform Project="x64" />
   </Project>
+  <Project Path="Tests/FreeWPFShell.Tests/FreeWPFShell.Tests.csproj">
+    <Platform Project="x64" />
+  </Project>
 </Solution>

@@ -84,6 +84,21 @@ namespace FreeWPFShell.Services
             Monitor = monitor;
         }
 
+        /// <summary>
+        /// 仅供单元测试使用：构造一个不依赖真实 SSH 客户端的实例，
+        /// 用于直接测试 top/proc 文本解析逻辑。
+        /// </summary>
+        internal SshMonitorService(MonitorData monitor)
+        {
+            _sshClient = null!;
+            _sftpClient = null!;
+            _hostInfo = new SshConnectionInfo();
+            _sessionId = "test";
+            _settingsRepo = new SettingsRepository();
+            _sftpLock = new object();
+            Monitor = monitor;
+        }
+
         public async Task StartAsync()
         {
             try
@@ -153,7 +168,7 @@ namespace FreeWPFShell.Services
             catch { Monitor.Ping = "错误"; }
         }
 
-        private void ParseLinuxMonitorJson(string json)
+        internal void ParseLinuxMonitorJson(string json)
         {
             var stats = JsonSerializer.Deserialize<SysStats>(json, s_jsonOptions);
             if (stats == null) return;
@@ -190,7 +205,7 @@ namespace FreeWPFShell.Services
             MonitorUpdated?.Invoke(this, Monitor);
         }
 
-        private void ParseTopOutput(string output)
+        internal void ParseTopOutput(string output)
         {
             var sections = output.Split(s_topSections, StringSplitOptions.None);
             if (sections.Length == 0) return;

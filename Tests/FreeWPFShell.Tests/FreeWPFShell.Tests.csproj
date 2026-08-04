@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MSTest.TestAdapter" Version="3.6.4" />
+    <PackageReference Include="MSTest.TestFramework" Version="3.6.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\FreeWPFShell.csproj">
+      <AdditionalProperties>Platform=x64</AdditionalProperties>
+    </ProjectReference>
+  </ItemGroup>
+
+  <!-- 集成测试服务器配置：复制到输出目录供测试读取 -->
+  <ItemGroup>
+    <None Include="sshtest.json" CopyToOutputDirectory="PreserveNewest" Condition="Exists('sshtest.json')" />
+    <None Include="sshtest.json.sample" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- IP 地理库 mmdb：复制到输出目录供 IpGeoService 查询测试 -->
+  <ItemGroup>
+    <None Include="..\..\IPDataBase\**\*.mmdb" CopyToOutputDirectory="PreserveNewest" LinkBase="IPDataBase" />
+  </ItemGroup>
+
+</Project>

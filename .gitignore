@@ -371,3 +371,6 @@ PackFreeWPFShell/
 .claude/
 
 .antigravitycli/
+
+# 测试服务器的真实凭据（含密码），不入库；仅提交 sshtest.json.sample 示例
+Tests/FreeWPFShell.Tests/sshtest.json

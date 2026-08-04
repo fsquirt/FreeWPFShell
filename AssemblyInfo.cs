@@ -1,5 +1,9 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Windows;
+
+// 允许测试项目访问 internal 成员，用于单元测试
+[assembly: InternalsVisibleTo("FreeWPFShell.Tests")]
 
 [assembly: ThemeInfo(
     ResourceDictionaryLocation.None,            //where theme specific resource dictionaries are located

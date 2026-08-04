@@ -50,6 +50,14 @@
     <None Include="IPDataBase\**\*.mmdb" CopyToOutputDirectory="PreserveNewest" LinkBase="IPDataBase" />
   </ItemGroup>
 
+  <!-- 排除测试项目目录，避免测试代码被主项目默认编译规则包含 -->
+  <ItemGroup>
+    <Compile Remove="Tests\**\*.cs" />
+    <None Remove="Tests\**" />
+    <Content Remove="Tests\**" />
+    <Page Remove="Tests\**\*.xaml" />
+  </ItemGroup>
+
   <ItemGroup>
     <Content Include="MainIcon.ico" />
   </ItemGroup>

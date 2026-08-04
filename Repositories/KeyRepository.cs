@@ -28,6 +28,16 @@ namespace FreeWPFShell.Repositories
             Reload();
         }
 
+        /// <summary>
+        /// 仅供单元测试使用：指定密钥库文件路径，避免污染真实用户数据。
+        /// </summary>
+        internal KeyRepository(string keysFilePath)
+        {
+            _filePath = keysFilePath;
+            _settingsRepo = new SettingsRepository();
+            Reload();
+        }
+
         public void Reload()
         {
             if (File.Exists(_filePath))
