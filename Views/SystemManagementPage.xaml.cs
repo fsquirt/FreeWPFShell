@@ -9,6 +9,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using FreeWPFShell.Models;
+using FreeWPFShell.Models.Dto;
 using FreeWPFShell.Services;
 using FreeWPFShell.Share;
 

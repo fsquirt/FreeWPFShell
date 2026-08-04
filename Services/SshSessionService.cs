@@ -10,7 +10,9 @@ using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Windows;
 using FreeWPFShell.Models;
+using FreeWPFShell.Models.Dto;
 using FreeWPFShell.Repositories;
+using FreeWPFShell.Services.Abstractions;
 using FreeWPFShell.Share;
 using Renci.SshNet;
 
@@ -64,9 +66,6 @@ namespace FreeWPFShell.Services
             set { if (_isAppCursorMode != value) { _isAppCursorMode = value; OnPropertyChanged(); } }
         }
 
-        private readonly List<SshTunnelInfo> _associatedTunnels = new();
-        private readonly object _tunnelLock = new();
-        private bool _tunnelCleanupDone;
         private readonly SettingsRepository _settingsRepo;
         private readonly object _sftpLock = new();
 
@@ -74,6 +73,12 @@ namespace FreeWPFShell.Services
         private SshClient? _jumpClient;
         private ForwardedPortLocal? _jumpPort;
         public object SftpLock => _sftpLock;
+
+        // 会话级隧道管理（单一职责）
+        private ITunnelService? _tunnelService;
+
+        // SSH/SFTP 客户端工厂（连接参数构建）
+        private readonly IConnectionFactory _connectionFactory;
 
         private RemoteFileService? _fileService;
         private SshMonitorService? _monitorService;
@@ -89,6 +94,8 @@ namespace FreeWPFShell.Services
             SessionIndex = Interlocked.Increment(ref _sessionCounter) - 1;
             string baseName = string.IsNullOrEmpty(hostInfo.HostName) ? hostInfo.IpAddress : hostInfo.HostName;
             DisplayName = $"{baseName} #{SessionIndex}";
+            _tunnelService = new TunnelService(hostInfo.Id, hostInfo.HostName ?? hostInfo.IpAddress);
+            _connectionFactory = new ConnectionFactory();
         }
 
         public async Task EditRemoteFileAsync(string remotePath, string editorCommand)
@@ -229,141 +236,25 @@ namespace FreeWPFShell.Services
             { IsBackground = true }.Start();
         }
 
-        private ConnectionInfo BuildConnectionInfo(PrivateKeyFile? preloadedKey = null)
-        {
-            var authMethods = new List<AuthenticationMethod>(2);
-
-            if (HostInfo.AuthMethod == SshAuthMethod.Password)
-            {
-                authMethods.Add(new PasswordAuthenticationMethod(
-                    HostInfo.SshUser, HostInfo.DecryptedSshSecret ?? ""));
-            }
-            else
-            {
-                if (preloadedKey == null)
-                    throw new Exception("密钥未预加载，请确保在连接前已加载密钥。");
-                authMethods.Add(new PrivateKeyAuthenticationMethod(HostInfo.SshUser, preloadedKey));
-            }
-
-            // SSH 隧道代理：通过本地转发端口连接，不使用 SSH.NET 的 Proxy 机制
-            if (HostInfo.UseProxy && HostInfo.Proxy?.Type == ProxyType.Ssh && _jumpPort != null)
-            {
-                var conn = new ConnectionInfo(
-                    "127.0.0.1", (int)_jumpPort.BoundPort, HostInfo.SshUser,
-                    authMethods.ToArray());
-                conn.Encoding = Encoding.UTF8;
-                conn.Timeout = TimeSpan.FromSeconds(30);
-                return conn;
-            }
-
-            if (HostInfo.UseProxy && HostInfo.Proxy != null)
-            {
-                ProxyTypes proxyType = HostInfo.Proxy.Type switch
-                {
-                    ProxyType.Http => ProxyTypes.Http,
-                    ProxyType.Socks4 => ProxyTypes.Socks4,
-                    ProxyType.Socks5 => ProxyTypes.Socks5,
-                    _ => ProxyTypes.None
-                };
-                return new ConnectionInfo(
-                    HostInfo.IpAddress, HostInfo.SshPort, HostInfo.SshUser,
-                    proxyType, HostInfo.Proxy.ServerAddress, HostInfo.Proxy.Port,
-                    HostInfo.Proxy.Username, HostInfo.Proxy.Password,
-                    authMethods.ToArray());
-            }
-
-            var defaultConn = new ConnectionInfo(
-                HostInfo.IpAddress, HostInfo.SshPort, HostInfo.SshUser,
-                authMethods.ToArray());
-            defaultConn.Encoding = Encoding.UTF8;
-            return defaultConn;
-        }
-
         private SshClient BuildSshClient(PrivateKeyFile? preloadedKey = null)
-        {
-            var client = new SshClient(BuildConnectionInfo(preloadedKey));
-            client.ErrorOccurred += (sender, e) =>
-            {
-                try { Debug.WriteLine($"[SshClient Error] {e.Exception?.Message}"); } catch { }
-            };
-            return client;
-        }
+            => _connectionFactory.BuildSshClient(HostInfo, preloadedKey, _jumpPort);
 
         private SftpClient BuildSftpClient(PrivateKeyFile? preloadedKey = null)
-        {
-            var client = new SftpClient(BuildConnectionInfo(preloadedKey));
-            client.ErrorOccurred += (sender, e) =>
-            {
-                try { Debug.WriteLine($"[SftpClient Error] {e.Exception?.Message}"); } catch { }
-            };
-            return client;
-        }
+            => _connectionFactory.BuildSftpClient(HostInfo, preloadedKey, _jumpPort);
 
         private SshClient BuildJumpClient(PrivateKeyFile? jumpKey = null)
-        {
-            if (HostInfo.Proxy == null || HostInfo.Proxy.Type != ProxyType.Ssh)
-                throw new Exception("跳板机配置无效。");
-
-            var authMethods = new List<AuthenticationMethod>(1);
-            if (jumpKey != null)
-                authMethods.Add(new PrivateKeyAuthenticationMethod(HostInfo.Proxy.Username, jumpKey));
-            else
-                authMethods.Add(new PasswordAuthenticationMethod(HostInfo.Proxy.Username, HostInfo.Proxy.Password));
-
-            var connInfo = new ConnectionInfo(
-                HostInfo.Proxy.ServerAddress, HostInfo.Proxy.Port, HostInfo.Proxy.Username,
-                authMethods.ToArray());
-            connInfo.Encoding = Encoding.UTF8;
-            connInfo.Timeout = TimeSpan.FromSeconds(15);
-
-            var client = new SshClient(connInfo);
-            client.ErrorOccurred += (sender, e) =>
-            {
-                try { Debug.WriteLine($"[JumpClient Error] {e.Exception?.Message}"); } catch { }
-            };
-            return client;
-        }
+            => _connectionFactory.BuildJumpClient(HostInfo, jumpKey);
 
         public void RegisterTunnel(SshTunnelInfo tunnel)
-        {
-            lock (_tunnelLock) { _associatedTunnels.Add(tunnel); }
-            SshTunnelManager.Instance.RegisterTunnel(tunnel);
-        }
+            => _tunnelService?.RegisterTunnel(tunnel);
 
         /// <summary>
         /// 幂等清理本会话创建的所有 SSH 隧道（Stop 端口并从全局隧道表移除）。
         /// 在连接意外断开、主动断开或会话结束时都会调用，确保不会残留隧道。
+        /// 委托给独立的 TunnelService 处理，避免上帝对象内维护大量隧道状态。
         /// </summary>
         public void CleanupTunnels()
-        {
-            // 防重入：避免 Disconnected 事件、Disconnect()、CloseTab 等多条路径并发重复清理
-            bool needClean;
-            lock (_tunnelLock)
-            {
-                if (_tunnelCleanupDone) return;
-                _tunnelCleanupDone = true;
-                needClean = _associatedTunnels.Count > 0;
-            }
-            if (!needClean) return;
-
-            try
-            {
-                lock (_tunnelLock)
-                {
-                    foreach (var tunnel in _associatedTunnels)
-                    {
-                        try
-                        {
-                            if (tunnel.PortConfig != null && tunnel.PortConfig.IsStarted) tunnel.PortConfig.Stop();
-                            SshTunnelManager.Instance.UnregisterTunnel(tunnel.Id);
-                        }
-                        catch { }
-                    }
-                    _associatedTunnels.Clear();
-                }
-            }
-            catch { }
-        }
+            => _tunnelService?.CleanupTunnels();
 
         /// <summary>
         /// 终端连接断连回调：当 SSH 连接意外断开（网络中断/服务器关闭）时，
@@ -428,7 +319,7 @@ namespace FreeWPFShell.Services
                     }
                 }
                 catch { }
-                CleanupTunnels();
+                try { _tunnelService?.Dispose(); } catch { }
 
                 try
                 {

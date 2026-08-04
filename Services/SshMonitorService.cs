@@ -11,6 +11,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using FreeWPFShell.Models;
+using FreeWPFShell.Models.Dto;
 using FreeWPFShell.Repositories;
 using FreeWPFShell.Share;
 using Renci.SshNet;

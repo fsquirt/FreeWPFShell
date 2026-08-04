@@ -1,8 +1,8 @@
-using FreeWPFShell.Share;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace FreeWPFShell.Models
 {
-    public class TracerouteHop : ObservableObject
+    public partial class TracerouteHop : ObservableObject
     {
         private string _ip = string.Empty;
         private string _simpleGeo = string.Empty;
@@ -15,31 +15,31 @@ namespace FreeWPFShell.Models
         public string Ip
         {
             get => _ip;
-            set => SetField(ref _ip, value);
+            set => SetProperty(ref _ip, value);
         }
 
         public string SimpleGeo
         {
             get => _simpleGeo;
-            set => SetField(ref _simpleGeo, value);
+            set => SetProperty(ref _simpleGeo, value);
         }
 
         public string Latency
         {
             get => _latency;
-            set => SetField(ref _latency, value);
+            set => SetProperty(ref _latency, value);
         }
 
         public string Status
         {
             get => _status;
-            set => SetField(ref _status, value);
+            set => SetProperty(ref _status, value);
         }
 
         public IpGeoResult? GeoDetail
         {
             get => _geoDetail;
-            set => SetField(ref _geoDetail, value);
+            set => SetProperty(ref _geoDetail, value);
         }
     }
 }

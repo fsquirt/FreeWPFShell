@@ -18,7 +18,7 @@ namespace FreeWPFShell.Views
         public WelcomePage()
         {
             InitializeComponent();
-            _hostRepo = new HostRepository(new SettingsRepository());
+            _hostRepo = Core.AppServices.GetService<HostRepository>();
             LoadHosts();
         }
 

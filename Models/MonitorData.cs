@@ -1,10 +1,9 @@
 using System.Collections.Generic;
-using FreeWPFShell.Models;
-using FreeWPFShell.Share;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace FreeWPFShell.Models
 {
-    public class MonitorData : ObservableObject
+    public partial class MonitorData : ObservableObject
     {
         private double _cpuPct;
         private double _memPct;

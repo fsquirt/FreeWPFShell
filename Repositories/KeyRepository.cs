@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -10,7 +9,6 @@ using System.Threading.Tasks;
 using FreeWPFShell.Models;
 using Renci.SshNet;
 using Windows.Security.Credentials;
-using Windows.Security.Credentials.UI;
 
 namespace FreeWPFShell.Repositories
 {
@@ -227,55 +225,7 @@ namespace FreeWPFShell.Repositories
             }
         }
 
-        // ─── Windows Hello 验证 ────────────────────────────────────
-        // 和 HostRepository 保持一致的验证逻辑
-
-        [DllImport("kernel32.dll", ExactSpelling = true)]
-        private static extern IntPtr GetConsoleWindow();
-
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-        private struct CREDUI_INFO
-        {
-            public int cbSize;
-            public IntPtr hwndParent;
-            public string pszMessageText;
-            public string pszCaptionText;
-            public IntPtr hbmBanner;
-        }
-
-        [DllImport("credui.dll", CharSet = CharSet.Unicode)]
-        private static extern uint CredUIPromptForWindowsCredentials(
-            ref CREDUI_INFO pUiInfo, int authError, ref uint pulAuthPackage,
-            IntPtr pvInAuthBuffer, uint ulInAuthBufferSize,
-            out IntPtr ppvOutAuthBuffer, out uint pulOutAuthBufferSize,
-            ref bool pfSave, int flags);
-
-        private async Task<bool> RequestAuthenticationAsync(string prompt)
-        {
-            try
-            {
-                var availability = await UserConsentVerifier.CheckAvailabilityAsync();
-                if (availability == UserConsentVerifierAvailability.Available)
-                {
-                    var result = await UserConsentVerifier.RequestVerificationAsync(prompt);
-                    if (result == UserConsentVerificationResult.Verified) return true;
-                    if (result == UserConsentVerificationResult.Canceled) return false;
-                }
-            }
-            catch { }
-            return await Task.Run(() =>
-            {
-                int authError = 0;
-                while (true)
-                {
-                    var uiInfo = new CREDUI_INFO { cbSize = Marshal.SizeOf(typeof(CREDUI_INFO)), hwndParent = GetConsoleWindow(), pszMessageText = prompt };
-                    uint authPackage = 0; IntPtr outBuffer; uint outSize; bool save = false;
-                    uint result = CredUIPromptForWindowsCredentials(ref uiInfo, authError, ref authPackage, IntPtr.Zero, 0, out outBuffer, out outSize, ref save, 0x1);
-                    if (result == 1223) return false;
-                    if (result == 0) { if (outBuffer != IntPtr.Zero) Marshal.FreeCoTaskMem(outBuffer); return true; }
-                    authError = (int)result;
-                }
-            });
-        }
+        private static async Task<bool> RequestAuthenticationAsync(string prompt)
+            => await Services.CredentialPromptService.RequestAuthenticationAsync(prompt);
     }
 }

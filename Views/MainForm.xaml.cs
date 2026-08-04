@@ -39,7 +39,7 @@ namespace FreeWPFShell.Views
         {
             InitializeComponent();
 
-            var settingsRepo = new Repositories.SettingsRepository();
+            var settingsRepo = Core.AppServices.GetService<Repositories.SettingsRepository>();
             BackdropService.ApplyToAllWindows(settingsRepo.Load().BackdropType);
 
             var welcomePage = new WelcomePage();
