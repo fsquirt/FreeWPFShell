@@ -64,6 +64,8 @@ namespace FreeWPFShell.Services
 
         public Action<string>? ConnectionStatusCallback { get; set; }
         public Action<SshTunnelInfo>? RegisterTunnelCallback { get; set; }
+        // 当监控轮询检测到 SSH 连接断开时触发，用于清理会话相关资源（如隧道）
+        public Action? ConnectionLostCallback { get; set; }
 
         private void NotifyStatus(string status)
         {
@@ -108,7 +110,13 @@ namespace FreeWPFShell.Services
 
         private async void OnMonitorTick(object? sender, System.Timers.ElapsedEventArgs e)
         {
-            if (!_sshClient.IsConnected) return;
+            if (!_sshClient.IsConnected)
+            {
+                // 连接已断开：通知上层清理资源（隧道等），并停止轮询避免空转
+                ConnectionLostCallback?.Invoke();
+                _monitorTimer?.Stop();
+                return;
+            }
             _tickCount++;
             await PingCheckAsync();
             try

@@ -123,12 +123,16 @@ namespace FreeWPFShell.Views
 
                 if (content is TerminalAndSFTP termPage)
                 {
-                    // 先清理引用链（退订事件、释放 Terminal 原生资源），再断开连接
+                    // 先保存会话引用：Cleanup() 内部会把 termPage.Session 置 null，
+                    // 若在此之后再读取 termPage.Session 将恒为 null，导致会话无法
+                    // 从 ActiveSessions 移除、Dispose 不执行、隧道残留。
+                    var session = termPage.Session;
+                    // 再清理引用链（退订事件、释放 Terminal 原生资源），再断开连接
                     termPage.Cleanup();
-                    if (termPage.Session != null)
+                    if (session != null)
                     {
-                        ActiveSessions.Remove(termPage.Session);
-                        termPage.Session.Dispose();
+                        ActiveSessions.Remove(session);
+                        session.Dispose(); // → Disconnect → CleanupTunnels
                     }
                 }
 

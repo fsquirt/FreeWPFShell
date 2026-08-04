@@ -65,6 +65,8 @@ namespace FreeWPFShell.Services
         }
 
         private readonly List<SshTunnelInfo> _associatedTunnels = new();
+        private readonly object _tunnelLock = new();
+        private bool _tunnelCleanupDone;
         private readonly SettingsRepository _settingsRepo;
         private readonly object _sftpLock = new();
 
@@ -173,6 +175,8 @@ namespace FreeWPFShell.Services
                     {
                         IsAppCursorMode = isApp;
                     };
+                    // 订阅终端断连：连接意外断开时自动清理本会话隧道
+                    TerminalConnection.ConnectionLost += OnTerminalConnectionLost;
 
                     // 先在后台线程建好 ShellStream，UI 线程设 Connection 时不会卡
                     TerminalConnection.Start();
@@ -204,6 +208,8 @@ namespace FreeWPFShell.Services
                             _monitorService.MonitorUpdated += (s, e) => MonitorUpdated?.Invoke(this, e);
                             _monitorService.ConnectionStatusCallback = (status) => ConnectionStatus = status;
                             _monitorService.RegisterTunnelCallback = RegisterTunnel;
+                            // 监控轮询检测到连接断开时，自动清理隧道（兜底信号，覆盖终端流未及时返回 0 的场景）
+                            _monitorService.ConnectionLostCallback = CleanupTunnels;
                             _monitorService.StartAsync().GetAwaiter().GetResult();
                         }
                     }
@@ -320,8 +326,53 @@ namespace FreeWPFShell.Services
 
         public void RegisterTunnel(SshTunnelInfo tunnel)
         {
-            lock (_associatedTunnels) { _associatedTunnels.Add(tunnel); }
+            lock (_tunnelLock) { _associatedTunnels.Add(tunnel); }
             SshTunnelManager.Instance.RegisterTunnel(tunnel);
+        }
+
+        /// <summary>
+        /// 幂等清理本会话创建的所有 SSH 隧道（Stop 端口并从全局隧道表移除）。
+        /// 在连接意外断开、主动断开或会话结束时都会调用，确保不会残留隧道。
+        /// </summary>
+        public void CleanupTunnels()
+        {
+            // 防重入：避免 Disconnected 事件、Disconnect()、CloseTab 等多条路径并发重复清理
+            bool needClean;
+            lock (_tunnelLock)
+            {
+                if (_tunnelCleanupDone) return;
+                _tunnelCleanupDone = true;
+                needClean = _associatedTunnels.Count > 0;
+            }
+            if (!needClean) return;
+
+            try
+            {
+                lock (_tunnelLock)
+                {
+                    foreach (var tunnel in _associatedTunnels)
+                    {
+                        try
+                        {
+                            if (tunnel.PortConfig != null && tunnel.PortConfig.IsStarted) tunnel.PortConfig.Stop();
+                            SshTunnelManager.Instance.UnregisterTunnel(tunnel.Id);
+                        }
+                        catch { }
+                    }
+                    _associatedTunnels.Clear();
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// 终端连接断连回调：当 SSH 连接意外断开（网络中断/服务器关闭）时，
+        /// 由 SshTerminalConnection 触发，立即清理本会话所有隧道，
+        /// 不依赖 UI 弹窗确认，避免残留隧道占用端口或导致后续连接异常。
+        /// </summary>
+        private void OnTerminalConnectionLost(object? sender, EventArgs e)
+        {
+            CleanupTunnels();
         }
 
         #region Linux Monitor API Delegation
@@ -368,28 +419,21 @@ namespace FreeWPFShell.Services
                 try { _fileService?.Dispose(); } catch { }
                 _fileService = null;
 
+                // 清理本会话创建的所有隧道（含跳板机、监控、手动创建的），幂等
+                try
+                {
+                    if (TerminalConnection != null)
+                    {
+                        TerminalConnection.ConnectionLost -= OnTerminalConnectionLost;
+                    }
+                }
+                catch { }
+                CleanupTunnels();
+
                 try
                 {
                     string localDir = Path.Combine(Path.GetTempPath(), "FreeWPFShell", SessionId);
                     if (Directory.Exists(localDir)) Directory.Delete(localDir, true);
-                }
-                catch { }
-
-                try
-                {
-                    lock (_associatedTunnels)
-                    {
-                        foreach (var tunnel in _associatedTunnels)
-                        {
-                            try
-                            {
-                                if (tunnel.PortConfig != null && tunnel.PortConfig.IsStarted) tunnel.PortConfig.Stop();
-                                SshTunnelManager.Instance.UnregisterTunnel(tunnel.Id);
-                            }
-                            catch { }
-                        }
-                        _associatedTunnels.Clear();
-                    }
                 }
                 catch { }
 
