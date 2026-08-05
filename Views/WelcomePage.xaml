@@ -51,12 +51,13 @@
 
             <ListBox.ItemTemplate>
                 <DataTemplate>
-                    <Border Background="#1C2E41" Margin="5" Padding="15" CornerRadius="8" Width="280">
+                    <Border Background="#1C2E41" Margin="5" Padding="15" CornerRadius="8" Width="280"
+                            Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=ListBox}}">
                         <Border.ContextMenu>
                             <ContextMenu>
-                                <MenuItem Header="连接主机" Command="{Binding PlacementTarget.DataContext.ConnectCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
-                                <MenuItem Header="编辑连接" Command="{Binding PlacementTarget.DataContext.EditCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
-                                <MenuItem Header="删除连接" Command="{Binding PlacementTarget.DataContext.DeleteCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
+                                <MenuItem Header="连接主机" Command="{Binding PlacementTarget.Tag.ConnectCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
+                                <MenuItem Header="编辑连接" Command="{Binding PlacementTarget.Tag.EditCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
+                                <MenuItem Header="删除连接" Command="{Binding PlacementTarget.Tag.DeleteCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
                             </ContextMenu>
                         </Border.ContextMenu>
                         <StackPanel>

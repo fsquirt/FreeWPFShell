@@ -26,6 +26,14 @@ namespace FreeWPFShell.Repositories
             Reload();
         }
 
+        /// <summary>仅供单元测试使用：指定主机库文件路径，避免污染真实用户数据。</summary>
+        internal HostRepository(SettingsRepository settingsRepo, string hostsFilePath)
+        {
+            _settingsRepo = settingsRepo;
+            _filePath = hostsFilePath;
+            Reload();
+        }
+
         public void Reload()
         {
             if (File.Exists(_filePath))

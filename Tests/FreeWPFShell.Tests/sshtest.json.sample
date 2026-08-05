@@ -2,5 +2,17 @@
   "Host": "127.0.0.1",
   "Port": 22,
   "User": "root",
-  "Password": "your-password-here"
+  "Password": "your-password-here",
+  "ProxyHost": "127.0.0.1",
+  "ProxyPort": 10808,
+  "ProxyUser": "",
+  "ProxyPassword": "",
+  "RemoteHost": "your-remote-host",
+  "RemotePort": 22,
+  "RemoteUser": "root",
+  "RemotePassword": "your-remote-password",
+  "JumpHost": "your-jump-host",
+  "JumpPort": 22,
+  "JumpUser": "root",
+  "JumpPassword": "your-jump-password"
 }
