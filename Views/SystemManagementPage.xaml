@@ -42,7 +42,8 @@
 
             <DataGrid Grid.Row="1" x:Name="ProcessGrid" AutoGenerateColumns="False" IsReadOnly="True"
                       Background="Transparent" RowHeaderWidth="0" GridLinesVisibility="Horizontal"
-                      HeadersVisibility="Column" SelectionMode="Single" SelectionChanged="ProcessGrid_SelectionChanged" FontFamily="Consolas, Microsoft YaHei" FontSize="13">
+                      HeadersVisibility="Column" SelectionMode="Single"
+                      SelectedItem="{Binding SelectedProcess}" FontFamily="Consolas, Microsoft YaHei" FontSize="13">
                 <DataGrid.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="发送 SIGTERM (Kill)" Click="CtxKill_Click" />
@@ -68,7 +69,7 @@
 
             <Border Grid.Row="3" BorderBrush="#555" BorderThickness="0,1,0,0" Margin="0,5,0,0" Padding="10" Background="#1A000000">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <TextBlock x:Name="TxtProcessDetail" Text="请从上方列表中选择一个进程以查看详细信息..." TextWrapping="Wrap" FontFamily="Consolas, Microsoft YaHei" FontSize="12" />
+                    <TextBlock x:Name="TxtProcessDetail" Text="{Binding ProcessDetailText}" TextWrapping="Wrap" FontFamily="Consolas, Microsoft YaHei" FontSize="12" />
                 </ScrollViewer>
             </Border>
         </Grid>
@@ -93,7 +94,8 @@
 
             <DataGrid Grid.Row="1" x:Name="NetGrid" AutoGenerateColumns="False" IsReadOnly="True"
                       Background="Transparent" RowHeaderWidth="0" GridLinesVisibility="Horizontal"
-                      HeadersVisibility="Column" SelectionMode="Single" FontFamily="Consolas, Microsoft YaHei" FontSize="13">
+                      HeadersVisibility="Column" SelectionMode="Single"
+                      SelectedItem="{Binding SelectedNetConn}" FontFamily="Consolas, Microsoft YaHei" FontSize="13">
                 <DataGrid.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="发送 SIGTERM (Kill)" Click="CtxKillNet_Click" />
@@ -190,7 +192,8 @@
 
                 <DataGrid x:Name="ServiceGrid" AutoGenerateColumns="False" IsReadOnly="True"
                           Background="Transparent" RowHeaderWidth="0" GridLinesVisibility="Horizontal"
-                          HeadersVisibility="Column" SelectionMode="Single" FontFamily="Consolas, Microsoft YaHei">
+                          HeadersVisibility="Column" SelectionMode="Single"
+                          SelectedItem="{Binding SelectedService}" FontFamily="Consolas, Microsoft YaHei">
                     <DataGrid.ContextMenu>
                         <ContextMenu>
                             <MenuItem Header="启动服务" Click="CtxServiceStart_Click">
@@ -237,7 +240,7 @@
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                     <icon:PackIconRemixIcon Kind="TimeLine" Foreground="#FF9800" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,5,0"/>
                     <TextBlock Text="计划任务" FontWeight="Bold" FontSize="16" VerticalAlignment="Center"/>
-                    <TextBlock x:Name="TxtCronServiceStatus" Text="检查中..." FontSize="11" Foreground="Gray" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                    <TextBlock x:Name="TxtCronServiceStatus" Text="{Binding CronServiceStatus}" FontSize="11" Foreground="Gray" VerticalAlignment="Center" Margin="10,0,0,0"/>
                     <TextBlock Text="搜索:" VerticalAlignment="Center" Margin="20,0,5,0"/>
                     <mica:TextBox x:Name="TxtCronSearch" Width="150" Height="26" TextChanged="TxtCronSearch_TextChanged"/>
                     <mica:Button x:Name="BtnRefreshCron" Content="刷新" Click="BtnRefreshCron_Click" Margin="10,0,0,0" Width="60" Height="26"/>
@@ -246,7 +249,8 @@
 
                 <DataGrid x:Name="CronGrid" AutoGenerateColumns="False" IsReadOnly="True"
                           Background="Transparent" RowHeaderWidth="0" GridLinesVisibility="Horizontal"
-                          HeadersVisibility="Column" SelectionMode="Single" FontFamily="Consolas, Microsoft YaHei">
+                          HeadersVisibility="Column" SelectionMode="Single"
+                          SelectedItem="{Binding SelectedCronJob}" FontFamily="Consolas, Microsoft YaHei">
                     <DataGrid.ContextMenu>
                         <ContextMenu>
                             <MenuItem Header="启用" Click="CtxCronEnable_Click">
@@ -309,15 +313,15 @@
                                 <ColumnDefinition Width="50"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="分 时 日 月 周" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <mica:TextBox x:Name="TxtCronMin" Grid.Column="1" Text="*" Height="26" Margin="2,0"/>
-                            <mica:TextBox x:Name="TxtCronHour" Grid.Column="2" Text="*" Height="26" Margin="2,0"/>
-                            <mica:TextBox x:Name="TxtCronDom" Grid.Column="3" Text="*" Height="26" Margin="2,0"/>
-                            <mica:TextBox x:Name="TxtCronMonth" Grid.Column="4" Text="*" Height="26" Margin="2,0"/>
-                            <mica:TextBox x:Name="TxtCronDow" Grid.Column="5" Text="*" Height="26" Margin="2,0"/>
+                            <mica:TextBox x:Name="TxtCronMin" Grid.Column="1" Text="{Binding CronMin}" Height="26" Margin="2,0"/>
+                            <mica:TextBox x:Name="TxtCronHour" Grid.Column="2" Text="{Binding CronHour}" Height="26" Margin="2,0"/>
+                            <mica:TextBox x:Name="TxtCronDom" Grid.Column="3" Text="{Binding CronDom}" Height="26" Margin="2,0"/>
+                            <mica:TextBox x:Name="TxtCronMonth" Grid.Column="4" Text="{Binding CronMonth}" Height="26" Margin="2,0"/>
+                            <mica:TextBox x:Name="TxtCronDow" Grid.Column="5" Text="{Binding CronDow}" Height="26" Margin="2,0"/>
                         </Grid>
                         <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
                             <TextBlock Text="命令:" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <mica:TextBox x:Name="TxtCronCommand" Width="400" Height="26"/>
+                            <mica:TextBox x:Name="TxtCronCommand" Width="400" Height="26" Text="{Binding CronCommand}"/>
                             <mica:Button x:Name="BtnAddCron" Content="添加" Click="BtnAddCron_Click" Width="60" Height="26" Margin="10,0,0,0"/>
                         </StackPanel>
                     </StackPanel>

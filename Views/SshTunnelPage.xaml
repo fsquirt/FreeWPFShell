@@ -20,10 +20,14 @@
                     </Grid.ColumnDefinitions>
                     
                     <TextBlock Text="目标主机:" VerticalAlignment="Center"/>
-                    <ComboBox x:Name="CmbHosts" Grid.Column="1" Margin="5,0,20,0" />
+                    <ComboBox Grid.Column="1" Margin="5,0,20,0"
+                              ItemsSource="{Binding ActiveSessions}"
+                              DisplayMemberPath="DisplayName"
+                              SelectedItem="{Binding SelectedSession}" />
                     
                     <TextBlock Grid.Column="2" Text="隧道类型:" VerticalAlignment="Center"/>
-                    <ComboBox x:Name="CmbTunnelType" Grid.Column="3" Margin="5,0,0,0" SelectedIndex="0">
+                    <ComboBox Grid.Column="3" Margin="5,0,0,0"
+                              SelectedIndex="{Binding TunnelTypeIndex}">
                         <ComboBoxItem Content="服务器 -> 本机" />
                         <ComboBoxItem Content="本机 -> 服务器" />
                     </ComboBox>
@@ -44,19 +48,19 @@
                     </Grid.ColumnDefinitions>
 
                     <TextBlock Text="本机端口:" VerticalAlignment="Center"/>
-                    <mica:TextBox x:Name="TxtBindPort" Grid.Column="1" Text="8080" />
+                    <mica:TextBox Grid.Column="1" Text="{Binding BindPort}" />
                     
                     <TextBlock Text="&lt;-&gt;" Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Center" />
                     
                     <TextBlock Text="服务器地址:" Grid.Column="3" VerticalAlignment="Center" />
-                    <mica:TextBox x:Name="TxtDestAddr" Grid.Column="4" Text="127.0.0.1" />
+                    <mica:TextBox Grid.Column="4" Text="{Binding DestAddr}" />
 
                     <TextBlock Text=":" Grid.Column="5" VerticalAlignment="Center" HorizontalAlignment="Center" />
                     
                     <TextBlock Text="服务器端口:" Grid.Column="6" VerticalAlignment="Center" />
-                    <mica:TextBox x:Name="TxtDestPort" Grid.Column="7" Text="80" />
+                    <mica:TextBox Grid.Column="7" Text="{Binding DestPort}" />
                     
-                    <mica:Button x:Name="BtnAddTunnel" Grid.Column="9" Content="添加隧道" Click="BtnAddTunnel_Click" Height="30"/>
+                    <mica:Button Grid.Column="9" Content="添加隧道" Command="{Binding AddTunnelCommand}" Height="30"/>
                 </Grid>
                 
                 <Grid Margin="0,10,0,0">
@@ -65,12 +69,12 @@
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
                     <TextBlock Text="隧道备注:" VerticalAlignment="Center"/>
-                    <mica:TextBox x:Name="TxtRemark" Grid.Column="1" Margin="5,0,0,0" Text="手动创建" />
+                    <mica:TextBox Grid.Column="1" Margin="5,0,0,0" Text="{Binding Remark}" />
                 </Grid>
             </StackPanel>
         </StackPanel>
 
-        <DataGrid x:Name="TunnelGrid" Grid.Row="1" AutoGenerateColumns="False" IsReadOnly="True" 
+        <DataGrid Grid.Row="1" ItemsSource="{Binding ActiveTunnels}" AutoGenerateColumns="False" IsReadOnly="True" 
                   Background="#1AFFFFFF" RowBackground="Transparent" AlternatingRowBackground="#0DFFFFFF"
                   HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#33FFFFFF">
             <DataGrid.Columns>
@@ -81,7 +85,10 @@
                 <DataGridTemplateColumn Header="操作" Width="80">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
-                            <mica:Button Content="删除" Tag="{Binding Id}" Click="BtnDeleteTunnel_Click" Padding="5,2" />
+                            <mica:Button Content="删除"
+                                         Command="{Binding DataContext.DeleteTunnelCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                         CommandParameter="{Binding}"
+                                         Padding="5,2" />
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>

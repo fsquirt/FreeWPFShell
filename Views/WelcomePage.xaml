@@ -16,19 +16,19 @@
             <Grid Grid.Row="0" Margin="20,20,20,0">
                 <TextBlock Text="已保存的主机列表:" FontSize="16" VerticalAlignment="Center" HorizontalAlignment="Left" />
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <mica:Button x:Name="BtnSettings" Margin="0,0,10,0" Padding="10,4" Click="BtnSettings_Click">
+                    <mica:Button Margin="0,0,10,0" Padding="10,4" Command="{Binding OpenSettingsCommand}">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconRemixIcon Kind="Settings3Line" Foreground="#AAA" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,5,0"/>
                             <TextBlock Text="设置" VerticalAlignment="Center"/>
                         </StackPanel>
                     </mica:Button>
-                    <mica:Button x:Name="BtnKeyManager" Margin="0,0,10,0" Padding="10,4" Click="BtnKeyManager_Click">
+                    <mica:Button Margin="0,0,10,0" Padding="10,4" Command="{Binding OpenKeyManagerCommand}">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconRemixIcon Kind="Key2Line" Foreground="#FFD700" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,5,0"/>
                             <TextBlock Text="密钥管理" VerticalAlignment="Center"/>
                         </StackPanel>
                     </mica:Button>
-                    <mica:Button x:Name="BtnAddConnection" Padding="10,4" Click="BtnAddConnection_Click">
+                    <mica:Button Padding="10,4" Command="{Binding AddConnectionCommand}">
                         <StackPanel Orientation="Horizontal">
                             <icon:PackIconRemixIcon Kind="AddCircleLine" Foreground="#00BCFF" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,5,0"/>
                             <TextBlock Text="新建连接" VerticalAlignment="Center"/>
@@ -45,6 +45,8 @@
          HorizontalContentAlignment="Stretch"
          ScrollViewer.HorizontalScrollBarVisibility="Disabled" 
          ScrollViewer.CanContentScroll="False" 
+         ItemsSource="{Binding Hosts}"
+         SelectedItem="{Binding SelectedHost}"
          MouseDoubleClick="HostsList_MouseDoubleClick">
 
             <ListBox.ItemTemplate>
@@ -52,14 +54,13 @@
                     <Border Background="#1C2E41" Margin="5" Padding="15" CornerRadius="8" Width="280">
                         <Border.ContextMenu>
                             <ContextMenu>
-                                <MenuItem Header="连接主机" Click="CtxConnect_Click" />
-                                <MenuItem Header="编辑连接" Click="CtxEdit_Click" />
-                                <MenuItem Header="删除连接" Click="CtxDelete_Click" />
+                                <MenuItem Header="连接主机" Command="{Binding PlacementTarget.DataContext.ConnectCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
+                                <MenuItem Header="编辑连接" Command="{Binding PlacementTarget.DataContext.EditCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
+                                <MenuItem Header="删除连接" Command="{Binding PlacementTarget.DataContext.DeleteCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
                             </ContextMenu>
                         </Border.ContextMenu>
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
-                                <!-- 图标样式保持不变 -->
                                 <icon:PackIconRemixIcon Kind="LockPasswordLine" Foreground="#00BCFF" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,5,0" ToolTip="由 Windows Hello 凭据保险箱保护">
                                     <icon:PackIconRemixIcon.Style>
                                         <Style TargetType="icon:PackIconRemixIcon">
@@ -88,8 +89,6 @@
 
             <ListBox.ItemsPanel>
                 <ItemsPanelTemplate>
-                    <!-- 【关键修改点】 -->
-                    <!-- 绑定宽度到 ScrollContentPresenter 的实际宽度，这会强制 WrapPanel 在到达边缘时换行 -->
                     <WrapPanel Orientation="Horizontal" 
                        Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ScrollContentPresenter}}" />
                 </ItemsPanelTemplate>

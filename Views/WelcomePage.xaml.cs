@@ -1,139 +1,95 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FreeWPFShell.Models;
 using FreeWPFShell.Repositories;
-using FreeWPFShell.Share;
 using FreeWPFShell.UserForm;
+using FreeWPFShell.ViewModels;
 
 namespace FreeWPFShell.Views
 {
+    /// <summary>
+    /// 首页（主机列表）。业务逻辑已迁移到 WelcomePageViewModel，
+    /// Code-behind 仅负责注入 UI 交互回调（对话框、连接会话）与双击连接。
+    /// </summary>
     public partial class WelcomePage : UserControl
     {
-        private readonly HostRepository _hostRepo;
+        public WelcomePageViewModel ViewModel { get; }
 
         public WelcomePage()
         {
             InitializeComponent();
-            _hostRepo = Core.AppServices.GetService<HostRepository>();
-            LoadHosts();
+            ViewModel = new WelcomePageViewModel(Core.AppServices.GetService<HostRepository>());
+            DataContext = ViewModel;
+
+            // 注入 UI 交互回调
+            ViewModel.AddConnectionRequested = ShowAddConnection;
+            ViewModel.EditRequested = ShowEditConnection;
+            ViewModel.DeleteConfirm = ConfirmDelete;
+            ViewModel.OpenSettingsRequested = OpenSettings;
+            ViewModel.OpenKeyManagerRequested = OpenKeyManager;
+            ViewModel.ConnectRequested = ConnectToHost;
         }
 
-        public async void LoadHosts()
+        private MainForm? MainForm => Window.GetWindow(this) as MainForm;
+
+        private void ShowAddConnection()
         {
-            try
-            {
-                // 强制同步内存和磁盘数据
-                _hostRepo.Reload();
-
-                // 先获取基础列表
-                var hosts = _hostRepo.GetAll();
-
-                // 强制刷新：先断开连接，再重新绑定
-                HostsList.ItemsSource = null;
-                HostsList.ItemsSource = hosts;
-
-                // 异步获取地理位置，不阻塞 UI 渲染，也不引发 COM 异常冲突
-                await Task.Run(() =>
-                {
-                    foreach (var host in hosts)
-                    {
-                        try 
-                        { 
-                            var geo = IpGeoService.Instance.Query(host.IpAddress);
-                            // 由于 SshConnectionInfo 不是 ObservableObject，我们在这里静默更新
-                            // 但后续如果需要实时变动，建议也将 SshConnectionInfo 改为 ObservableObject
-                            host.SimpleIpGEO = geo.SimpleGeo; 
-                        } 
-                        catch { }
-                    }
-                });
-
-                // 再次刷新以显示获取到的地理位置
-                HostsList.Items.Refresh();
-            }
-            catch (Exception ex) 
-            { 
-                System.Diagnostics.Debug.WriteLine("LoadHosts Error: " + ex.Message);
-            }
-        }
-
-        private void BtnAddConnection_Click(object sender, RoutedEventArgs e)
-        {
-            var dlg = new UserForm.AddConnection();
-            dlg.Owner = Window.GetWindow(this);
+            var dlg = new AddConnection { Owner = Window.GetWindow(this) };
             if (dlg.ShowDialog() == true)
             {
-                LoadHosts();
+                ViewModel.LoadHosts();
                 if (dlg.ConnectAfterSave && dlg.SavedHostInfo != null)
-                    (Window.GetWindow(this) as MainForm)?.OpenSession(dlg.SavedHostInfo);
+                    MainForm?.OpenSession(dlg.SavedHostInfo);
             }
         }
 
-        private void BtnSettings_Click(object sender, RoutedEventArgs e)
+        private void ShowEditConnection(SshConnectionInfo host)
         {
-            var settings = new SettingsWindow();
-            settings.Owner = Window.GetWindow(this);
+            var dlg = new AddConnection(host) { Owner = Window.GetWindow(this) };
+            if (dlg.ShowDialog() == true)
+            {
+                ViewModel.LoadHosts();
+                if (dlg.ConnectAfterSave && dlg.SavedHostInfo != null)
+                    MainForm?.OpenSession(dlg.SavedHostInfo);
+            }
+        }
+
+        private bool ConfirmDelete(SshConnectionInfo host)
+        {
+            return ModernMessageBox.Show(
+                $"确定要删除连接 {host.HostName} ({host.IpAddress}) 吗？",
+                "删除确认", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+        }
+
+        private void OpenSettings()
+        {
+            var settings = new SettingsWindow { Owner = Window.GetWindow(this) };
             settings.ShowDialog();
-            LoadHosts();
+            ViewModel.LoadHosts();
         }
 
-        private void BtnKeyManager_Click(object sender, RoutedEventArgs e)
+        private void OpenKeyManager()
         {
-            var keyMgr = new UserForm.KeyManagerWindow();
-            keyMgr.Owner = Window.GetWindow(this);
+            var keyMgr = new KeyManagerWindow { Owner = Window.GetWindow(this) };
             keyMgr.ShowDialog();
-        }
-
-        private void HostsList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
-        {
-            if (HostsList.SelectedItem is SshConnectionInfo host) ConnectToHost(host);
-        }
-
-        private void CtxConnect_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is FrameworkElement fe && fe.DataContext is SshConnectionInfo host) ConnectToHost(host);
-        }
-
-        private void CtxEdit_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is FrameworkElement fe && fe.DataContext is SshConnectionInfo host)
-            {
-                var dlg = new UserForm.AddConnection(host);
-                dlg.Owner = Window.GetWindow(this);
-                if (dlg.ShowDialog() == true)
-                {
-                    LoadHosts();
-                    if (dlg.ConnectAfterSave && dlg.SavedHostInfo != null)
-                        (Window.GetWindow(this) as MainForm)?.OpenSession(dlg.SavedHostInfo);
-                }
-            }
-        }
-
-        private void CtxDelete_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is FrameworkElement fe && fe.DataContext is SshConnectionInfo host)
-            {
-                if (ModernMessageBox.Show($"确定要删除连接 {host.HostName} ({host.IpAddress}) 吗？", "删除确认", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
-                {
-                    try { _hostRepo.Delete(host.Id); LoadHosts(); }
-                    catch (Exception ex) { ModernMessageBox.Show("删除失败: " + ex.Message); }
-                }
-            }
         }
 
         private void ConnectToHost(SshConnectionInfo host)
         {
             try
             {
-                var hostWithSecret = Task.Run(() => _hostRepo.GetAndDecryptAsync(host.Id)).GetAwaiter().GetResult();
-                (Window.GetWindow(this) as MainForm)?.OpenSession(hostWithSecret);
+                var hostWithSecret = Task.Run(() => ViewModel.GetAndDecryptAsync(host.Id)).GetAwaiter().GetResult();
+                MainForm?.OpenSession(hostWithSecret);
             }
             catch (UnauthorizedAccessException) { }
             catch (Exception ex) { ModernMessageBox.Show("连接失败: " + ex.Message); }
+        }
+
+        private void HostsList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            if (HostsList.SelectedItem is SshConnectionInfo host)
+                ViewModel.ConnectCommand.Execute(host);
         }
     }
 }

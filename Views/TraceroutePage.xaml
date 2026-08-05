@@ -12,12 +12,13 @@
 
         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
             <TextBlock Text="目标:" VerticalAlignment="Center" Margin="0,0,5,0"/>
-            <mica:TextBox x:Name="TxtTarget" Width="220" VerticalAlignment="Center" />
-            <mica:Button x:Name="BtnStart" Content="开始追踪" Click="BtnStart_Click" Margin="10,0,0,0" Height="30" Width="60"/>
-            <mica:Button x:Name="BtnCancel" Content="取消" Click="BtnCancel_Click" Margin="5,0,0,0" Height="30" Width="60" Visibility="Collapsed"/>
+            <mica:TextBox Text="{Binding Target, UpdateSourceTrigger=PropertyChanged}" Width="220" VerticalAlignment="Center" />
+            <mica:Button Content="开始追踪" Command="{Binding StartCommand}" Margin="10,0,0,0" Height="30" Width="60"/>
+            <mica:Button Content="取消" Command="{Binding CancelCommand}" Margin="5,0,0,0" Height="30" Width="60"
+                         Visibility="{Binding IsCancelVisible, Converter={StaticResource BoolToVis}}"/>
         </StackPanel>
 
-        <DataGrid Grid.Row="1" x:Name="HopsGrid" AutoGenerateColumns="False" IsReadOnly="True"
+        <DataGrid Grid.Row="1" ItemsSource="{Binding Hops}" AutoGenerateColumns="False" IsReadOnly="True"
                   Background="Transparent" RowHeaderWidth="0" GridLinesVisibility="None" 
                   HeadersVisibility="Column" SelectionMode="Single" AlternatingRowBackground="#1A2A3A">
             <DataGrid.Columns >
@@ -31,7 +32,7 @@
 
         <Border Grid.Row="2" BorderBrush="#555" BorderThickness="0,1,0,0" Margin="0,10,0,0" Padding="8" MinHeight="80">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <TextBlock x:Name="TxtDetail" Text="输入目标 IP 或域名，点击「开始追踪」" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding DetailText}" TextWrapping="Wrap" />
             </ScrollViewer>
         </Border>
     </Grid>

@@ -95,7 +95,7 @@ namespace FreeWPFShell.Views
         {
             var page = new TraceroutePage();
             AddTab("路由追踪", page);
-            if (!string.IsNullOrEmpty(initialTarget)) page.TxtTarget.Text = initialTarget;
+            if (!string.IsNullOrEmpty(initialTarget)) page.ViewModel.Target = initialTarget;
         }
 
         public void OpenSystemManagementPage(SshSessionService session)
