@@ -18,7 +18,21 @@ namespace FreeWPFShell.ViewModels
     {
         private readonly SshSessionService _session;
         private readonly System.Timers.Timer _processTimer;
+        private readonly System.Windows.Threading.Dispatcher _dispatcher;
         private bool _isRefreshingProcess;
+
+        /// <summary>确保在 UI 线程上执行集合修改，避免 ObservableCollection 跨线程异常。</summary>
+        private void RunOnUiThread(Action action)
+        {
+            // 测试环境（无 WPF Application）直接执行，避免等待不存在的 UI 消息循环导致死锁
+            if (System.Windows.Application.Current == null)
+            {
+                action();
+                return;
+            }
+            if (_dispatcher.CheckAccess()) action();
+            else _dispatcher.Invoke(action);
+        }
 
         // 原始数据（用于过滤）
         private List<LoginRecord> _wtmpRaw = new();
@@ -41,9 +55,10 @@ namespace FreeWPFShell.ViewModels
         [ObservableProperty] private string _processSearch = string.Empty;
         [ObservableProperty] private string _netSearch = string.Empty;
         [ObservableProperty] private string _cronSearch = string.Empty;
-        [ObservableProperty] private bool _filterInactive;
-        [ObservableProperty] private bool _filterEmpty;
-        [ObservableProperty] private bool _filterEmptyNet;
+        // 初始值与 UI 开关默认状态保持一致（默认勾选），确保页面加载时过滤即生效
+        [ObservableProperty] private bool _filterInactive = true;
+        [ObservableProperty] private bool _filterEmpty = true;
+        [ObservableProperty] private bool _filterEmptyNet = true;
         [ObservableProperty] private bool _filterDisabledCron;
 
         // 选中项
@@ -73,6 +88,8 @@ namespace FreeWPFShell.ViewModels
         public SystemManagementViewModel(SshSessionService session)
         {
             _session = session;
+            _dispatcher = System.Windows.Application.Current?.Dispatcher
+                ?? System.Windows.Threading.Dispatcher.CurrentDispatcher;
             _processTimer = new System.Timers.Timer(2000) { AutoReset = true };
             _processTimer.Elapsed += async (s, e) =>
             {
@@ -112,21 +129,24 @@ namespace FreeWPFShell.ViewModels
         private void ApplyWtmpFilter() => FillGeo(_wtmpRaw, WtmpRecords);
         private void ApplyBtmpFilter() => FillGeo(_btmpRaw, BtmpRecords);
 
-        private static void FillGeo(List<LoginRecord> records, ObservableCollection<LoginRecord> target)
+        private void FillGeo(List<LoginRecord> records, ObservableCollection<LoginRecord> target)
         {
             var geoService = IpGeoService.Instance;
-            target.Clear();
-            foreach (var r in records)
+            RunOnUiThread(() =>
             {
-                if (r.Timestamp > 0)
-                    r.Time = DateTimeOffset.FromUnixTimeSeconds(r.Timestamp).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
-                if (!string.IsNullOrEmpty(r.Ip) && r.Ip != "(本地)")
+                target.Clear();
+                foreach (var r in records)
                 {
-                    try { r.Geo = geoService.Query(r.Ip).SimpleGeo; } catch { r.Geo = ""; }
+                    if (r.Timestamp > 0)
+                        r.Time = DateTimeOffset.FromUnixTimeSeconds(r.Timestamp).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
+                    if (!string.IsNullOrEmpty(r.Ip) && r.Ip != "(本地)")
+                    {
+                        try { r.Geo = geoService.Query(r.Ip).SimpleGeo; } catch { r.Geo = ""; }
+                    }
+                    else r.Geo = "本地";
+                    target.Add(r);
                 }
-                else r.Geo = "本地";
-                target.Add(r);
-            }
+            });
         }
 
         public static string EscapeCsv(string? field)
@@ -200,16 +220,19 @@ namespace FreeWPFShell.ViewModels
         {
             string search = ServiceSearch.Trim().ToLower();
             bool onlyRunning = FilterInactive;
-            ServiceRecords.Clear();
-            foreach (var s in _allServicesRaw)
+            RunOnUiThread(() =>
             {
-                if (onlyRunning && (s.ActiveState != "active" || s.SubState != "running")) continue;
-                if (!string.IsNullOrEmpty(search) &&
-                    !s.Name.ToLower().Contains(search) &&
-                    !s.Description.ToLower().Contains(search) &&
-                    !s.ActiveState.ToLower().Contains(search)) continue;
-                ServiceRecords.Add(s);
-            }
+                ServiceRecords.Clear();
+                foreach (var s in _allServicesRaw)
+                {
+                    if (onlyRunning && (s.ActiveState != "active" || s.SubState != "running")) continue;
+                    if (!string.IsNullOrEmpty(search) &&
+                        !s.Name.ToLower().Contains(search) &&
+                        !s.Description.ToLower().Contains(search) &&
+                        !s.ActiveState.ToLower().Contains(search)) continue;
+                    ServiceRecords.Add(s);
+                }
+            });
         }
 
         [RelayCommand]
@@ -270,16 +293,19 @@ namespace FreeWPFShell.ViewModels
             string search = ProcessSearch.Trim().ToLower();
             bool filterEmpty = FilterEmpty;
             uint? selectedPid = SelectedProcess?.Pid;
-            ProcessRecords.Clear();
-            foreach (var p in _allProcessesRaw)
+            RunOnUiThread(() =>
             {
-                if (filterEmpty && string.IsNullOrEmpty(p.File)) continue;
-                if (!string.IsNullOrEmpty(search) &&
-                    !p.Pid.ToString().Contains(search) &&
-                    !p.File.ToLower().Contains(search) &&
-                    !p.Cmd.ToLower().Contains(search)) continue;
-                ProcessRecords.Add(p);
-            }
+                ProcessRecords.Clear();
+                foreach (var p in _allProcessesRaw)
+                {
+                    if (filterEmpty && string.IsNullOrEmpty(p.File)) continue;
+                    if (!string.IsNullOrEmpty(search) &&
+                        !p.Pid.ToString().Contains(search) &&
+                        !p.File.ToLower().Contains(search) &&
+                        !p.Cmd.ToLower().Contains(search)) continue;
+                    ProcessRecords.Add(p);
+                }
+            });
             if (selectedPid.HasValue)
             {
                 var match = ProcessRecords.FirstOrDefault(x => x.Pid == selectedPid.Value);
@@ -369,19 +395,22 @@ namespace FreeWPFShell.ViewModels
         {
             string search = NetSearch.Trim().ToLower();
             bool hideEmpty = FilterEmptyNet;
-            NetConns.Clear();
-            foreach (var c in _allNetConnsRaw)
+            RunOnUiThread(() =>
             {
-                if (hideEmpty && string.IsNullOrEmpty(c.Program)) continue;
-                if (!string.IsNullOrEmpty(search) &&
-                    !c.Local.ToLower().Contains(search) &&
-                    !c.Remote.ToLower().Contains(search) &&
-                    !c.Program.ToLower().Contains(search) &&
-                    !c.Pid.ToString().Contains(search) &&
-                    !c.User.ToLower().Contains(search) &&
-                    !c.Proto.ToLower().Contains(search)) continue;
-                NetConns.Add(c);
-            }
+                NetConns.Clear();
+                foreach (var c in _allNetConnsRaw)
+                {
+                    if (hideEmpty && string.IsNullOrEmpty(c.Program)) continue;
+                    if (!string.IsNullOrEmpty(search) &&
+                        !c.Local.ToLower().Contains(search) &&
+                        !c.Remote.ToLower().Contains(search) &&
+                        !c.Program.ToLower().Contains(search) &&
+                        !c.Pid.ToString().Contains(search) &&
+                        !c.User.ToLower().Contains(search) &&
+                        !c.Proto.ToLower().Contains(search)) continue;
+                    NetConns.Add(c);
+                }
+            });
         }
 
         [RelayCommand]
@@ -418,16 +447,19 @@ namespace FreeWPFShell.ViewModels
         {
             string search = CronSearch.Trim().ToLower();
             bool hideDisabled = FilterDisabledCron;
-            CronJobs.Clear();
-            foreach (var c in _allCronJobsRaw)
+            RunOnUiThread(() =>
             {
-                if (hideDisabled && !c.Enabled) continue;
-                if (!string.IsNullOrEmpty(search) &&
-                    !c.Schedule.ToLower().Contains(search) &&
-                    !c.Command.ToLower().Contains(search) &&
-                    !c.Raw.ToLower().Contains(search)) continue;
-                CronJobs.Add(c);
-            }
+                CronJobs.Clear();
+                foreach (var c in _allCronJobsRaw)
+                {
+                    if (hideDisabled && !c.Enabled) continue;
+                    if (!string.IsNullOrEmpty(search) &&
+                        !c.Schedule.ToLower().Contains(search) &&
+                        !c.Command.ToLower().Contains(search) &&
+                        !c.Raw.ToLower().Contains(search)) continue;
+                    CronJobs.Add(c);
+                }
+            });
         }
 
         public void ApplyCronPreset(string tag)

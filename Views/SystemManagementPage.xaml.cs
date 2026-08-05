@@ -70,7 +70,7 @@ namespace FreeWPFShell.Views
             UpdateTabButton(BtnTabService, tabName == "Service");
             UpdateTabButton(BtnTabCron, tabName == "Cron");
 
-            if (tabName == "Login" && !_loginLoaded) { _loginLoaded = true; _ = _vm.LoadWtmpAsync(); _ = _vm.LoadBtmpAsync(); }
+            if (tabName == "Login" && !_loginLoaded) { _loginLoaded = true; _ = _vm.LoadWtmpAsync(GetWtmpCount()); _ = _vm.LoadBtmpAsync(GetBtmpCount()); }
             if (tabName == "Service" && !_servicesLoaded) { _servicesLoaded = true; _ = _vm.LoadServicesAsync(); }
             if (tabName == "Net" && !_netLoaded) { _netLoaded = true; _ = _vm.LoadNetConnsAsync(); }
             if (tabName == "Cron" && !_cronLoaded) { _cronLoaded = true; _ = _vm.LoadCronJobsAsync(); }
@@ -84,8 +84,16 @@ namespace FreeWPFShell.Views
 
         // ── 登录记录 ─────────────────────────────────────────────
 
-        private void BtnRefreshWtmp_Click(object sender, RoutedEventArgs e) => _ = _vm.LoadWtmpAsync();
-        private void BtnRefreshBtmp_Click(object sender, RoutedEventArgs e) => _ = _vm.LoadBtmpAsync();
+        private void BtnRefreshWtmp_Click(object sender, RoutedEventArgs e) => _ = _vm.LoadWtmpAsync(GetWtmpCount());
+        private void BtnRefreshBtmp_Click(object sender, RoutedEventArgs e) => _ = _vm.LoadBtmpAsync(GetBtmpCount());
+
+        /// <summary>解析"成功登录条数"输入框，无效则用默认 100。</summary>
+        private int GetWtmpCount()
+            => int.TryParse(TxtWtmpCount.Text, out int c) && c > 0 ? c : 100;
+
+        /// <summary>解析"失败登录条数"输入框，无效则用默认 100。</summary>
+        private int GetBtmpCount()
+            => int.TryParse(TxtBtmpCount.Text, out int c) && c > 0 ? c : 100;
         private void BtnExportWtmp_Click(object sender, RoutedEventArgs e) => ExportCsv(_vm.BuildWtmpCsvAsync, "登录记录");
         private void BtnExportBtmp_Click(object sender, RoutedEventArgs e) => ExportCsv(_vm.BuildBtmpCsvAsync, "登录失败记录");
 
@@ -113,7 +121,6 @@ namespace FreeWPFShell.Views
         // ── 服务管理 ─────────────────────────────────────────────
 
         private void BtnRefreshServices_Click(object sender, RoutedEventArgs e) => _ = _vm.LoadServicesAsync();
-        private void TogFilterInactive_Click(object sender, RoutedEventArgs e) => _vm.FilterInactive = TogFilterInactive.IsChecked == true;
         private void TxtServiceSearch_TextChanged(object sender, TextChangedEventArgs e) => _vm.ServiceSearch = TxtServiceSearch.Text;
 
         private void CtxServiceStart_Click(object sender, RoutedEventArgs e) => _ = _vm.ServiceActionCommand.ExecuteAsync("start");
@@ -143,7 +150,6 @@ namespace FreeWPFShell.Views
         // ── 进程管理 ─────────────────────────────────────────────
 
         private void BtnRefreshProcess_Click(object sender, RoutedEventArgs e) => _ = _vm.RefreshProcessData();
-        private void TogFilterEmpty_Click(object sender, RoutedEventArgs e) => _vm.FilterEmpty = TogFilterEmpty.IsChecked == true;
         private void TxtProcessSearch_TextChanged(object sender, TextChangedEventArgs e) => _vm.ProcessSearch = TxtProcessSearch.Text;
 
         private void CtxKill_Click(object sender, RoutedEventArgs e) => _ = _vm.KillProcessCommand.ExecuteAsync(15);
@@ -155,7 +161,6 @@ namespace FreeWPFShell.Views
         // ── 网络连接 ─────────────────────────────────────────────
 
         private void BtnRefreshNet_Click(object sender, RoutedEventArgs e) => _ = _vm.LoadNetConnsAsync();
-        private void TogFilterEmptyNet_Click(object sender, RoutedEventArgs e) => _vm.FilterEmptyNet = TogFilterEmptyNet.IsChecked == true;
         private void TxtNetSearch_TextChanged(object sender, TextChangedEventArgs e) => _vm.NetSearch = TxtNetSearch.Text;
         private void CtxKillNet_Click(object sender, RoutedEventArgs e) => _ = _vm.KillNetCommand.ExecuteAsync(15);
         private void CtxKillNetForce_Click(object sender, RoutedEventArgs e) => _ = _vm.KillNetCommand.ExecuteAsync(9);
@@ -163,7 +168,6 @@ namespace FreeWPFShell.Views
         // ── Cron ─────────────────────────────────────────────────
 
         private void BtnRefreshCron_Click(object sender, RoutedEventArgs e) => _ = _vm.LoadCronJobsAsync();
-        private void TogFilterDisabledCron_Click(object sender, RoutedEventArgs e) => _vm.FilterDisabledCron = TogFilterDisabledCron.IsChecked == true;
         private void TxtCronSearch_TextChanged(object sender, TextChangedEventArgs e) => _vm.CronSearch = TxtCronSearch.Text;
 
         private void CtxCronEnable_Click(object sender, RoutedEventArgs e) => _ = _vm.ToggleCronCommand.ExecuteAsync(true);

@@ -35,7 +35,7 @@
                 <TextBlock Text="搜索:" VerticalAlignment="Center" Margin="20,0,5,0"/>
                 <mica:TextBox x:Name="TxtProcessSearch" Width="150" Height="26" TextChanged="TxtProcessSearch_TextChanged"/>
 
-                <mica:ToggleSwitch x:Name="TogFilterEmpty" Content="过滤空路径" IsChecked="True" VerticalAlignment="Center" Margin="20,0,0,0" Click="TogFilterEmpty_Click" />
+                <mica:ToggleSwitch x:Name="TogFilterEmpty" Content="过滤空路径" IsChecked="{Binding FilterEmpty, Mode=TwoWay}" VerticalAlignment="Center" Margin="20,0,0,0" />
 
                 <mica:Button x:Name="BtnRefreshProcess" Content="刷新" Click="BtnRefreshProcess_Click" Margin="20,0,0,0" Width="60" Height="26"/>
             </StackPanel>
@@ -89,7 +89,7 @@
                 <mica:TextBox x:Name="TxtNetSearch" Width="150" Height="26" TextChanged="TxtNetSearch_TextChanged"/>
 
                 <mica:Button x:Name="BtnRefreshNet" Content="刷新" Click="BtnRefreshNet_Click" Margin="20,0,0,0" Width="60" Height="26"/>
-                <mica:ToggleSwitch x:Name="TogFilterEmptyNet" Content="隐藏空路径" IsChecked="True" VerticalAlignment="Center" Margin="15,0,0,0" Click="TogFilterEmptyNet_Click"/>
+                <mica:ToggleSwitch x:Name="TogFilterEmptyNet" Content="隐藏空路径" IsChecked="{Binding FilterEmptyNet, Mode=TwoWay}" VerticalAlignment="Center" Margin="15,0,0,0" />
             </StackPanel>
 
             <DataGrid Grid.Row="1" x:Name="NetGrid" AutoGenerateColumns="False" IsReadOnly="True"
@@ -187,7 +187,7 @@
                     <TextBlock Text="搜索:" VerticalAlignment="Center" Margin="20,0,5,0"/>
                     <mica:TextBox x:Name="TxtServiceSearch" Width="150" Height="26" TextChanged="TxtServiceSearch_TextChanged"/>
                     <mica:Button x:Name="BtnRefreshServices" Content="刷新" Click="BtnRefreshServices_Click" Margin="10,0,0,0" Width="60" Height="26"/>
-                    <mica:ToggleSwitch x:Name="TogFilterInactive" Content="仅显示运行中" IsChecked="True" VerticalAlignment="Center" Margin="15,0,0,0" Click="TogFilterInactive_Click"/>
+                    <mica:ToggleSwitch x:Name="TogFilterInactive" Content="仅显示运行中" IsChecked="{Binding FilterInactive, Mode=TwoWay}" VerticalAlignment="Center" Margin="15,0,0,0" />
                 </StackPanel>
 
                 <DataGrid x:Name="ServiceGrid" AutoGenerateColumns="False" IsReadOnly="True"
@@ -244,7 +244,7 @@
                     <TextBlock Text="搜索:" VerticalAlignment="Center" Margin="20,0,5,0"/>
                     <mica:TextBox x:Name="TxtCronSearch" Width="150" Height="26" TextChanged="TxtCronSearch_TextChanged"/>
                     <mica:Button x:Name="BtnRefreshCron" Content="刷新" Click="BtnRefreshCron_Click" Margin="10,0,0,0" Width="60" Height="26"/>
-                    <mica:ToggleSwitch x:Name="TogFilterDisabledCron" Content="隐藏已禁用" IsChecked="False" VerticalAlignment="Center" Margin="15,0,0,0" Click="TogFilterDisabledCron_Click"/>
+                    <mica:ToggleSwitch x:Name="TogFilterDisabledCron" Content="隐藏已禁用" IsChecked="{Binding FilterDisabledCron, Mode=TwoWay}" VerticalAlignment="Center" Margin="15,0,0,0" />
                 </StackPanel>
 
                 <DataGrid x:Name="CronGrid" AutoGenerateColumns="False" IsReadOnly="True"
