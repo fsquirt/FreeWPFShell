@@ -47,8 +47,8 @@
             <!-- 认证方式区域 -->
             <StackPanel Margin="0,8,0,0" Spacing="2">
                 <StackPanel Orientation="Horizontal" Spacing="10">
-                    <ToggleSwitch x:Name="rbPassword" IsOn="True" Toggled="rbPassword_Toggled" />
                     <TextBlock Text="密码登录" VerticalAlignment="Center" />
+                    <ToggleSwitch x:Name="rbPassword" IsOn="True" OnContent="启用" OffContent="禁止" Toggled="rbPassword_Toggled" />
                 </StackPanel>
                 <Grid Margin="20,0,0,4" ColumnSpacing="8">
                     <Grid.ColumnDefinitions>
@@ -60,8 +60,8 @@
                 </Grid>
 
                 <StackPanel Orientation="Horizontal" Spacing="10">
-                    <ToggleSwitch x:Name="rbKey" Toggled="rbKey_Toggled" />
                     <TextBlock Text="密钥登录" VerticalAlignment="Center" />
+                    <ToggleSwitch x:Name="rbKey" OnContent="启用" OffContent="禁止" Toggled="rbKey_Toggled" />
                 </StackPanel>
                 <StackPanel Margin="20,0,0,4" Spacing="4">
                     <ComboBox x:Name="cmbKeySelect" HorizontalAlignment="Stretch"
@@ -76,8 +76,8 @@
             <!-- 代理设置区域 -->
             <StackPanel Margin="0,8,0,0" Spacing="2">
                 <StackPanel Orientation="Horizontal" Spacing="10">
-                    <ToggleSwitch x:Name="chkProxy" Toggled="chkProxy_Toggled" />
                     <TextBlock Text="启用代理" VerticalAlignment="Center" />
+                    <ToggleSwitch x:Name="chkProxy" OnContent="启用" OffContent="禁止" Toggled="chkProxy_Toggled" />
                 </StackPanel>
                 <ContentControl x:Name="pnlProxy" IsEnabled="False" Margin="0,4,0,0">
                     <StackPanel Spacing="4">
@@ -151,8 +151,8 @@
                             <TextBox Grid.Column="1" x:Name="txtJumpUser" Text="root" />
                         </Grid>
                         <StackPanel Orientation="Horizontal" Spacing="10">
-                            <ToggleSwitch x:Name="rbJumpPassword" IsOn="True" Toggled="rbJumpPassword_Toggled" />
                             <TextBlock Text="密码登录" VerticalAlignment="Center" />
+                            <ToggleSwitch x:Name="rbJumpPassword" IsOn="True" OnContent="启用" OffContent="禁止" Toggled="rbJumpPassword_Toggled" />
                         </StackPanel>
                         <Grid Margin="20,0,0,4" ColumnSpacing="8">
                             <Grid.ColumnDefinitions>
@@ -163,8 +163,8 @@
                             <TextBox Grid.Column="1" x:Name="txtJumpPassword" />
                         </Grid>
                         <StackPanel Orientation="Horizontal" Spacing="10">
-                            <ToggleSwitch x:Name="rbJumpKey" Toggled="rbJumpKey_Toggled" />
                             <TextBlock Text="密钥登录" VerticalAlignment="Center" />
+                            <ToggleSwitch x:Name="rbJumpKey" OnContent="启用" OffContent="禁止" Toggled="rbJumpKey_Toggled" />
                         </StackPanel>
                         <StackPanel x:Name="pnlJumpKey" Visibility="Collapsed" Spacing="4" Margin="20,0,0,4">
                             <ComboBox x:Name="cmbJumpKeySelect" HorizontalAlignment="Stretch"
