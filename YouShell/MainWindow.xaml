@@ -113,6 +113,10 @@
             x:Name="SessionTabs"
             Grid.Column="1"
             IsAddTabButtonVisible="False"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch"
+            HorizontalContentAlignment="Stretch"
+            VerticalContentAlignment="Stretch"
             TabCloseRequested="SessionTabs_TabCloseRequested"
             SelectionChanged="SessionTabs_SelectionChanged">
             <TabView.TabItems>

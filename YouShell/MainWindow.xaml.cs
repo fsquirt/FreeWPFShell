@@ -94,8 +94,10 @@ namespace YouShell
             AddTab($"系统管理-{session.DisplayName}", new SystemManagementPage(session));
         }
 
-        private TabViewItem AddTab(string header, UIElement content)
+        private TabViewItem AddTab(string header, FrameworkElement content)
         {
+            content.HorizontalAlignment = HorizontalAlignment.Stretch;
+            content.VerticalAlignment = VerticalAlignment.Stretch;
             var tab = new TabViewItem { Header = header, Content = content, Tag = content };
             SessionTabs.TabItems.Add(tab);
             SessionTabs.SelectedItem = tab;
