@@ -20,9 +20,6 @@ namespace YouShell.Views
         /// <summary>由 MainWindow 注入：请求打开一个 SSH 会话。</summary>
         public Action<SshConnectionInfo>? OpenSessionRequested { get; set; }
 
-        /// <summary>由 MainWindow 注入：请求打开 SSH 密钥管理标签页。</summary>
-        public Action? OpenKeyManagerRequested { get; set; }
-
         public WelcomePage()
         {
             InitializeComponent();
@@ -39,7 +36,7 @@ namespace YouShell.Views
 
         private async void ShowAddConnection()
         {
-            var dlg = new AddConnection();
+            var dlg = new AddConnectionPage();
             var result = await dlg.ShowAsync();
             if (result == ContentDialogResult.None) return;
             ViewModel.LoadHosts();
@@ -49,7 +46,7 @@ namespace YouShell.Views
 
         private async void ShowEditConnection(SshConnectionInfo host)
         {
-            var dlg = new AddConnection(host);
+            var dlg = new AddConnectionPage(host);
             var result = await dlg.ShowAsync();
             if (result == ContentDialogResult.None) return;
             ViewModel.LoadHosts();
@@ -72,7 +69,11 @@ namespace YouShell.Views
             ViewModel.LoadHosts();
         }
 
-        private void OpenKeyManager() => OpenKeyManagerRequested?.Invoke();
+        private async void OpenKeyManager()
+        {
+            var dlg = new KeyManagerPage();
+            await dlg.ShowAsync();
+        }
 
         private async void ConnectToHost(SshConnectionInfo host)
         {

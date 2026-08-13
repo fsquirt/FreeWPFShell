@@ -9,16 +9,22 @@ using YouShell.UserForm;
 namespace YouShell.Views
 {
     /// <summary>
-    /// SSH 密钥管理标签页。提供密钥导入/删除，作为主窗口的一个 Tab 打开
-    /// （避免原 ContentDialog 形态下嵌套弹出对话框触发「仅允许单个 ContentDialog」异常）。
+    /// SSH 密钥管理对话框（WinUI 3 ContentDialog，加宽）。提供密钥导入/删除。
+    /// 反馈使用内联 InfoBar、密码输入使用内联面板，避免在 ContentDialog 内再弹 ContentDialog
+    /// （WinUI 3 同一 XamlRoot 仅允许一个 ContentDialog 同时打开）。
     /// </summary>
-    public sealed partial class KeyManagerPage : UserControl
+    public sealed partial class KeyManagerPage : ContentDialog
     {
         private readonly KeyRepository _keyRepo = new();
+
+        // 待导入（有密码保护）密钥的临时状态
+        private string? _pendingImportPath;
+        private string? _pendingImportName;
 
         public KeyManagerPage()
         {
             InitializeComponent();
+            XamlRoot = ModernMessageBox.Root;
             RefreshList();
         }
 
@@ -26,6 +32,14 @@ namespace YouShell.Views
         {
             _keyRepo.Reload();
             KeyList.ItemsSource = _keyRepo.GetAll();
+        }
+
+        private void ShowInfo(string title, string message, InfoBarSeverity severity)
+        {
+            FeedbackBar.Title = title;
+            FeedbackBar.Message = message;
+            FeedbackBar.Severity = severity;
+            FeedbackBar.IsOpen = true;
         }
 
         private async void BtnImport_Click(object sender, RoutedEventArgs e)
@@ -39,45 +53,68 @@ namespace YouShell.Views
             try
             {
                 var key = _keyRepo.Import(filePath, defaultName, null);
-                await ModernMessageBox.ShowAsync($"密钥 \"{key.Name}\" 导入成功！", "导入成功", MessageBoxButton.OK, MessageBoxImage.Information);
                 RefreshList();
+                ShowInfo("成功", $"密钥 \"{key.Name}\" 导入成功！", InfoBarSeverity.Success);
                 return;
             }
             catch (InvalidOperationException) { }
             catch (SshPassPhraseNullOrEmptyException) { }
             catch (Exception ex)
             {
-                await ModernMessageBox.ShowAsync($"导入失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                ShowInfo("错误", "导入失败: " + ex.Message, InfoBarSeverity.Error);
                 return;
             }
 
-            // 密钥有密码保护，弹窗输入
-            var passphraseDlg = new PassphraseDialog();
-            if (await passphraseDlg.ShowAsync() != ContentDialogResult.Primary) return;
+            // 密钥有密码保护，显示内联密码输入
+            _pendingImportPath = filePath;
+            _pendingImportName = defaultName;
+            TxtPassphrase.Password = "";
+            pnlPassphrase.Visibility = Visibility.Visible;
+        }
 
+        private async void BtnPassphraseConfirm_Click(object sender, RoutedEventArgs e)
+        {
+            if (_pendingImportPath == null || _pendingImportName == null) return;
             try
             {
-                var key = _keyRepo.Import(filePath, defaultName, passphraseDlg.Passphrase);
-                await ModernMessageBox.ShowAsync($"密钥 \"{key.Name}\" 导入成功！\n密钥密码已加密保存。", "导入成功", MessageBoxButton.OK, MessageBoxImage.Information);
+                var key = _keyRepo.Import(_pendingImportPath, _pendingImportName, TxtPassphrase.Password);
                 RefreshList();
+                ShowInfo("成功", $"密钥 \"{key.Name}\" 导入成功！\n密钥密码已加密保存。", InfoBarSeverity.Success);
             }
             catch (Exception ex)
             {
-                await ModernMessageBox.ShowAsync($"导入失败: {ex.Message}\n\n可能是密钥密码错误。", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                ShowInfo("错误", "导入失败: " + ex.Message + "\n\n可能是密钥密码错误。", InfoBarSeverity.Error);
+            }
+            finally
+            {
+                _pendingImportPath = null;
+                _pendingImportName = null;
+                pnlPassphrase.Visibility = Visibility.Collapsed;
             }
         }
 
-        private async void CtxDelete_Click(object sender, RoutedEventArgs e)
+        private void BtnPassphraseCancel_Click(object sender, RoutedEventArgs e)
         {
-            if (KeyList.SelectedItem is not SshKeyInfo key) return;
+            _pendingImportPath = null;
+            _pendingImportName = null;
+            pnlPassphrase.Visibility = Visibility.Collapsed;
+        }
 
-            var result = await ModernMessageBox.ShowAsync(
-                $"确定要删除密钥 \"{key.Name}\" 吗？\n\n删除后使用此密钥的连接将无法登录。",
-                "删除确认", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-            if (result != MessageBoxResult.Yes) return;
+        private void BtnDelete_Click(object sender, RoutedEventArgs e) => DeleteSelected();
+
+        private void CtxDelete_Click(object sender, RoutedEventArgs e) => DeleteSelected();
+
+        private void DeleteSelected()
+        {
+            if (KeyList.SelectedItem is not SshKeyInfo key)
+            {
+                ShowInfo("提示", "请先在列表中选择要删除的密钥。", InfoBarSeverity.Informational);
+                return;
+            }
 
             _keyRepo.Delete(key.Id);
             RefreshList();
+            ShowInfo("成功", $"已删除密钥 \"{key.Name}\"。", InfoBarSeverity.Success);
         }
     }
 }

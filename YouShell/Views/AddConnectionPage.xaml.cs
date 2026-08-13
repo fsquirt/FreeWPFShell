@@ -4,24 +4,29 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using YouShell.Models;
 using YouShell.Repositories;
+using YouShell.UserForm;
 using Renci.SshNet;
 
-namespace YouShell.UserForm
+namespace YouShell.Views
 {
     /// <summary>
-    /// 新建/编辑连接对话框（WinUI 3 ContentDialog）。
+    /// 新建/编辑连接对话框（WinUI 3 ContentDialog，加宽）。
     /// Primary="保存并连接"、Secondary="保存配置"。关闭后通过 SavedHostInfo/ConnectAfterSave 取结果。
     /// </summary>
-    public sealed partial class AddConnection : ContentDialog
+    public sealed partial class AddConnectionPage : ContentDialog
     {
         private readonly HostRepository _hostRepo;
         private readonly KeyRepository _keyRepo = new();
         private string? _editingHostId;
 
+        // 认证方式开关互斥时的重入保护
+        private bool _syncingAuth;
+        private bool _syncingJumpAuth;
+
         public bool ConnectAfterSave { get; private set; }
         public SshConnectionInfo? SavedHostInfo { get; private set; }
 
-        public AddConnection()
+        public AddConnectionPage()
         {
             InitializeComponent();
             XamlRoot = ModernMessageBox.Root;
@@ -39,7 +44,7 @@ namespace YouShell.UserForm
             if (keys.Count > 0) cmbJumpKeySelect.SelectedIndex = 0;
         }
 
-        public AddConnection(SshConnectionInfo editHost) : this()
+        public AddConnectionPage(SshConnectionInfo editHost) : this()
         {
             _editingHostId = editHost.Id;
             Title = "编辑连接";
@@ -97,7 +102,7 @@ namespace YouShell.UserForm
                     {
                         rbJumpPassword.IsOn = true;
                         rbJumpKey.IsOn = false;
-                        txtJumpPassword.Text = editHost.Proxy.Password;
+                        txtJumpPassword.Password = editHost.Proxy.Password ?? "";
                     }
                 }
                 else
@@ -105,7 +110,7 @@ namespace YouShell.UserForm
                     txtProxyHost.Text = editHost.Proxy.ServerAddress;
                     txtProxyPort.Text = editHost.Proxy.Port.ToString();
                     txtProxyUsername.Text = editHost.Proxy.Username;
-                    txtProxyPassword.Text = editHost.Proxy.Password;
+                    txtProxyPassword.Password = editHost.Proxy.Password ?? "";
                 }
             }
             // 面板可见性按当前代理类型刷新
@@ -171,7 +176,7 @@ namespace YouShell.UserForm
             if (!int.TryParse(txtPort.Text, out int port) || port < 1 || port > 65535) { await WarnAsync("端口号无效。", "提示", MessageBoxImage.Warning, txtPort); return false; }
             if (string.IsNullOrEmpty(_editingHostId))
             {
-                if (rbPassword.IsOn && string.IsNullOrEmpty(txtPassword.Text)) { await WarnAsync("请输入密码。", "提示", MessageBoxImage.Information, txtPassword); return false; }
+                if (rbPassword.IsOn && string.IsNullOrEmpty(txtPassword.Password)) { await WarnAsync("请输入密码。", "提示", MessageBoxImage.Information, txtPassword); return false; }
             }
             if (rbKey.IsOn && cmbKeySelect.SelectedItem == null) { await WarnAsync("请选择一个已导入的 SSH 密钥。\n\n请先在主界面的「密钥管理」中导入密钥。", "提示", MessageBoxImage.Information, null); return false; }
 
@@ -180,7 +185,7 @@ namespace YouShell.UserForm
                 if (string.IsNullOrWhiteSpace(txtJumpHost.Text)) { await WarnAsync("请输入跳板机IP地址。", "提示", MessageBoxImage.Information, txtJumpHost); return false; }
                 if (!int.TryParse(txtJumpPort.Text, out int jp) || jp < 1 || jp > 65535) { await WarnAsync("跳板机端口号无效。", "提示", MessageBoxImage.Warning, txtJumpPort); return false; }
                 if (string.IsNullOrWhiteSpace(txtJumpUser.Text)) { await WarnAsync("请输入跳板机用户名。", "提示", MessageBoxImage.Information, txtJumpUser); return false; }
-                if (rbJumpPassword.IsOn && string.IsNullOrEmpty(_editingHostId) && string.IsNullOrEmpty(txtJumpPassword.Text)) { await WarnAsync("请输入跳板机密码。", "提示", MessageBoxImage.Information, txtJumpPassword); return false; }
+                if (rbJumpPassword.IsOn && string.IsNullOrEmpty(_editingHostId) && string.IsNullOrEmpty(txtJumpPassword.Password)) { await WarnAsync("请输入跳板机密码。", "提示", MessageBoxImage.Information, txtJumpPassword); return false; }
                 if (rbJumpKey.IsOn && cmbJumpKeySelect.SelectedItem == null) { await WarnAsync("请选择跳板机使用的 SSH 密钥。", "提示", MessageBoxImage.Information, null); return false; }
             }
             return true;
@@ -225,7 +230,7 @@ namespace YouShell.UserForm
                         ServerAddress = txtJumpHost.Text.Trim(),
                         Port = int.TryParse(txtJumpPort.Text, out int jp) ? jp : 22,
                         Username = txtJumpUser.Text.Trim(),
-                        Password = rbJumpPassword.IsOn ? txtJumpPassword.Text : "",
+                        Password = rbJumpPassword.IsOn ? txtJumpPassword.Password : "",
                         SshKeyId = rbJumpKey.IsOn && cmbJumpKeySelect.SelectedItem is SshKeyInfo jumpKey ? jumpKey.Id : null
                     };
                 }
@@ -237,14 +242,14 @@ namespace YouShell.UserForm
                         ServerAddress = txtProxyHost.Text.Trim(),
                         Port = int.TryParse(txtProxyPort.Text, out int pp) ? pp : 1080,
                         Username = txtProxyUsername.Text.Trim(),
-                        Password = txtProxyPassword.Text
+                        Password = txtProxyPassword.Password
                     };
                 }
             }
             return host;
         }
 
-        private string GetSecret() => rbPassword.IsOn ? txtPassword.Text : "";
+        private string GetSecret() => rbPassword.IsOn ? txtPassword.Password : "";
 
         // ── 面板/开关交互 ────────────────────────────────────────
 
@@ -267,26 +272,56 @@ namespace YouShell.UserForm
             pnlSshProxy.Visibility = isSsh ? Visibility.Visible : Visibility.Collapsed;
         }
 
+        // 密码登录 / 密钥登录 互斥且至少启用一个：启用一个会禁用另一个，
+        // 反过来禁用已启用的一个也会自动启用另一个（原实现只处理了「启用即禁用对方」这一半）。
         private void rbPassword_Toggled(object sender, RoutedEventArgs e)
         {
-            if (rbKey != null && rbPassword.IsOn) rbKey.IsOn = false;
+            if (_syncingAuth) return;
+            if (rbKey == null) return;
+            _syncingAuth = true;
+            try { rbKey.IsOn = !rbPassword.IsOn; }
+            finally { _syncingAuth = false; }
         }
 
         private void rbKey_Toggled(object sender, RoutedEventArgs e)
         {
-            if (rbPassword != null && rbKey.IsOn) rbPassword.IsOn = false;
+            if (_syncingAuth) return;
+            if (rbPassword == null) return;
+            _syncingAuth = true;
+            try { rbPassword.IsOn = !rbKey.IsOn; }
+            finally { _syncingAuth = false; }
         }
 
         private void rbJumpPassword_Toggled(object sender, RoutedEventArgs e)
         {
-            if (rbJumpKey != null && rbJumpPassword.IsOn) rbJumpKey.IsOn = false;
-            if (pnlJumpKey != null) pnlJumpKey.Visibility = Visibility.Collapsed;
+            if (_syncingJumpAuth) return;
+            if (rbJumpKey == null) return;
+            _syncingJumpAuth = true;
+            try
+            {
+                rbJumpKey.IsOn = !rbJumpPassword.IsOn;
+                UpdateJumpKeyPanel();
+            }
+            finally { _syncingJumpAuth = false; }
         }
 
         private void rbJumpKey_Toggled(object sender, RoutedEventArgs e)
         {
-            if (rbJumpPassword != null && rbJumpKey.IsOn) rbJumpPassword.IsOn = false;
-            if (pnlJumpKey != null) pnlJumpKey.Visibility = rbJumpKey.IsOn ? Visibility.Visible : Visibility.Collapsed;
+            if (_syncingJumpAuth) return;
+            if (rbJumpPassword == null) return;
+            _syncingJumpAuth = true;
+            try
+            {
+                rbJumpPassword.IsOn = !rbJumpKey.IsOn;
+                UpdateJumpKeyPanel();
+            }
+            finally { _syncingJumpAuth = false; }
+        }
+
+        private void UpdateJumpKeyPanel()
+        {
+            if (pnlJumpKey != null)
+                pnlJumpKey.Visibility = rbJumpKey.IsOn ? Visibility.Visible : Visibility.Collapsed;
         }
 
         // ── 代理测试 ─────────────────────────────────────────────
@@ -333,7 +368,7 @@ namespace YouShell.UserForm
             }
 
             string jumpUser = txtJumpUser.Text.Trim();
-            string jumpPassword = txtJumpPassword.Text;
+            string jumpPassword = txtJumpPassword.Password;
 
             PrivateKeyFile? jumpKey = null;
             if (rbJumpKey.IsOn && cmbJumpKeySelect.SelectedItem is SshKeyInfo selectedJumpKey)
@@ -455,7 +490,7 @@ namespace YouShell.UserForm
             string targetHost = txtHost.Text.Trim();
             int proxyTypeIndex = cmbProxyType.SelectedIndex;
             string proxyUsername = txtProxyUsername.Text.Trim();
-            string proxyPassword = txtProxyPassword.Text;
+            string proxyPassword = txtProxyPassword.Password;
 
             if (!string.IsNullOrEmpty(targetHost) && int.TryParse(txtPort.Text, out int targetPort))
             {
