@@ -29,5 +29,8 @@ namespace YouShell.Models
         public string DisplayText => string.IsNullOrEmpty(Fingerprint)
             ? $"{Name}"
             : $"{Name} ({Fingerprint})";
+
+        [JsonIgnore]
+        public string ImportedAtText => ImportedAt.ToString("yyyy/MM/dd");
     }
 }

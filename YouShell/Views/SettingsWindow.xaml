@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ContentDialog
+    x:Class="YouShell.Views.SettingsWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="设置"
+    PrimaryButtonText="保存"
+    CloseButtonText="取消"
+    DefaultButton="Primary"
+    PrimaryButtonClick="SettingsWindow_PrimaryButtonClick">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Width="400" Spacing="6">
+            <TextBlock Text="安全设置" FontSize="20" FontWeight="Bold" Margin="0,0,0,6" />
+
+            <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,0,0,12">
+                <ToggleSwitch x:Name="TogVault" />
+                <TextBlock Text="使用 Windows Hello 保护密码" FontSize="14" VerticalAlignment="Center"
+                           ToolTipService.ToolTip="启用后，新保存的凭据将强制要求通过本机 PIN 或生物识别才能解锁。" />
+            </StackPanel>
+
+            <TextBlock Text="系统设置" FontSize="20" FontWeight="Bold" Margin="0,0,0,6" />
+
+            <StackPanel Spacing="8" Margin="0,0,0,12">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <ToggleSwitch x:Name="TogLinuxMonitor" />
+                    <TextBlock Text="使用 Linux Monitor 代理进程监视" FontSize="14" VerticalAlignment="Center"
+                               ToolTipService.ToolTip="启用后将自动建立SSH端口转发并挂载Native探针，大幅优化监控性能。" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="窗口背景渲染：" FontSize="14" VerticalAlignment="Center" />
+                    <ComboBox x:Name="CmbBackdrop" Width="140" VerticalAlignment="Center"
+                              SelectionChanged="CmbBackdrop_SelectionChanged">
+                        <ComboBoxItem Content="None" />
+                        <ComboBoxItem Content="Mica" />
+                        <ComboBoxItem Content="Acrylic" />
+                        <ComboBoxItem Content="Tabbed" />
+                    </ComboBox>
+                </StackPanel>
+            </StackPanel>
+
+            <TextBlock Text="路由追踪设置" FontSize="20" FontWeight="Bold" Margin="0,6,0,6" />
+
+            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,12">
+                <TextBlock Text="路由追踪超时(秒)：" FontSize="14" VerticalAlignment="Center" />
+                <TextBox x:Name="TxtTraceTimeout" Width="60" VerticalAlignment="Center" />
+                <TextBlock Text="最大跳数：" FontSize="14" VerticalAlignment="Center" Margin="12,0,0,0" />
+                <TextBox x:Name="TxtTraceMaxHops" Width="60" VerticalAlignment="Center" />
+            </StackPanel>
+
+            <TextBlock Text="终端设置" FontSize="20" FontWeight="Bold" Margin="0,6,0,6" />
+
+            <StackPanel Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="终端纯色背景：" FontSize="14" VerticalAlignment="Center" />
+                    <TextBox x:Name="TxtTerminalBg" Width="180" ToolTipService.ToolTip="例如: #1E3047 或 Red" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="终端字体：" FontSize="14" VerticalAlignment="Center" />
+                    <TextBox x:Name="TxtTerminalFont" Width="120" ToolTipService.ToolTip="例如: Cascadia Code" />
+                    <TextBlock Text="字号：" FontSize="14" VerticalAlignment="Center" Margin="8,0,0,0" />
+                    <TextBox x:Name="TxtTerminalFontSize" Width="40" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <ToggleSwitch x:Name="TogImageBg" />
+                    <TextBlock Text="启用图片背景" FontSize="14" VerticalAlignment="Center" />
+                </StackPanel>
+
+                <ContentControl IsEnabled="{Binding IsOn, ElementName=TogImageBg}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="图片路径：" FontSize="14" VerticalAlignment="Center" />
+                        <TextBox x:Name="TxtImagePath" Width="200" VerticalAlignment="Center" IsReadOnly="True" />
+                        <Button Content="选择图片" Width="80" VerticalAlignment="Center" Click="BtnSelectImage_Click" />
+                    </StackPanel>
+                </ContentControl>
+
+                <ContentControl IsEnabled="{Binding IsOn, ElementName=TogImageBg}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="拉伸模式：" FontSize="14" VerticalAlignment="Center" />
+                        <ComboBox x:Name="CmbStretch" Width="200">
+                            <ComboBoxItem Content="None (原始)" />
+                            <ComboBoxItem Content="Fill (填充)" />
+                            <ComboBoxItem Content="Uniform (适应)" />
+                            <ComboBoxItem Content="UniformToFill (裁剪)" />
+                            <ComboBoxItem Content="Center (居中)" />
+                        </ComboBox>
+                    </StackPanel>
+                </ContentControl>
+
+                <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,8,0,0">
+                    <ToggleSwitch x:Name="TogInjectLocale" />
+                    <TextBlock Text="连接后自动注入中文环境变量" FontSize="14" VerticalAlignment="Center"
+                               ToolTipService.ToolTip="启用后将在登录时自动执行 export LANG=zh_CN.UTF-8 等命令。" />
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Footer -->
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="2" Margin="0,12,0,0">
+                <TextBlock Text="Under " Foreground="#707070" FontSize="11" VerticalAlignment="Center" />
+                <HyperlinkButton Content="MIT License" NavigateUri="https://opensource.org/licenses/MIT" FontSize="11" Padding="0" />
+                <TextBlock Text=" | Code By " Foreground="#707070" FontSize="11" VerticalAlignment="Center" />
+                <HyperlinkButton Content="关晓予" NavigateUri="https://github.com/fsquirt" FontSize="11" Padding="0" />
+                <TextBlock Text=" | Powered By " Foreground="#707070" FontSize="11" VerticalAlignment="Center" />
+                <HyperlinkButton Content=".NET 10" NavigateUri="https://dotnet.microsoft.com" FontSize="11" Padding="0" />
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</ContentDialog>

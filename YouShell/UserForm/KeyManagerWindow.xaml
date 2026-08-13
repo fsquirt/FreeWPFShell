@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ContentDialog
+    x:Class="YouShell.UserForm.KeyManagerWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="SSH 密钥管理"
+    CloseButtonText="关闭"
+    DefaultButton="Close">
+
+    <Grid Width="600" RowSpacing="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 操作按钮 -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+            <Button Content="导入密钥" Click="BtnImport_Click" />
+            <Button Content="删除密钥" Click="CtxDelete_Click" />
+        </StackPanel>
+
+        <!-- 密钥列表 -->
+        <Grid Grid.Row="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- 表头 -->
+            <Grid Grid.Row="0" Padding="12,6" ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="150" />
+                    <ColumnDefinition Width="240" />
+                    <ColumnDefinition Width="40" />
+                    <ColumnDefinition Width="120" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="名称" FontWeight="SemiBold" Foreground="#78909C" />
+                <TextBlock Grid.Column="1" Text="指纹" FontWeight="SemiBold" Foreground="#78909C" />
+                <FontIcon Grid.Column="2" Glyph="&#xE72E;" FontSize="12" Foreground="#78909C" HorizontalAlignment="Center" />
+                <TextBlock Grid.Column="3" Text="导入时间" FontWeight="SemiBold" Foreground="#78909C" />
+            </Grid>
+
+            <ListView
+                x:Name="KeyList"
+                Grid.Row="1"
+                SelectionMode="Single"
+                HorizontalContentAlignment="Stretch"
+                MaxHeight="320">
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Padding="12,8" ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="150" />
+                                <ColumnDefinition Width="240" />
+                                <ColumnDefinition Width="40" />
+                                <ColumnDefinition Width="120" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="{Binding Fingerprint}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                            <FontIcon Grid.Column="2" Glyph="&#xE72E;" FontSize="14" Foreground="#00BCFF" HorizontalAlignment="Center"
+                                      Visibility="{Binding HasPassphrase, Converter={StaticResource BoolToVis}}" />
+                            <TextBlock Grid.Column="3" Text="{Binding ImportedAtText}" VerticalAlignment="Center" />
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </Grid>
+
+        <!-- 底部说明 -->
+        <TextBlock Grid.Row="2" Text="💡 密钥内容保存在本地，密钥密码被加密保护。务必使用加密的密钥，因为程序不会加密密钥本体！"
+                   FontSize="11" Foreground="#78909C" TextWrapping="Wrap" />
+    </Grid>
+</ContentDialog>

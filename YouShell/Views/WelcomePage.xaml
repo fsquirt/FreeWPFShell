@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="YouShell.Views.WelcomePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    FontFamily="Microsoft YaHei">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- 标题栏 -->
+        <Grid Grid.Row="0" Margin="20,20,20,0">
+            <TextBlock Text="已保存的主机列表:" FontSize="16" VerticalAlignment="Center" HorizontalAlignment="Left" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                <Button Command="{Binding OpenSettingsCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <FontIcon Glyph="&#xE713;" FontSize="14" Foreground="#AAA" />
+                        <TextBlock Text="设置" />
+                    </StackPanel>
+                </Button>
+                <Button Command="{Binding OpenKeyManagerCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <FontIcon Glyph="&#xE72E;" FontSize="14" Foreground="#FFD700" />
+                        <TextBlock Text="密钥管理" />
+                    </StackPanel>
+                </Button>
+                <Button Command="{Binding AddConnectionCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <FontIcon Glyph="&#xE710;" FontSize="14" Foreground="#00BCFF" />
+                        <TextBlock Text="新建连接" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <!-- 主机卡片列表 -->
+        <ListView
+            x:Name="HostsList"
+            Grid.Row="1"
+            Margin="20"
+            ItemsSource="{Binding Hosts}"
+            SelectedItem="{Binding SelectedHost}"
+            SelectionMode="Single"
+            DoubleTapped="HostsList_DoubleTapped"
+            ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+            ScrollViewer.HorizontalScrollMode="Disabled">
+
+            <ListView.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <ItemsWrapGrid Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+            </ListView.ItemsPanel>
+
+            <ListView.ItemTemplate>
+                <DataTemplate>
+                    <Border Background="#1C2E41" Margin="5" Padding="15" CornerRadius="8" Width="280">
+                        <Border.ContextFlyout>
+                            <MenuFlyout>
+                                <MenuFlyoutItem Text="连接主机" Click="MnuConnect_Click" />
+                                <MenuFlyoutItem Text="编辑连接" Click="MnuEdit_Click" />
+                                <MenuFlyoutItem Text="删除连接" Click="MnuDelete_Click" />
+                            </MenuFlyout>
+                        </Border.ContextFlyout>
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="5" Margin="0,0,0,5">
+                                <FontIcon Glyph="&#xE72E;" FontSize="14" Foreground="#00BCFF" VerticalAlignment="Center"
+                                          Visibility="{Binding UseVault, Converter={StaticResource BoolToVis}}"
+                                          ToolTipService.ToolTip="由 Windows Hello 凭据保险箱保护" />
+                                <TextBlock Text="{Binding HostName}" FontWeight="Bold" FontSize="16" Foreground="White" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding IpAddress}" FontSize="13" Foreground="#B0BEC5" />
+                            <TextBlock Text="{Binding SimpleIpGEO}" FontSize="11" Foreground="#78909C" Margin="0,2,0,0" />
+                            <StackPanel Orientation="Horizontal" Spacing="0" Margin="0,3,0,0">
+                                <TextBlock Text="{Binding SshUser}" FontSize="12" Foreground="#78909C" />
+                                <TextBlock Text=" : " FontSize="12" Foreground="#78909C" />
+                                <TextBlock Text="{Binding SshPort}" FontSize="12" Foreground="#78909C" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+    </Grid>
+</UserControl>

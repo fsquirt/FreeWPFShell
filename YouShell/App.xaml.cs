@@ -44,6 +44,9 @@ namespace YouShell
         /// <param name="args">Details about the launch request and process.</param>
         protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
         {
+            // 初始化依赖注入容器（单例服务：设置/主机/密钥库、IP 地理、隧道管理器）
+            Core.AppServices.Initialize();
+
             MainWindow = new MainWindow();
             Core.UiDispatcher.Initialize(MainWindow.DispatcherQueue);
             MainWindow.Activate();
