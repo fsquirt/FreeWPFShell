@@ -20,6 +20,9 @@ namespace YouShell.Views
         /// <summary>由 MainWindow 注入：请求打开一个 SSH 会话。</summary>
         public Action<SshConnectionInfo>? OpenSessionRequested { get; set; }
 
+        /// <summary>由 MainWindow 注入：请求打开 SSH 密钥管理标签页。</summary>
+        public Action? OpenKeyManagerRequested { get; set; }
+
         public WelcomePage()
         {
             InitializeComponent();
@@ -69,11 +72,7 @@ namespace YouShell.Views
             ViewModel.LoadHosts();
         }
 
-        private async void OpenKeyManager()
-        {
-            var keyMgr = new KeyManagerWindow();
-            await keyMgr.ShowAsync();
-        }
+        private void OpenKeyManager() => OpenKeyManagerRequested?.Invoke();
 
         private async void ConnectToHost(SshConnectionInfo host)
         {

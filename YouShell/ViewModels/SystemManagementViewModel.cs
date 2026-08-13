@@ -293,12 +293,15 @@ namespace YouShell.ViewModels
                         !p.Cmd.ToLower().Contains(search)) continue;
                     ProcessRecords.Add(p);
                 }
+                // 在 UI 线程内重设选中项：原在 RunOnUiThread 外赋值 SelectedProcess，
+                // 后台线程触发 PropertyChanged 会抛 COMException(0x8001010E)，
+                // 且 ProcessRecords 是异步填充的，立即读取还有竞态。
+                if (selectedPid.HasValue)
+                {
+                    var match = ProcessRecords.FirstOrDefault(x => x.Pid == selectedPid.Value);
+                    if (match != null) SelectedProcess = match;
+                }
             });
-            if (selectedPid.HasValue)
-            {
-                var match = ProcessRecords.FirstOrDefault(x => x.Pid == selectedPid.Value);
-                if (match != null) SelectedProcess = match;
-            }
         }
 
         partial void OnSelectedProcessChanged(ProcessItem? value) => _ = ShowProcessDetailAsync();

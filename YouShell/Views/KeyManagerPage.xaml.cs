@@ -1,23 +1,24 @@
 using System;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Renci.SshNet.Common;
 using YouShell.Models;
 using YouShell.Repositories;
-using Renci.SshNet.Common;
+using YouShell.UserForm;
 
-namespace YouShell.UserForm
+namespace YouShell.Views
 {
     /// <summary>
-    /// SSH 密钥管理对话框（WinUI 3 ContentDialog）。提供密钥导入/删除。
+    /// SSH 密钥管理标签页。提供密钥导入/删除，作为主窗口的一个 Tab 打开
+    /// （避免原 ContentDialog 形态下嵌套弹出对话框触发「仅允许单个 ContentDialog」异常）。
     /// </summary>
-    public sealed partial class KeyManagerWindow : ContentDialog
+    public sealed partial class KeyManagerPage : UserControl
     {
         private readonly KeyRepository _keyRepo = new();
 
-        public KeyManagerWindow()
+        public KeyManagerPage()
         {
             InitializeComponent();
-            XamlRoot = ModernMessageBox.Root;
             RefreshList();
         }
 

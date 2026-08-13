@@ -23,6 +23,7 @@ namespace YouShell
             Services.BackdropService.Apply(this, settingsRepo.Load().BackdropType);
 
             WelcomePageControl.OpenSessionRequested = OpenSession;
+            WelcomePageControl.OpenKeyManagerRequested = OpenKeyManagerTab;
             Closed += MainWindow_Closed;
         }
 
@@ -81,6 +82,11 @@ namespace YouShell
         private void OpenSystemManagementPage(SshSessionService session)
         {
             AddTab($"系统管理-{session.DisplayName}", new SystemManagementPage(session));
+        }
+
+        private void OpenKeyManagerTab()
+        {
+            AddTab("SSH密钥管理", new KeyManagerPage());
         }
 
         private TabViewItem AddTab(string header, FrameworkElement content)
