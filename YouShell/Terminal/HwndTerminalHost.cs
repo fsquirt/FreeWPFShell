@@ -37,26 +37,27 @@ namespace YouShell.Terminal
 
         public bool IsCreated => _terminal != IntPtr.Zero;
 
-        /// <summary>将宿主挂到指定窗口，并让终端原生窗口覆盖 <paramref name="placeholder"/>。</summary>
+        /// <summary>将宿主挂到指定窗口，并让终端原生窗口覆盖 <paramref name="placeholder"/>。已创建时仅重新绑定占位元素。</summary>
         public void Attach(Window window, FrameworkElement placeholder)
         {
-            if (IsCreated) return;
-
             _window = window;
             _placeholder = placeholder;
             _parentHwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
 
-            NativeMethods.AvoidBuggyTSFConsoleFlags();
-            NativeMethods.CreateTerminal(_parentHwnd, out _hwnd, out _terminal);
+            if (!IsCreated)
+            {
+                NativeMethods.AvoidBuggyTSFConsoleFlags();
+                NativeMethods.CreateTerminal(_parentHwnd, out _hwnd, out _terminal);
 
-            _scrollCallback = OnScroll;
-            _writeCallback = OnWrite;
-            NativeMethods.TerminalRegisterScrollCallback(_terminal, _scrollCallback);
-            NativeMethods.TerminalRegisterWriteCallback(_terminal, _writeCallback);
+                _scrollCallback = OnScroll;
+                _writeCallback = OnWrite;
+                NativeMethods.TerminalRegisterScrollCallback(_terminal, _scrollCallback);
+                NativeMethods.TerminalRegisterWriteCallback(_terminal, _writeCallback);
 
-            // 子类化终端 HWND，转发键盘输入并抢占焦点（WinUI 3 无 HwndHost.MessageHook）。
-            _subclassProc = SubclassProc;
-            NativeMethods.SetWindowSubclass(_hwnd, _subclassProc, SubclassId, UIntPtr.Zero);
+                // 子类化终端 HWND，转发键盘输入并抢占焦点（WinUI 3 无 HwndHost.MessageHook）。
+                _subclassProc = SubclassProc;
+                NativeMethods.SetWindowSubclass(_hwnd, _subclassProc, SubclassId, UIntPtr.Zero);
+            }
 
             placeholder.SizeChanged += OnPlaceholderSizeChanged;
             if (window.AppWindow is not null)
@@ -65,6 +66,28 @@ namespace YouShell.Terminal
             }
 
             UpdateLayout();
+        }
+
+        /// <summary>解除与占位元素的绑定并隐藏原生窗口，但保留终端实例（切 Tab 不销毁，避免缓冲丢失）。</summary>
+        public void Detach()
+        {
+            if (_window?.AppWindow is not null)
+            {
+                _window.AppWindow.Changed -= OnAppWindowChanged;
+            }
+
+            if (_placeholder != null)
+            {
+                _placeholder.SizeChanged -= OnPlaceholderSizeChanged;
+            }
+
+            _placeholder = null;
+            _window = null;
+
+            if (_hwnd != IntPtr.Zero)
+            {
+                NativeMethods.ShowWindow(_hwnd, NativeMethods.SW_HIDE);
+            }
         }
 
         /// <summary>设置终端后端连接。</summary>
@@ -215,7 +238,7 @@ namespace YouShell.Terminal
 
         private void UpdateLayout()
         {
-            if (_terminal == IntPtr.Zero || _placeholder == null) return;
+            if (_terminal == IntPtr.Zero || _placeholder == null || _placeholder.XamlRoot == null) return;
 
             int dpi = CurrentDpi;
             if (_lastDpi != 0 && dpi != _lastDpi)
@@ -266,15 +289,7 @@ namespace YouShell.Terminal
 
         public void Dispose()
         {
-            if (_window?.AppWindow is not null)
-            {
-                _window.AppWindow.Changed -= OnAppWindowChanged;
-            }
-
-            if (_placeholder != null)
-            {
-                _placeholder.SizeChanged -= OnPlaceholderSizeChanged;
-            }
+            Detach();
 
             if (_terminal != IntPtr.Zero)
             {

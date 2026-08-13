@@ -79,6 +79,7 @@ namespace YouShell.Views
                 Session.TerminalConnection.ConnectionLost -= TerminalConnection_ConnectionLost;
 
             Terminal.Connection = null;
+            Terminal.DisposeHost();
             ViewModel.CancelAllTransfersCommand.Execute(null);
             FileGrid.ItemsSource = null;
             ViewModel.Files.Clear();

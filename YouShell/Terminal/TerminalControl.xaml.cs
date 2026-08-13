@@ -84,7 +84,7 @@ namespace YouShell.Terminal
 
         private void OnLoaded(object sender, RoutedEventArgs e)
         {
-            if (App.MainWindow is not null && !_host.IsCreated)
+            if (App.MainWindow is not null)
             {
                 _host.Attach(App.MainWindow, Placeholder);
             }
@@ -92,7 +92,11 @@ namespace YouShell.Terminal
 
         private void OnUnloaded(object sender, RoutedEventArgs e)
         {
-            _host.Dispose();
+            // 切 Tab 只是卸载视觉树：隐藏并解除绑定，保留终端缓冲与状态。
+            _host.Detach();
         }
+
+        /// <summary>关 Tab 时彻底销毁原生终端宿主。</summary>
+        public void DisposeHost() => _host.Dispose();
     }
 }
