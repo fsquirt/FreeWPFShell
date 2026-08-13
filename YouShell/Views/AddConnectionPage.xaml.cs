@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using YouShell.Models;
 using YouShell.Repositories;
 using YouShell.UserForm;
@@ -23,6 +24,9 @@ namespace YouShell.Views
         private bool _syncingAuth;
         private bool _syncingJumpAuth;
 
+        // 无密钥时的错误提示颜色（Windows 错误红）
+        private static readonly Windows.UI.Color s_errorRed = Windows.UI.Color.FromArgb(255, 232, 17, 35);
+
         public bool ConnectAfterSave { get; private set; }
         public SshConnectionInfo? SavedHostInfo { get; private set; }
 
@@ -42,6 +46,18 @@ namespace YouShell.Views
 
             cmbJumpKeySelect.ItemsSource = keys;
             if (keys.Count > 0) cmbJumpKeySelect.SelectedIndex = 0;
+
+            // 有密钥时隐藏提示；无密钥时显示
+            bool hasKeys = keys.Count > 0;
+            if (pnlKeyHint != null) pnlKeyHint.Visibility = hasKeys ? Visibility.Collapsed : Visibility.Visible;
+            if (pnlJumpKeyHint != null) pnlJumpKeyHint.Visibility = hasKeys ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        private bool HasKeys => cmbKeySelect.Items.Count > 0;
+
+        private void SetHintWarning(TextBlock hint)
+        {
+            if (hint != null) hint.Foreground = new SolidColorBrush(s_errorRed);
         }
 
         public AddConnectionPage(SshConnectionInfo editHost) : this()
@@ -287,6 +303,21 @@ namespace YouShell.Views
         {
             if (_syncingAuth) return;
             if (rbPassword == null) return;
+
+            // 没有导入密钥时不允许启用密钥登录：提示变红并立即切回密码登录
+            if (rbKey.IsOn && !HasKeys)
+            {
+                _syncingAuth = true;
+                try
+                {
+                    SetHintWarning(txtKeyHint);
+                    rbKey.IsOn = false;
+                    rbPassword.IsOn = true;
+                }
+                finally { _syncingAuth = false; }
+                return;
+            }
+
             _syncingAuth = true;
             try { rbPassword.IsOn = !rbKey.IsOn; }
             finally { _syncingAuth = false; }
@@ -309,6 +340,22 @@ namespace YouShell.Views
         {
             if (_syncingJumpAuth) return;
             if (rbJumpPassword == null) return;
+
+            // 没有导入密钥时不允许启用密钥登录：提示变红并立即切回密码登录
+            if (rbJumpKey.IsOn && !HasKeys)
+            {
+                _syncingJumpAuth = true;
+                try
+                {
+                    SetHintWarning(txtJumpKeyHint);
+                    rbJumpKey.IsOn = false;
+                    rbJumpPassword.IsOn = true;
+                    UpdateJumpKeyPanel();
+                }
+                finally { _syncingJumpAuth = false; }
+                return;
+            }
+
             _syncingJumpAuth = true;
             try
             {

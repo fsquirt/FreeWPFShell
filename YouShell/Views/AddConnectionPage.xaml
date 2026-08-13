@@ -73,9 +73,9 @@
                 <StackPanel Margin="20,0,0,4" Spacing="4">
                     <ComboBox x:Name="cmbKeySelect" HorizontalAlignment="Stretch"
                               DisplayMemberPath="DisplayText" SelectedValuePath="Id" />
-                    <StackPanel Orientation="Horizontal" Spacing="5">
+                    <StackPanel x:Name="pnlKeyHint" Orientation="Horizontal" Spacing="5">
                         <FontIcon Glyph="&#xE946;" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        <TextBlock Text="请先在主界面的「密钥管理」中导入密钥" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <TextBlock x:Name="txtKeyHint" Text="请先在主界面的「密钥管理」中导入密钥" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     </StackPanel>
                 </StackPanel>
             </StackPanel>
@@ -178,9 +178,9 @@
                             <StackPanel x:Name="pnlJumpKey" Visibility="Collapsed" Spacing="4" Margin="20,0,0,4">
                                 <ComboBox x:Name="cmbJumpKeySelect" HorizontalAlignment="Stretch"
                                           DisplayMemberPath="DisplayText" SelectedValuePath="Id" />
-                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                <StackPanel x:Name="pnlJumpKeyHint" Orientation="Horizontal" Spacing="5">
                                     <FontIcon Glyph="&#xE946;" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                    <TextBlock Text="请先在主界面的「密钥管理」中导入密钥" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <TextBlock x:Name="txtJumpKeyHint" Text="请先在主界面的「密钥管理」中导入密钥" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                 </StackPanel>
                             </StackPanel>
                         </StackPanel>
