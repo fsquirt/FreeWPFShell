@@ -11,4 +11,8 @@
   <Project Path="Tests/FreeWPFShell.Tests/FreeWPFShell.Tests.csproj">
     <Platform Project="x64" />
   </Project>
+  <Project Path="YouShell/YouShell.csproj" Id="8d72243f-16f9-4a44-ad27-305b2a5192c2">
+    <Platform Project="x64" />
+    <Deploy />
+  </Project>
 </Solution>
