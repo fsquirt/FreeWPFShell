@@ -19,71 +19,94 @@
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
                 <Button Command="{Binding OpenSettingsCommand}">
                     <StackPanel Orientation="Horizontal" Spacing="4">
-                        <FontIcon Glyph="&#xE713;" FontSize="14" Foreground="#AAA" />
+                        <FontIcon Glyph="&#xE713;" FontSize="14" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
                         <TextBlock Text="设置" />
                     </StackPanel>
                 </Button>
                 <Button Command="{Binding OpenKeyManagerCommand}">
                     <StackPanel Orientation="Horizontal" Spacing="4">
-                        <FontIcon Glyph="&#xE72E;" FontSize="14" Foreground="#FFD700" />
+                        <FontIcon Glyph="&#xE72E;" FontSize="14" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
                         <TextBlock Text="密钥管理" />
                     </StackPanel>
                 </Button>
                 <Button Command="{Binding AddConnectionCommand}">
                     <StackPanel Orientation="Horizontal" Spacing="4">
-                        <FontIcon Glyph="&#xE710;" FontSize="14" Foreground="#00BCFF" />
+                        <FontIcon Glyph="&#xE710;" FontSize="14" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
                         <TextBlock Text="新建连接" />
                     </StackPanel>
                 </Button>
             </StackPanel>
         </Grid>
 
-        <!-- 主机卡片列表 -->
-        <ListView
-            x:Name="HostsList"
-            Grid.Row="1"
-            Margin="20"
-            ItemsSource="{Binding Hosts}"
-            SelectedItem="{Binding SelectedHost}"
-            SelectionMode="Single"
-            DoubleTapped="HostsList_DoubleTapped"
-            ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-            ScrollViewer.HorizontalScrollMode="Disabled">
+        <!-- 主机表格 -->
+        <Grid Grid.Row="1" Margin="20,12,20,20">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
 
-            <ListView.ItemsPanel>
-                <ItemsPanelTemplate>
-                    <ItemsWrapGrid Orientation="Horizontal" />
-                </ItemsPanelTemplate>
-            </ListView.ItemsPanel>
+            <!-- 表头 -->
+            <Grid Padding="12,8" ColumnSpacing="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="2*" />
+                    <ColumnDefinition Width="1.5*" />
+                    <ColumnDefinition Width="2*" />
+                    <ColumnDefinition Width="1*" />
+                    <ColumnDefinition Width="0.8*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="主机名" FontWeight="SemiBold" />
+                <TextBlock Grid.Column="1" Text="IP" FontWeight="SemiBold" />
+                <TextBlock Grid.Column="2" Text="地理位置" FontWeight="SemiBold" />
+                <TextBlock Grid.Column="3" Text="用户名" FontWeight="SemiBold" />
+                <TextBlock Grid.Column="4" Text="端口" FontWeight="SemiBold" />
+            </Grid>
 
-            <ListView.ItemTemplate>
-                <DataTemplate>
-                    <Border Background="#1C2E41" Margin="5" Padding="15" CornerRadius="8" Width="280">
-                        <Border.ContextFlyout>
-                            <MenuFlyout>
-                                <MenuFlyoutItem Text="连接主机" Click="MnuConnect_Click" />
-                                <MenuFlyoutItem Text="编辑连接" Click="MnuEdit_Click" />
-                                <MenuFlyoutItem Text="删除连接" Click="MnuDelete_Click" />
-                            </MenuFlyout>
-                        </Border.ContextFlyout>
-                        <StackPanel>
-                            <StackPanel Orientation="Horizontal" Spacing="5" Margin="0,0,0,5">
-                                <FontIcon Glyph="&#xE72E;" FontSize="14" Foreground="#00BCFF" VerticalAlignment="Center"
+            <ListView
+                x:Name="HostsList"
+                Grid.Row="1"
+                ItemsSource="{Binding Hosts}"
+                SelectedItem="{Binding SelectedHost}"
+                SelectionMode="Single"
+                DoubleTapped="HostsList_DoubleTapped"
+                ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                ScrollViewer.HorizontalScrollMode="Disabled">
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                        <Setter Property="Padding" Value="0" />
+                    </Style>
+                </ListView.ItemContainerStyle>
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Padding="12,8" ColumnSpacing="8" Background="Transparent">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="1.5*" />
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="1*" />
+                                <ColumnDefinition Width="0.8*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.ContextFlyout>
+                                <MenuFlyout>
+                                    <MenuFlyoutItem Text="连接主机" Click="MnuConnect_Click" />
+                                    <MenuFlyoutItem Text="编辑连接" Click="MnuEdit_Click" />
+                                    <MenuFlyoutItem Text="删除连接" Click="MnuDelete_Click" />
+                                </MenuFlyout>
+                            </Grid.ContextFlyout>
+                            <StackPanel Orientation="Horizontal" Spacing="5">
+                                <FontIcon Glyph="&#xE72E;" FontSize="12" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" VerticalAlignment="Center"
                                           Visibility="{Binding UseVault, Converter={StaticResource BoolToVis}}"
                                           ToolTipService.ToolTip="由 Windows Hello 凭据保险箱保护" />
-                                <TextBlock Text="{Binding HostName}" FontWeight="Bold" FontSize="16" Foreground="White" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding HostName}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                             </StackPanel>
-                            <TextBlock Text="{Binding IpAddress}" FontSize="13" Foreground="#B0BEC5" />
-                            <TextBlock Text="{Binding SimpleIpGEO}" FontSize="11" Foreground="#78909C" Margin="0,2,0,0" />
-                            <StackPanel Orientation="Horizontal" Spacing="0" Margin="0,3,0,0">
-                                <TextBlock Text="{Binding SshUser}" FontSize="12" Foreground="#78909C" />
-                                <TextBlock Text=" : " FontSize="12" Foreground="#78909C" />
-                                <TextBlock Text="{Binding SshPort}" FontSize="12" Foreground="#78909C" />
-                            </StackPanel>
-                        </StackPanel>
-                    </Border>
-                </DataTemplate>
-            </ListView.ItemTemplate>
-        </ListView>
+                            <TextBlock Grid.Column="1" Text="{Binding IpAddress}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Column="2" Text="{Binding SimpleIpGEO}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Column="3" Text="{Binding SshUser}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Column="4" Text="{Binding SshPort}" VerticalAlignment="Center" />
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </Grid>
     </Grid>
 </UserControl>

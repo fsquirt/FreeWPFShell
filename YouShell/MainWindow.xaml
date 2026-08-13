@@ -11,114 +11,14 @@
     Title="YouShell">
 
     <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="230" MinWidth="180" MaxWidth="400" />
-            <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
-
-        <!-- 左侧监控栏 -->
-        <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
-            <StackPanel Margin="10" Spacing="4">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                    <TextBlock x:Name="TxtHostIp" Text="未连接" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                    <Button x:Name="BtnCopyIp" Content="复制" Click="BtnCopyIp_Click" Padding="6,1" FontSize="11" />
-                </StackPanel>
-                <TextBlock x:Name="TxtHostGeo" Text="" FontSize="12" TextWrapping="Wrap" />
-
-                <StackPanel Orientation="Horizontal" Spacing="10">
-                    <TextBlock x:Name="TxtUptime" Text="运行 -- 天..." FontSize="12" />
-                    <TextBlock x:Name="TxtPing" Text="--ms" FontSize="12" />
-                </StackPanel>
-                <TextBlock x:Name="TxtLoad" Text="负载 --, --, --" FontSize="12" />
-
-                <Grid Margin="0,6,0,4" RowSpacing="3">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="32" /><ColumnDefinition Width="*" /><ColumnDefinition Width="58" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Text="CPU" VerticalAlignment="Center" />
-                    <ProgressBar x:Name="ProgCpu" Grid.Column="1" Value="0" Minimum="0" Maximum="100" Height="14" Foreground="#4CAF50" />
-                    <TextBlock x:Name="TxtCpuText" Grid.Column="2" Text="0.0%" HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="11" />
-                    <TextBlock Text="内存" Grid.Row="1" VerticalAlignment="Center" />
-                    <ProgressBar x:Name="ProgMem" Grid.Column="1" Grid.Row="1" Value="0" Minimum="0" Maximum="100" Height="14" Foreground="#FF9800" />
-                    <TextBlock x:Name="TxtMemText" Grid.Column="2" Grid.Row="1" Text="0M/0M" HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="11" />
-                    <TextBlock Text="交换" Grid.Row="2" VerticalAlignment="Center" />
-                    <ProgressBar x:Name="ProgSwap" Grid.Column="1" Grid.Row="2" Value="0" Minimum="0" Maximum="100" Height="14" Foreground="#9E9E9E" />
-                    <TextBlock x:Name="TxtSwapText" Grid.Column="2" Grid.Row="2" Text="0M/0M" HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="11" />
-                </Grid>
-
-                <TextBlock Text="进程" FontSize="12" FontWeight="SemiBold" />
-                <ListView x:Name="ProcessGrid" Height="120" HorizontalContentAlignment="Stretch">
-                    <ListView.ItemTemplate>
-                        <DataTemplate>
-                            <Grid ColumnSpacing="6">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="50" /><ColumnDefinition Width="50" /><ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="{Binding Mem}" FontSize="11" />
-                                <TextBlock Grid.Column="1" Text="{Binding Cpu}" FontSize="11" />
-                                <TextBlock Grid.Column="2" Text="{Binding Cmd}" FontSize="11" TextTrimming="CharacterEllipsis" />
-                            </Grid>
-                        </DataTemplate>
-                    </ListView.ItemTemplate>
-                </ListView>
-
-                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
-                    <StackPanel Orientation="Horizontal" Spacing="2">
-                        <FontIcon Glyph="&#xE74A;" FontSize="11" Foreground="#00BCFF" />
-                        <TextBlock x:Name="TxtNetUp" Text="0K" FontSize="11" />
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="2">
-                        <FontIcon Glyph="&#xE74B;" FontSize="11" Foreground="#4CAF50" />
-                        <TextBlock x:Name="TxtNetDown" Text="0K" FontSize="11" />
-                    </StackPanel>
-                    <TextBlock x:Name="TxtNetIface" Text="--" FontSize="11" />
-                </StackPanel>
-
-                <Grid Height="80" Margin="0,4,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="32" /><ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel VerticalAlignment="Stretch" HorizontalAlignment="Right" Margin="0,0,5,0">
-                        <TextBlock x:Name="TxtNetMax" Text="100K" FontSize="10" VerticalAlignment="Top" />
-                        <TextBlock x:Name="TxtNetMid" Text="50K" FontSize="10" VerticalAlignment="Center" Margin="0,18,0,0" />
-                    </StackPanel>
-                    <Border Grid.Column="1" BorderBrush="#555" BorderThickness="0,0,0,1">
-                        <Canvas x:Name="NetChartCanvas" />
-                    </Border>
-                </Grid>
-
-                <TextBlock Text="磁盘" FontSize="12" FontWeight="SemiBold" Margin="0,4,0,0" />
-                <ListView x:Name="DiskGrid" Height="120" HorizontalContentAlignment="Stretch">
-                    <ListView.ItemTemplate>
-                        <DataTemplate>
-                            <Grid ColumnSpacing="6">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" /><ColumnDefinition Width="70" /><ColumnDefinition Width="70" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="{Binding Path}" FontSize="11" TextTrimming="CharacterEllipsis" />
-                                <TextBlock Grid.Column="1" Text="{Binding Avail}" FontSize="11" />
-                                <TextBlock Grid.Column="2" Text="{Binding Size}" FontSize="11" />
-                            </Grid>
-                        </DataTemplate>
-                    </ListView.ItemTemplate>
-                </ListView>
-            </StackPanel>
-        </ScrollViewer>
-
-        <!-- 标签页 -->
         <TabView
             x:Name="SessionTabs"
-            Grid.Column="1"
             IsAddTabButtonVisible="False"
             HorizontalAlignment="Stretch"
             VerticalAlignment="Stretch"
             HorizontalContentAlignment="Stretch"
             VerticalContentAlignment="Stretch"
-            TabCloseRequested="SessionTabs_TabCloseRequested"
-            SelectionChanged="SessionTabs_SelectionChanged">
+            TabCloseRequested="SessionTabs_TabCloseRequested">
             <TabView.TabItems>
                 <TabViewItem x:Name="WelcomeTab" Header="首页" IsClosable="False">
                     <views:WelcomePage x:Name="WelcomePageControl" />

@@ -47,12 +47,12 @@
                         <ColumnDefinition Width="60" /><ColumnDefinition Width="60" />
                         <ColumnDefinition Width="200" /><ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="PID" FontWeight="SemiBold" Foreground="#78909C" />
-                    <TextBlock Grid.Column="1" Text="用户" FontWeight="SemiBold" Foreground="#78909C" />
-                    <TextBlock Grid.Column="2" Text="CPU" FontWeight="SemiBold" Foreground="#78909C" />
-                    <TextBlock Grid.Column="3" Text="内存" FontWeight="SemiBold" Foreground="#78909C" />
-                    <TextBlock Grid.Column="4" Text="路径" FontWeight="SemiBold" Foreground="#78909C" />
-                    <TextBlock Grid.Column="5" Text="命令行" FontWeight="SemiBold" Foreground="#78909C" />
+                    <TextBlock Text="PID" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="1" Text="用户" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="2" Text="CPU" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="3" Text="内存" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="4" Text="路径" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="5" Text="命令行" FontWeight="SemiBold" />
                 </Grid>
                 <ListView x:Name="ProcessGrid" Grid.Row="1" ItemsSource="{Binding ProcessRecords}"
                           SelectedItem="{Binding SelectedProcess, Mode=TwoWay}"
@@ -88,7 +88,7 @@
                 </ListView>
             </Grid>
 
-            <Border Grid.Row="2" BorderBrush="#555" BorderThickness="0,1,0,0" Margin="0,5,0,0" Padding="10" Background="#1A000000" MaxHeight="180">
+            <Border Grid.Row="2" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,0" Margin="0,5,0,0" Padding="10" Background="{ThemeResource SubtleFillColorSecondaryBrush}" MaxHeight="180">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <TextBlock Text="{Binding ProcessDetailText}" TextWrapping="Wrap" FontFamily="Consolas, Microsoft YaHei" FontSize="12" />
                 </ScrollViewer>
@@ -121,13 +121,13 @@
                         <ColumnDefinition Width="1.5*" /><ColumnDefinition Width="100" />
                         <ColumnDefinition Width="60" /><ColumnDefinition Width="80" /><ColumnDefinition Width="2*" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="协议" FontWeight="SemiBold" Foreground="#78909C" />
-                    <TextBlock Grid.Column="1" Text="本地地址" FontWeight="SemiBold" Foreground="#78909C" />
-                    <TextBlock Grid.Column="2" Text="远程地址" FontWeight="SemiBold" Foreground="#78909C" />
-                    <TextBlock Grid.Column="3" Text="状态" FontWeight="SemiBold" Foreground="#78909C" />
-                    <TextBlock Grid.Column="4" Text="PID" FontWeight="SemiBold" Foreground="#78909C" />
-                    <TextBlock Grid.Column="5" Text="用户" FontWeight="SemiBold" Foreground="#78909C" />
-                    <TextBlock Grid.Column="6" Text="程序路径" FontWeight="SemiBold" Foreground="#78909C" />
+                    <TextBlock Text="协议" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="1" Text="本地地址" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="2" Text="远程地址" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="3" Text="状态" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="4" Text="PID" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="5" Text="用户" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="6" Text="程序路径" FontWeight="SemiBold" />
                 </Grid>
                 <ListView x:Name="NetGrid" Grid.Row="1" ItemsSource="{Binding NetConns}"
                           SelectedItem="{Binding SelectedNetConn, Mode=TwoWay}"
@@ -165,7 +165,7 @@
             <StackPanel Margin="10,8,10,10" Spacing="6">
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <TextBlock Text="登录成功记录" FontWeight="Bold" FontSize="16" VerticalAlignment="Center" />
-                    <TextBlock Text="/var/log/wtmp" FontSize="11" Foreground="Gray" VerticalAlignment="Center" />
+                    <TextBlock Text="/var/log/wtmp" FontSize="11" VerticalAlignment="Center" />
                     <TextBlock Text="获取条数:" VerticalAlignment="Center" Margin="12,0,0,0" />
                     <TextBox x:Name="TxtWtmpCount" Width="60" Text="10" />
                     <Button x:Name="BtnRefreshWtmp" Content="刷新" Click="BtnRefreshWtmp_Click" />
@@ -180,10 +180,10 @@
                             <ColumnDefinition Width="2*" /><ColumnDefinition Width="1*" />
                             <ColumnDefinition Width="1.5*" /><ColumnDefinition Width="2*" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="登录时间" FontWeight="SemiBold" Foreground="#78909C" />
-                        <TextBlock Grid.Column="1" Text="登录用户" FontWeight="SemiBold" Foreground="#78909C" />
-                        <TextBlock Grid.Column="2" Text="登录来源 (IP)" FontWeight="SemiBold" Foreground="#78909C" />
-                        <TextBlock Grid.Column="3" Text="IP归属地" FontWeight="SemiBold" Foreground="#78909C" />
+                        <TextBlock Text="登录时间" FontWeight="SemiBold" />
+                        <TextBlock Grid.Column="1" Text="登录用户" FontWeight="SemiBold" />
+                        <TextBlock Grid.Column="2" Text="登录来源 (IP)" FontWeight="SemiBold" />
+                        <TextBlock Grid.Column="3" Text="IP归属地" FontWeight="SemiBold" />
                     </Grid>
                     <ListView x:Name="WtmpGrid" Grid.Row="1" ItemsSource="{Binding WtmpRecords}" SelectionMode="Single" HorizontalContentAlignment="Stretch" MaxHeight="220">
                         <ListView.ItemTemplate>
@@ -205,7 +205,7 @@
 
                 <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
                     <TextBlock Text="登录失败记录" FontWeight="Bold" FontSize="16" VerticalAlignment="Center" />
-                    <TextBlock Text="/var/log/btmp" FontSize="11" Foreground="Gray" VerticalAlignment="Center" />
+                    <TextBlock Text="/var/log/btmp" FontSize="11" VerticalAlignment="Center" />
                     <TextBlock Text="获取条数:" VerticalAlignment="Center" Margin="12,0,0,0" />
                     <TextBox x:Name="TxtBtmpCount" Width="60" Text="10" />
                     <Button x:Name="BtnRefreshBtmp" Content="刷新" Click="BtnRefreshBtmp_Click" />
@@ -220,10 +220,10 @@
                             <ColumnDefinition Width="2*" /><ColumnDefinition Width="1*" />
                             <ColumnDefinition Width="1.5*" /><ColumnDefinition Width="2*" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="登录时间" FontWeight="SemiBold" Foreground="#78909C" />
-                        <TextBlock Grid.Column="1" Text="登录用户" FontWeight="SemiBold" Foreground="#78909C" />
-                        <TextBlock Grid.Column="2" Text="登录来源 (IP)" FontWeight="SemiBold" Foreground="#78909C" />
-                        <TextBlock Grid.Column="3" Text="IP归属地" FontWeight="SemiBold" Foreground="#78909C" />
+                        <TextBlock Text="登录时间" FontWeight="SemiBold" />
+                        <TextBlock Grid.Column="1" Text="登录用户" FontWeight="SemiBold" />
+                        <TextBlock Grid.Column="2" Text="登录来源 (IP)" FontWeight="SemiBold" />
+                        <TextBlock Grid.Column="3" Text="IP归属地" FontWeight="SemiBold" />
                     </Grid>
                     <ListView x:Name="BtmpGrid" Grid.Row="1" ItemsSource="{Binding BtmpRecords}" SelectionMode="Single" HorizontalContentAlignment="Stretch" MaxHeight="220">
                         <ListView.ItemTemplate>
@@ -269,14 +269,14 @@
                         <ColumnDefinition Width="1*" /><ColumnDefinition Width="1*" /><ColumnDefinition Width="1*" />
                         <ColumnDefinition Width="0.7*" /><ColumnDefinition Width="1*" /><ColumnDefinition Width="1*" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="服务名称" FontWeight="SemiBold" Foreground="#78909C" />
-                    <TextBlock Grid.Column="1" Text="描述" FontWeight="SemiBold" Foreground="#78909C" />
-                    <TextBlock Grid.Column="2" Text="状态" FontWeight="SemiBold" Foreground="#78909C" />
-                    <TextBlock Grid.Column="3" Text="子状态" FontWeight="SemiBold" Foreground="#78909C" />
-                    <TextBlock Grid.Column="4" Text="加载状态" FontWeight="SemiBold" Foreground="#78909C" />
-                    <TextBlock Grid.Column="5" Text="PID" FontWeight="SemiBold" Foreground="#78909C" />
-                    <TextBlock Grid.Column="6" Text="用户" FontWeight="SemiBold" Foreground="#78909C" />
-                    <TextBlock Grid.Column="7" Text="用户组" FontWeight="SemiBold" Foreground="#78909C" />
+                    <TextBlock Text="服务名称" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="1" Text="描述" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="2" Text="状态" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="3" Text="子状态" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="4" Text="加载状态" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="5" Text="PID" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="6" Text="用户" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="7" Text="用户组" FontWeight="SemiBold" />
                 </Grid>
                 <ListView x:Name="ServiceGrid" Grid.Row="1" ItemsSource="{Binding ServiceRecords}"
                           SelectedItem="{Binding SelectedService, Mode=TwoWay}"
@@ -318,7 +318,7 @@
             <StackPanel Margin="10,8,10,10" Spacing="6">
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <TextBlock Text="计划任务" FontWeight="Bold" FontSize="16" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding CronServiceStatus}" FontSize="11" Foreground="Gray" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding CronServiceStatus}" FontSize="11" VerticalAlignment="Center" />
                     <TextBlock Text="搜索:" VerticalAlignment="Center" Margin="12,0,0,0" />
                     <TextBox x:Name="TxtCronSearch" Width="150" TextChanged="TxtCronSearch_TextChanged" />
                     <Button x:Name="BtnRefreshCron" Content="刷新" Click="BtnRefreshCron_Click" />
@@ -335,10 +335,10 @@
                             <ColumnDefinition Width="80" /><ColumnDefinition Width="1.5*" />
                             <ColumnDefinition Width="3*" /><ColumnDefinition Width="2*" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="状态" FontWeight="SemiBold" Foreground="#78909C" />
-                        <TextBlock Grid.Column="1" Text="时间规则" FontWeight="SemiBold" Foreground="#78909C" />
-                        <TextBlock Grid.Column="2" Text="命令" FontWeight="SemiBold" Foreground="#78909C" />
-                        <TextBlock Grid.Column="3" Text="原始行" FontWeight="SemiBold" Foreground="#78909C" />
+                        <TextBlock Text="状态" FontWeight="SemiBold" />
+                        <TextBlock Grid.Column="1" Text="时间规则" FontWeight="SemiBold" />
+                        <TextBlock Grid.Column="2" Text="命令" FontWeight="SemiBold" />
+                        <TextBlock Grid.Column="3" Text="原始行" FontWeight="SemiBold" />
                     </Grid>
                     <ListView x:Name="CronGrid" Grid.Row="1" ItemsSource="{Binding CronJobs}"
                               SelectedItem="{Binding SelectedCronJob, Mode=TwoWay}"
@@ -369,7 +369,7 @@
                     </ListView>
                 </Grid>
 
-                <Border BorderBrush="#555" BorderThickness="0,1,0,0" Margin="0,8,0,0" Padding="10">
+                <Border BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,0" Margin="0,8,0,0" Padding="10">
                     <StackPanel Spacing="6">
                         <TextBlock Text="新建计划任务" FontWeight="Bold" FontSize="14" />
                         <StackPanel Orientation="Horizontal" Spacing="8">

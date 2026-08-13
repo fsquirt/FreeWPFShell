@@ -68,7 +68,7 @@ namespace YouShell.ViewModels
         // UI 交互回调
         public Action<string, string>? ShowMessage { get; set; }
         public Func<string, string, Task<bool>>? Confirm { get; set; }
-        public Action? TransferStateChanged { get; set; }
+        public event Action? TransferStateChanged;
 
         public TerminalViewModel(SshSessionService session)
         {
