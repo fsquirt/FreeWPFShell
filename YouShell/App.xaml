@@ -12,6 +12,7 @@
                 <!-- Other merged dictionaries here -->
             </ResourceDictionary.MergedDictionaries>
             <converters:BooleanToVisibilityConverter x:Key="BoolToVis" />
+            <converters:DirectoryToGlyphConverter x:Key="DirGlyph" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>
