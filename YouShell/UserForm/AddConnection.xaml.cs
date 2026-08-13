@@ -24,6 +24,7 @@ namespace YouShell.UserForm
         public AddConnection()
         {
             InitializeComponent();
+            XamlRoot = ModernMessageBox.Root;
             _hostRepo = Core.AppServices.GetService<HostRepository>();
             LoadKeys();
         }

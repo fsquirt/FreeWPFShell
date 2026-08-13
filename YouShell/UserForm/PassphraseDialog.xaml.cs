@@ -13,6 +13,7 @@ namespace YouShell.UserForm
         public PassphraseDialog()
         {
             InitializeComponent();
+            XamlRoot = ModernMessageBox.Root;
             TxtPassphrase.Focus(FocusState.Programmatic);
         }
 

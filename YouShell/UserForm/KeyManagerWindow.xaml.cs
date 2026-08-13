@@ -17,6 +17,7 @@ namespace YouShell.UserForm
         public KeyManagerWindow()
         {
             InitializeComponent();
+            XamlRoot = ModernMessageBox.Root;
             RefreshList();
         }
 

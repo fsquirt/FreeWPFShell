@@ -15,6 +15,7 @@ namespace YouShell.UserForm
         public RenameDialog(string oldName)
         {
             InitializeComponent();
+            XamlRoot = ModernMessageBox.Root;
             TxtNewName.Text = oldName;
             TxtNewName.SelectAll();
             TxtNewName.Focus(FocusState.Programmatic);

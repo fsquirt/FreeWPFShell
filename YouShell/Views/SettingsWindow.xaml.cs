@@ -16,6 +16,7 @@ namespace YouShell.Views
         public SettingsWindow()
         {
             InitializeComponent();
+            XamlRoot = UserForm.ModernMessageBox.Root;
             var settings = _settingsRepo.Load();
             TogVault.IsOn = settings.UseWindowsHello;
             TogLinuxMonitor.IsOn = settings.UseLinuxMonitor;
