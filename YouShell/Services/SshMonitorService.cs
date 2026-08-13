@@ -339,19 +339,42 @@ namespace YouShell.Services
             if (!_sshClient.IsConnected || !_sftpClient.IsConnected) return;
 
             NotifyStatus("建立 ssh 隧道...");
-            LinuxMonitorLocalPort = (uint)(System.Security.Cryptography.RandomNumberGenerator.GetInt32(40000, 60001));
             // 通过跳板机连接时，remoteHost 用 "0.0.0.0" 确保目标 SSH 服务器在所有接口监听
             // 直连时 "127.0.0.1" 和 "0.0.0.0" 效果相同（SSH.NET 内部会转换）
             string monitorRemoteHost = _hostInfo.UseProxy && _hostInfo.Proxy?.Type == ProxyType.Ssh ? "0.0.0.0" : "127.0.0.1";
-            var port = new ForwardedPortLocal("127.0.0.1", LinuxMonitorLocalPort, monitorRemoteHost, LinuxMonitorLocalPort);
-            port.Exception += (sender, e) =>
-            {
-                try { Debug.WriteLine($"[ForwardedPort Exception] {e.Exception?.Message}"); } catch { }
-            };
-            _sshClient.AddForwardedPort(port);
 
-            // 异步启动端口转发，绝不阻塞 UI
-            await Task.Run(() => port.Start());
+            // 随机本地端口有概率与已占用端口/其他隧道/系统临时端口冲突，Windows 上端口被占用时
+            // Bind 会抛 SocketException(WSAEACCES 10013 "forbidden by its access permissions")。
+            // 因此启动失败时换一个随机端口重试，最多重试 maxTunnelRetries 次。
+            const int maxTunnelRetries = 5;
+            ForwardedPortLocal? port = null;
+            for (int attempt = 1; attempt <= maxTunnelRetries; attempt++)
+            {
+                LinuxMonitorLocalPort = (uint)System.Security.Cryptography.RandomNumberGenerator.GetInt32(40000, 60001);
+                port = new ForwardedPortLocal("127.0.0.1", LinuxMonitorLocalPort, monitorRemoteHost, LinuxMonitorLocalPort);
+                port.Exception += (sender, e) =>
+                {
+                    try { Debug.WriteLine($"[ForwardedPort Exception] {e.Exception?.Message}"); } catch { }
+                };
+                _sshClient.AddForwardedPort(port);
+
+                try
+                {
+                    // 异步启动端口转发，绝不阻塞 UI
+                    await Task.Run(() => port.Start());
+                    break; // 启动成功
+                }
+                catch (Exception ex)
+                {
+                    // 端口被占用等临时性错误：移除失败的端口，换端口重试
+                    try { _sshClient.RemoveForwardedPort(port); } catch { }
+                    try { port.Dispose(); } catch { }
+                    port = null;
+                    Debug.WriteLine($"[SshMonitor] 隧道建立失败(第 {attempt} 次): {ex.Message}");
+                    if (attempt >= maxTunnelRetries) throw;
+                    await Task.Delay(150 * attempt); // 递增退避，降低并发会话争用同一端口的概率
+                }
+            }
 
             var tunnelInfo = new SshTunnelInfo
             {

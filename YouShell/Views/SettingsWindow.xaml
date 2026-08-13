@@ -97,15 +97,6 @@
                 </StackPanel>
             </StackPanel>
 
-            <!-- Footer -->
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="2" Margin="0,12,0,0">
-                <TextBlock Text="Under " Foreground="#707070" FontSize="11" VerticalAlignment="Center" />
-                <HyperlinkButton Content="MIT License" NavigateUri="https://opensource.org/licenses/MIT" FontSize="11" Padding="0" />
-                <TextBlock Text=" | Code By " Foreground="#707070" FontSize="11" VerticalAlignment="Center" />
-                <HyperlinkButton Content="关晓予" NavigateUri="https://github.com/fsquirt" FontSize="11" Padding="0" />
-                <TextBlock Text=" | Powered By " Foreground="#707070" FontSize="11" VerticalAlignment="Center" />
-                <HyperlinkButton Content=".NET 10" NavigateUri="https://dotnet.microsoft.com" FontSize="11" Padding="0" />
-            </StackPanel>
         </StackPanel>
     </ScrollViewer>
 </ContentDialog>

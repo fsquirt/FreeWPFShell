@@ -11,6 +11,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- 标题栏 -->
@@ -108,5 +109,15 @@
                 </ListView.ItemTemplate>
             </ListView>
         </Grid>
+
+        <!-- Footer（右下角） -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="2" Margin="0,0,20,12">
+            <TextBlock Text="Under " Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" VerticalAlignment="Center" />
+            <HyperlinkButton Content="MIT License" NavigateUri="https://opensource.org/licenses/MIT" FontSize="11" Padding="0" />
+            <TextBlock Text=" | Code By " Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" VerticalAlignment="Center" />
+            <HyperlinkButton Content="关晓予" NavigateUri="https://github.com/fsquirt" FontSize="11" Padding="0" />
+            <TextBlock Text=" | Powered By " Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" VerticalAlignment="Center" />
+            <HyperlinkButton Content=".NET 10" NavigateUri="https://dotnet.microsoft.com" FontSize="11" Padding="0" />
+        </StackPanel>
     </Grid>
 </UserControl>
