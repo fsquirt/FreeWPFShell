@@ -34,6 +34,7 @@ namespace YouShell.Services
         public uint LinuxMonitorLocalPort { get; private set; } = 0;
         private string _monitorToken = "";
         private HttpClient? _monitorHttpClient;
+        private HttpClient? _transferHttpClient;
         private CancellationTokenSource? _monitorCts;
         private Timer? _monitorTimer;
         private int _tickCount;
@@ -470,6 +471,18 @@ namespace YouShell.Services
             return hc;
         }
 
+        /// <summary>传输专用 HttpClient：无超时限制，供大文件分段上传/下载使用。</summary>
+        private HttpClient TransferClient => _transferHttpClient ??= CreateTransferHttpClient();
+
+        private HttpClient CreateTransferHttpClient()
+        {
+            var hc = new HttpClient();
+            hc.Timeout = Timeout.InfiniteTimeSpan;
+            if (!string.IsNullOrEmpty(_monitorToken))
+                hc.DefaultRequestHeaders.Add("X-Monitor-Token", _monitorToken);
+            return hc;
+        }
+
         public async Task<ProcessDetail?> GetProcessDetailAsync(uint pid)
         {
             if (LinuxMonitorLocalPort == 0) return null;
@@ -652,6 +665,75 @@ namespace YouShell.Services
                 return await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/cron_status");
             }
             catch { return "未知"; }
+        }
+
+        // ── 隧道多线程传输：文件分段读写 ─────────────────────────
+
+        /// <summary>读取远程文件 [offset, offset+length) 区间的字节。失败返回 null。</summary>
+        public async Task<byte[]?> ReadFileRangeAsync(string remotePath, long offset, int length, CancellationToken ct = default)
+        {
+            if (LinuxMonitorLocalPort == 0) { Console.WriteLine($"[monitor] ReadFileRange port=0 直接返回 null"); return null; }
+            string url = $"http://127.0.0.1:{LinuxMonitorLocalPort}/file_read?path={Uri.EscapeDataString(remotePath)}&offset={offset}&len={length}";
+            var t0 = DateTime.UtcNow;
+            Console.WriteLine($"[monitor] ReadFileRange 发送 offset={offset} len={length} url={url}");
+            try
+            {
+                var data = await TransferClient.GetByteArrayAsync(url, ct);
+                Console.WriteLine($"[monitor] ReadFileRange 返回 offset={offset} 耗时={(DateTime.UtcNow - t0).TotalMilliseconds:F0}ms 实得={(data?.Length ?? 0)}B");
+                return data;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[monitor] ReadFileRange 异常 offset={offset} 耗时={(DateTime.UtcNow - t0).TotalMilliseconds:F0}ms ex={ex.GetType().Name}:{ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>把 data 写入远程文件 offset 处（就地覆盖）。成功返回 true。</summary>
+        public async Task<bool> WriteFileRangeAsync(string remotePath, long offset, byte[] data, CancellationToken ct = default)
+        {
+            if (LinuxMonitorLocalPort == 0) { Console.WriteLine($"[monitor] WriteFileRange port=0 直接返回 false"); return false; }
+            string url = $"http://127.0.0.1:{LinuxMonitorLocalPort}/file_write?path={Uri.EscapeDataString(remotePath)}&offset={offset}";
+            var t0 = DateTime.UtcNow;
+            Console.WriteLine($"[monitor] WriteFileRange 发送 offset={offset} len={data.Length} url={url}");
+            try
+            {
+                using var content = new ByteArrayContent(data);
+                var resp = await TransferClient.PostAsync(url, content, ct);
+                if (!resp.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"[monitor] WriteFileRange HTTP失败 offset={offset} 耗时={(DateTime.UtcNow - t0).TotalMilliseconds:F0}ms code={(int)resp.StatusCode}");
+                    return false;
+                }
+                string result = await resp.Content.ReadAsStringAsync(ct);
+                Console.WriteLine($"[monitor] WriteFileRange 返回 offset={offset} 耗时={(DateTime.UtcNow - t0).TotalMilliseconds:F0}ms result={result}");
+                return result.Trim().ToLowerInvariant() == "true";
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[monitor] WriteFileRange 异常 offset={offset} 耗时={(DateTime.UtcNow - t0).TotalMilliseconds:F0}ms ex={ex.GetType().Name}:{ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>在远程创建/截断文件为空（上传前先清空目标，避免残留旧数据）。</summary>
+        public async Task<bool> TruncateRemoteFileAsync(string remotePath, CancellationToken ct = default)
+        {
+            if (LinuxMonitorLocalPort == 0) { Console.WriteLine($"[monitor] Truncate port=0 直接返回 false"); return false; }
+            string url = $"http://127.0.0.1:{LinuxMonitorLocalPort}/file_truncate?path={Uri.EscapeDataString(remotePath)}";
+            var t0 = DateTime.UtcNow;
+            Console.WriteLine($"[monitor] Truncate 发送 url={url}");
+            try
+            {
+                string result = await TransferClient.GetStringAsync(url, ct);
+                Console.WriteLine($"[monitor] Truncate 返回 耗时={(DateTime.UtcNow - t0).TotalMilliseconds:F0}ms result={result}");
+                return result.Trim().ToLowerInvariant() == "true";
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[monitor] Truncate 异常 耗时={(DateTime.UtcNow - t0).TotalMilliseconds:F0}ms ex={ex.GetType().Name}:{ex.Message}");
+                return false;
+            }
         }
 
         public void Stop()

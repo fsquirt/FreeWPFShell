@@ -26,11 +26,32 @@ namespace YouShell.UserForm
         public static XamlRoot? Root
             => Services.WindowManager.ActiveWindow?.Content?.XamlRoot ?? App.MainWindow?.Content?.XamlRoot;
 
-        public static async Task<MessageBoxResult> ShowAsync(
+        /// <summary>
+        /// 同步弹窗主题到当前激活窗口。ContentDialog 位于独立的 Popup 视觉树中，
+        /// 不会自动继承主窗口主题、也不实时监听系统主题变化，因此必须显式赋值。
+        /// </summary>
+        public static void SyncTheme(ContentDialog dialog)
+        {
+            var root = (Services.WindowManager.ActiveWindow?.Content ?? App.MainWindow?.Content) as FrameworkElement;
+            if (root != null) dialog.RequestedTheme = root.ActualTheme;
+        }
+
+        public static Task<MessageBoxResult> ShowAsync(
             string message,
             string title = "提示",
             MessageBoxButton button = MessageBoxButton.OK,
             MessageBoxImage image = MessageBoxImage.None)
+        {
+            // ContentDialog 是 WinRT 类，必须在 UI 线程创建与显示；
+            // 后台线程（如连接断开回调）直接调用会抛 0x8001010E，这里统一 marshal 到 UI 线程。
+            return YouShell.Core.UiDispatcher.RunAsync(() => ShowAsyncCore(message, title, button, image));
+        }
+
+        private static async Task<MessageBoxResult> ShowAsyncCore(
+            string message,
+            string title,
+            MessageBoxButton button,
+            MessageBoxImage image)
         {
             var dialog = new ContentDialog
             {
@@ -56,6 +77,7 @@ namespace YouShell.UserForm
 
             var root = GetRoot();
             if (root != null) dialog.XamlRoot = root;
+            SyncTheme(dialog);
 
             var result = await dialog.ShowAsync();
             return button switch

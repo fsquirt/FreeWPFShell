@@ -69,6 +69,9 @@ namespace YouShell.Services
         private ForwardedPortLocal? _jumpPort;
         public object SftpLock => _sftpLock;
 
+        // 预加载的私钥：连接时解密一次，供并行 SFTP 连接复用（密码登录时为空）
+        private PrivateKeyFile? _preloadedKey;
+
         // 会话级隧道管理（单一职责）
         private ITunnelService? _tunnelService;
 
@@ -80,6 +83,9 @@ namespace YouShell.Services
 
         public MonitorData Monitor { get; } = new();
         public event EventHandler<MonitorData>? MonitorUpdated;
+
+        /// <summary>Linux Monitor 服务（提供 SSH 隧道多线程传输的分段读写接口等）。未连接时为 null。</summary>
+        public SshMonitorService? MonitorService => _monitorService;
 
         public SshSessionService(SshConnectionInfo hostInfo, SettingsRepository? settingsRepo = null)
         {
@@ -115,6 +121,7 @@ namespace YouShell.Services
                 var keyRepo = new KeyRepository();
                 preloadedKey = keyRepo.LoadPrivateKeyFileAsync(HostInfo.SshKeyId).GetAwaiter().GetResult();
             }
+            _preloadedKey = preloadedKey;
 
             // SSH 隧道代理：预加载跳板机密钥
             PrivateKeyFile? jumpKey = null;
@@ -236,6 +243,21 @@ namespace YouShell.Services
 
         private SftpClient BuildSftpClient(PrivateKeyFile? preloadedKey = null)
             => _connectionFactory.BuildSftpClient(HostInfo, preloadedKey, _jumpPort);
+
+        /// <summary>
+        /// 打开一个额外的 SFTP 连接（复用连接参数与已解密的私钥），用于多线程传输。
+        /// 失败返回 null，调用方回退到主 <see cref="SftpClient"/>。
+        /// </summary>
+        public SftpClient? OpenParallelSftpClient()
+        {
+            try
+            {
+                var sftp = BuildSftpClient(_preloadedKey);
+                sftp.Connect();
+                return sftp;
+            }
+            catch { return null; }
+        }
 
         private SshClient BuildJumpClient(PrivateKeyFile? jumpKey = null)
             => _connectionFactory.BuildJumpClient(HostInfo, jumpKey);

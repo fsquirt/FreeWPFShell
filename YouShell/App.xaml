@@ -13,6 +13,17 @@
             </ResourceDictionary.MergedDictionaries>
             <converters:BooleanToVisibilityConverter x:Key="BoolToVis" />
             <converters:DirectoryToGlyphConverter x:Key="DirGlyph" />
+
+            <!-- 右键菜单统一微软雅黑（MenuFlyout 默认 Segoe UI，不跟随页面 FontFamily） -->
+            <Style TargetType="MenuFlyoutItem">
+                <Setter Property="FontFamily" Value="Microsoft YaHei" />
+            </Style>
+            <Style TargetType="MenuFlyoutSubItem">
+                <Setter Property="FontFamily" Value="Microsoft YaHei" />
+            </Style>
+            <Style TargetType="ToggleMenuFlyoutItem">
+                <Setter Property="FontFamily" Value="Microsoft YaHei" />
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

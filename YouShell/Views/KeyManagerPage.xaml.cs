@@ -25,6 +25,7 @@ namespace YouShell.Views
         {
             InitializeComponent();
             XamlRoot = ModernMessageBox.Root;
+            ModernMessageBox.SyncTheme(this);
             RefreshList();
         }
 

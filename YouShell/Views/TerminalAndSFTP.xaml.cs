@@ -163,7 +163,8 @@ namespace YouShell.Views
         private void TerminalConnection_ConnectionLost(object? sender, EventArgs e)
         {
             Session?.TerminalConnection?.ConnectionLost -= TerminalConnection_ConnectionLost;
-            HandleConnectionLost();
+            // 连接断开回调来自后台线程，整个处理（弹窗 + 关 Tab）必须 marshal 到 UI 线程
+            YouShell.Core.UiDispatcher.Run(HandleConnectionLost);
         }
 
         private async void HandleConnectionLost()

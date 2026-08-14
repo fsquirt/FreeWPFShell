@@ -229,5 +229,32 @@ namespace YouShell.Views
 
         private void BtnDownload_Click(object sender, RoutedEventArgs e)
             => _ = ViewModel.DownloadAsync(FileGrid.SelectedItems.Cast<RemoteFile>().ToList(), GetDownloadDir());
+
+        // ── 传输任务列表 ─────────────────────────────────────────
+
+        private bool _showTasks;
+
+        private void BtnTasks_Click(object sender, RoutedEventArgs e)
+        {
+            _showTasks = !_showTasks;
+            FileListPanel.Visibility = _showTasks ? Visibility.Collapsed : Visibility.Visible;
+            TaskListPanel.Visibility = _showTasks ? Visibility.Visible : Visibility.Collapsed;
+            TxtTasksBtn.Text = _showTasks ? "文件列表" : "传输任务";
+        }
+
+        private void TaskPause_Click(object sender, RoutedEventArgs e)
+        {
+            if ((sender as FrameworkElement)?.DataContext is TransferTask t) ViewModel.PauseTask(t);
+        }
+
+        private void TaskResume_Click(object sender, RoutedEventArgs e)
+        {
+            if ((sender as FrameworkElement)?.DataContext is TransferTask t) ViewModel.ResumeTask(t);
+        }
+
+        private void TaskCancel_Click(object sender, RoutedEventArgs e)
+        {
+            if ((sender as FrameworkElement)?.DataContext is TransferTask t) ViewModel.CancelTask(t);
+        }
     }
 }

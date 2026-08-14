@@ -44,6 +44,26 @@
                         <ComboBoxItem Content="Tabbed" />
                     </ComboBox>
                 </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="并发SFTP最大传输个数：" FontSize="14" VerticalAlignment="Center" />
+                    <TextBox x:Name="TxtMaxConcurrent" Width="60" VerticalAlignment="Center"
+                             ToolTipService.ToolTip="同时传输的文件个数（每个走独立 SFTP 连接），默认 1。" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Spacing="10"
+                            ToolTipService.ToolTip="启用后，单个文件将切分为多段，通过 Linux Monitor 的 SSH 隧道并行上传/下载，提升高延迟服务器上的传输速度。">
+                    <TextBlock Text="使用SSH隧道进行多线程SFTP上传下载" FontSize="14" VerticalAlignment="Center" />
+                    <ToggleSwitch x:Name="TogTunnelTransfer" OnContent="启用" OffContent="禁止" VerticalAlignment="Center" />
+                </StackPanel>
+
+                <ContentControl IsEnabled="{Binding IsOn, ElementName=TogTunnelTransfer}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="单任务传输线程数量：" FontSize="14" VerticalAlignment="Center" />
+                        <TextBox x:Name="TxtTransferThreads" Width="60" VerticalAlignment="Center"
+                                 ToolTipService.ToolTip="隧道多线程模式下，单个文件切分的并行段数，默认 10。" />
+                    </StackPanel>
+                </ContentControl>
             </StackPanel>
 
             <TextBlock Text="路由追踪设置" FontSize="20" FontWeight="Bold" Margin="0,6,0,6" />

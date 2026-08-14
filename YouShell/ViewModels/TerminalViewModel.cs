@@ -4,6 +4,7 @@ using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using YouShell.Models;
+using YouShell.Repositories;
 using YouShell.Services;
 using Renci.SshNet;
 using Renci.SshNet.Sftp;
@@ -27,36 +28,30 @@ namespace YouShell.ViewModels
         [ObservableProperty]
         private string _currentPath = "/";
 
-        // 传输状态
-        [ObservableProperty]
-        private int _upActive;
-        [ObservableProperty]
-        private int _upTotal;
-        [ObservableProperty]
-        private int _upDone;
-        [ObservableProperty]
-        private string _upName = "";
-        [ObservableProperty]
-        private double _upProgress;
+        // 传输任务列表（每个上传/下载一个任务，支持暂停/继续/取消）
+        public ObservableCollection<TransferTask> TransferTasks { get; } = new();
 
-        [ObservableProperty]
-        private int _downActive;
-        [ObservableProperty]
-        private int _downTotal;
-        [ObservableProperty]
-        private int _downDone;
-        [ObservableProperty]
-        private string _downName = "";
-        [ObservableProperty]
-        private double _downProgress;
+        // 并行传输上限（并发 SFTP 最大传输个数，可在设置中配置，默认 1）
+        private readonly SemaphoreSlim _transferSlots;
+        private readonly int _maxConcurrentTransfers;
+        private readonly SettingsRepository _settingsRepo = new();
+
+        // ── 诊断日志（定位「进度/速度长时间为 0」用；输出到控制台，调试时用 Console 查看） ──
+        private static int s_diagProgressCount;
+        private static void Diag(string msg)
+        {
+            try
+            {
+                Console.WriteLine($"[transfer-diag] {DateTime.Now:HH:mm:ss.fff} {msg}");
+            }
+            catch { }
+        }
 
         // 状态图标/提示（由 Code-behind 或 UI 读取）
         [ObservableProperty]
         private string _statusText = "当前没有传输任务";
         [ObservableProperty]
         private bool _isTransferring;
-
-        private CancellationTokenSource? _transferCts;
 
         // UID/GID → 用户名/组名 缓存
         private Dictionary<int, string> _userMap = new();
@@ -73,6 +68,8 @@ namespace YouShell.ViewModels
         public TerminalViewModel(SshSessionService session)
         {
             _session = session;
+            _maxConcurrentTransfers = Math.Clamp(_settingsRepo.Load().MaxConcurrentTransfers, 1, 16);
+            _transferSlots = new SemaphoreSlim(_maxConcurrentTransfers, _maxConcurrentTransfers);
         }
 
         public SshSessionService Session => _session;
@@ -141,7 +138,9 @@ namespace YouShell.ViewModels
             {
                 try
                 {
-                    var files = sftp.ListDirectory(path);
+                    // 并发=1 时传输会长时间占用主连接（持 _sftpLock），这里同样加锁避免与传输并发操作同一 SftpClient
+                    var files = new List<ISftpFile>();
+                    lock (_session.SftpLock) files = sftp.ListDirectory(path).ToList();
                     var items = BuildFileList(files);
                     YouShell.Core.UiDispatcher.Enqueue(() =>
                     {
@@ -169,7 +168,8 @@ namespace YouShell.ViewModels
                 {
                     FetchUserGroupMaps(ssh);
                     var workingDir = sftp.WorkingDirectory ?? "/";
-                    var files = sftp.ListDirectory(workingDir);
+                    var files = new List<ISftpFile>();
+                    lock (_session.SftpLock) files = sftp.ListDirectory(workingDir).ToList();
                     var items = BuildFileList(files);
                     YouShell.Core.UiDispatcher.Enqueue(() =>
                     {
@@ -277,235 +277,142 @@ namespace YouShell.ViewModels
             var sftp = Sftp;
             if (sftp == null || !sftp.IsConnected) return;
 
-            if (UpActive == 0 && DownActive == 0)
-            {
-                _transferCts = new CancellationTokenSource();
-                DownTotal = 0; DownDone = 0;
-                UpTotal = 0; UpDone = 0;
-            }
-
+            var dirTasks = new List<Task>();
             foreach (var item in items)
             {
-                int count = item.IsDirectory ? await CountRemoteFilesAsync(item.FullName) : 1;
-                DownTotal += count;
-                DownActive++;
-                _ = DownloadItemAsync(item, localDir, sftp);
+                if (item.IsDirectory)
+                    dirTasks.Add(DownloadDirectoryAsync(item, localDir));
+                else
+                    StartDownloadFile(item.Name, item.FullName, item.Length,
+                        GetUniqueLocalPath(Path.Combine(localDir, item.Name)));
+            }
+            await Task.WhenAll(dirTasks);
+        }
+
+        private async Task DownloadDirectoryAsync(RemoteFile dir, string localDir)
+        {
+            var entries = await Task.Run(() => EnumerateRemoteFiles(dir.FullName));
+            string baseDir = Path.Combine(localDir, dir.Name);
+            foreach (var (remotePath, length) in entries)
+            {
+                if (string.IsNullOrEmpty(remotePath)) continue;
+                string rel = remotePath.Length > dir.FullName.Length
+                    ? remotePath[(dir.FullName.Length + 1)..]
+                    : Path.GetFileName(remotePath);
+                string local = Path.Combine(baseDir, rel.Replace('/', Path.DirectorySeparatorChar));
+                StartDownloadFile(Path.GetFileName(remotePath), remotePath, length, local);
             }
         }
 
-        private async Task<int> CountRemoteFilesAsync(string path)
+        private List<(string Path, long Length)> EnumerateRemoteFiles(string dirPath)
         {
+            var result = new List<(string, long)>();
             var sftp = Sftp;
-            if (sftp == null) return 0;
-            int count = 0;
+            if (sftp == null || !sftp.IsConnected) return result;
             try
             {
-                var files = await Task.Run(() => sftp.ListDirectory(path));
-                foreach (var f in files)
-                {
-                    if (f.Name == "." || f.Name == "..") continue;
-                    if (f.IsDirectory) count += await CountRemoteFilesAsync(f.FullName);
-                    else count++;
-                }
+                lock (_session.SftpLock) CollectRemoteFiles(sftp, dirPath, result);
             }
             catch { }
-            return count;
+            return result;
         }
 
-        private async Task DownloadItemAsync(RemoteFile item, string localDir, SftpClient sftp)
+        private static void CollectRemoteFiles(SftpClient sftp, string dirPath, List<(string, long)> result)
         {
-            Task.Run(() =>
+            foreach (var f in sftp.ListDirectory(dirPath))
             {
-                try
-                {
-                    string localPath = GetUniqueLocalPath(Path.Combine(localDir, item.Name));
-                    DownName = item.Name;
-                    if (item.IsDirectory)
-                    {
-                        Directory.CreateDirectory(localPath);
-                        foreach (var c in sftp.ListDirectory(item.FullName))
-                        {
-                            if (c.Name == "." || c.Name == "..") continue;
-                            if (_transferCts?.IsCancellationRequested == true) break;
-                            DownloadItemSync(c, localPath, sftp);
-                        }
-                    }
-                    else
-                    {
-                        using var s = File.Create(localPath);
-                        using (var reg = _transferCts?.Token.Register(() => { try { s.Close(); } catch { } }))
-                        {
-                            sftp.DownloadFile(item.FullName, s, uploaded =>
-                            {
-                                DownProgress = item.Length > 0 ? (double)uploaded / item.Length * 100 : 0;
-                                YouShell.Core.UiDispatcher.Enqueue(UpdateTransferStatus);
-                            });
-                        }
-                    }
-                }
-                catch (Exception ex) when (ex is OperationCanceledException || ex is IOException || ex is ObjectDisposedException || ex is Renci.SshNet.Common.SshException)
-                { }
-                catch (Exception ex)
-                {
-                    YouShell.Core.UiDispatcher.Enqueue(() => ShowMessage?.Invoke($"下载失败 {item.Name}", ex.Message));
-                }
-                finally
-                {
-                    DownDone++;
-                    DownActive--;
-                    YouShell.Core.UiDispatcher.Enqueue(UpdateTransferStatus);
-                }
-            });
+                if (f.Name == "." || f.Name == "..") continue;
+                if (f.IsDirectory) CollectRemoteFiles(sftp, f.FullName, result);
+                else result.Add((f.FullName, f.Length));
+            }
         }
 
-        private void DownloadItemSync(ISftpFile item, string localDir, SftpClient sftp)
+        private void StartDownloadFile(string name, string remotePath, long length, string localPath)
         {
-            if (_transferCts?.IsCancellationRequested == true) return;
-            string lp = Path.Combine(localDir, item.Name);
-            DownName = item.Name;
-            if (item.IsDirectory)
+            var task = new TransferTask
             {
-                Directory.CreateDirectory(lp);
-                foreach (var c in sftp.ListDirectory(item.FullName))
-                {
-                    if (c.Name == "." || c.Name == "..") continue;
-                    if (_transferCts?.IsCancellationRequested == true) break;
-                    DownloadItemSync(c, lp, sftp);
-                }
-            }
-            else
-            {
-                try
-                {
-                    using var s = File.Create(lp);
-                    using (var reg = _transferCts?.Token.Register(() => { try { s.Close(); } catch { } }))
-                    {
-                        sftp.DownloadFile(item.FullName, s, uploaded =>
-                        {
-                            DownProgress = item.Length > 0 ? (double)uploaded / item.Length * 100 : 0;
-                            YouShell.Core.UiDispatcher.Enqueue(UpdateTransferStatus);
-                        });
-                    }
-                    DownDone++;
-                }
-                catch { }
-            }
+                Direction = TransferDirection.Download,
+                FileName = name,
+                RemotePath = remotePath,
+                LocalPath = localPath,
+                TotalBytes = length,
+                Cts = new CancellationTokenSource(),
+            };
+            YouShell.Core.UiDispatcher.Run(() => TransferTasks.Add(task));
+            _ = TransferFileAsync(task);
         }
 
         // ── 上传 ─────────────────────────────────────────────────
 
         public void UploadLocalItem(string localPath, string remoteDir)
         {
-            var session = _session;
             var sftp = Sftp;
             if (sftp == null || !sftp.IsConnected) return;
 
-            if (UpActive == 0 && DownActive == 0)
+            bool isDir = (File.GetAttributes(localPath) & FileAttributes.Directory) == FileAttributes.Directory;
+            string name = Path.GetFileName(localPath.TrimEnd('\\', '/'));
+            string remoteBase = remoteDir.TrimEnd('/');
+
+            if (!isDir)
             {
-                _transferCts = new CancellationTokenSource();
-                UpTotal = 0; UpDone = 0;
-                DownTotal = 0; DownDone = 0;
+                StartUploadFile(name, localPath, remoteBase + "/" + name, new FileInfo(localPath).Length);
+                return;
             }
 
-            int count = CountLocalFiles(localPath);
-            UpTotal += count;
-            UpActive++;
-
+            // 目录：先在主连接上建好远程目录结构，再并行上传文件
             Task.Run(() =>
             {
                 try
                 {
-                    bool isDir = (File.GetAttributes(localPath) & FileAttributes.Directory) == FileAttributes.Directory;
-                    string name = Path.GetFileName(localPath.TrimEnd('\\', '/')), rp = remoteDir.TrimEnd('/') + "/" + name;
-                    UpName = name;
-                    if (isDir)
+                    string baseDir = localPath.TrimEnd('\\', '/');
+                    var dirs = Directory.GetDirectories(localPath, "*", SearchOption.AllDirectories);
+                    lock (_session.SftpLock)
                     {
-                        lock (session.SftpLock) { if (!sftp.Exists(rp)) sftp.CreateDirectory(rp); }
-                        UploadDirSync(localPath, rp, session, sftp);
-                    }
-                    else
-                    {
-                        long fileSize = new FileInfo(localPath).Length;
-                        using var s = File.OpenRead(localPath);
-                        using (var reg = _transferCts?.Token.Register(() => { try { s.Close(); } catch { } }))
+                        EnsureRemoteDir(sftp, remoteBase + "/" + name);
+                        foreach (var d in dirs.OrderBy(x => x.Count(c => c == Path.DirectorySeparatorChar)))
                         {
-                            lock (session.SftpLock)
-                            {
-                                sftp.UploadFile(s, rp, uploaded =>
-                                {
-                                    UpProgress = fileSize > 0 ? (double)uploaded / fileSize * 100 : 0;
-                                    YouShell.Core.UiDispatcher.Enqueue(UpdateTransferStatus);
-                                });
-                            }
+                            string rel = Path.GetRelativePath(baseDir, d).Replace('\\', '/');
+                            EnsureRemoteDir(sftp, remoteBase + "/" + name + "/" + rel);
                         }
                     }
+
+                    foreach (var f in Directory.GetFiles(localPath, "*", SearchOption.AllDirectories))
+                    {
+                        string rel = Path.GetRelativePath(baseDir, f).Replace('\\', '/');
+                        StartUploadFile(Path.GetFileName(f), f, remoteBase + "/" + name + "/" + rel, new FileInfo(f).Length);
+                    }
                 }
-                catch (Exception ex) when (ex is OperationCanceledException || ex is IOException || ex is ObjectDisposedException || ex is Renci.SshNet.Common.SshException)
-                { }
                 catch (Exception ex)
                 {
                     YouShell.Core.UiDispatcher.Enqueue(() => ShowMessage?.Invoke("上传失败", ex.Message));
                 }
-                finally
-                {
-                    UpDone++;
-                    UpActive--;
-                    YouShell.Core.UiDispatcher.Enqueue(() =>
-                    {
-                        UpdateTransferStatus();
-                        if (UpActive == 0 && DownActive == 0) LoadPath(CurrentPath, true);
-                    });
-                }
             });
         }
 
-        private void UploadDirSync(string localDir, string remoteDir, SshSessionService session, SftpClient sftp)
+        private void StartUploadFile(string name, string localPath, string remotePath, long length)
         {
-            if (_transferCts?.IsCancellationRequested == true) return;
-            var files = Directory.GetFiles(localDir);
-
-            Parallel.ForEach(files, new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = _transferCts?.Token ?? default }, f =>
+            var task = new TransferTask
             {
-                try
-                {
-                    string fileName = Path.GetFileName(f);
-                    long fileSize = new FileInfo(f).Length;
-                    UpName = fileName;
-                    YouShell.Core.UiDispatcher.Enqueue(UpdateTransferStatus);
-                    using var s = File.OpenRead(f);
-                    using (var reg = _transferCts?.Token.Register(() => { try { s.Close(); } catch { } }))
-                    {
-                        lock (session.SftpLock)
-                        {
-                            sftp.UploadFile(s, remoteDir.TrimEnd('/') + "/" + fileName,
-                                uploaded => { UpProgress = fileSize > 0 ? (double)uploaded / fileSize * 100 : 0; });
-                        }
-                    }
-                    UpDone++;
-                }
-                catch { }
-            });
-
-            if (_transferCts?.IsCancellationRequested == true) return;
-            foreach (var d in Directory.GetDirectories(localDir))
-            {
-                if (_transferCts?.IsCancellationRequested == true) break;
-                string rp = remoteDir.TrimEnd('/') + "/" + Path.GetFileName(d);
-                lock (session.SftpLock) { if (!sftp.Exists(rp)) sftp.CreateDirectory(rp); }
-                UploadDirSync(d, rp, session, sftp);
-            }
+                Direction = TransferDirection.Upload,
+                FileName = name,
+                RemotePath = remotePath,
+                LocalPath = localPath,
+                TotalBytes = length,
+                Cts = new CancellationTokenSource(),
+            };
+            YouShell.Core.UiDispatcher.Run(() => TransferTasks.Add(task));
+            _ = TransferFileAsync(task);
         }
 
-        private static int CountLocalFiles(string path)
+        private static void EnsureRemoteDir(SftpClient sftp, string path)
         {
-            try
-            {
-                if (File.Exists(path)) return 1;
-                if (Directory.Exists(path))
-                    return Directory.GetFiles(path, "*", SearchOption.AllDirectories).Length;
-            }
-            catch { }
-            return 0;
+            if (string.IsNullOrEmpty(path) || path == "/") return;
+            bool exists;
+            try { exists = sftp.Exists(path); } catch { exists = true; }
+            if (exists) return;
+            int idx = path.LastIndexOf('/');
+            if (idx > 0) EnsureRemoteDir(sftp, path[..idx]);
+            try { sftp.CreateDirectory(path); } catch { }
         }
 
         private static string GetUniqueLocalPath(string p)
@@ -517,21 +424,330 @@ namespace YouShell.ViewModels
             return p;
         }
 
+        // ── 传输引擎 ─────────────────────────────────────────────
+
+        private async Task TransferFileAsync(TransferTask task)
+        {
+            var t0 = DateTime.UtcNow;
+            try
+            {
+                Diag($"[transfer] 开始 {task.Direction} '{task.FileName}' total={task.TotalBytes} remote='{task.RemotePath}' local='{task.LocalPath}'");
+                var tWait = DateTime.UtcNow;
+                await _transferSlots.WaitAsync(task.Cts!.Token);
+                Diag($"[transfer] 已获槽 '{task.FileName}' 等槽耗时={(DateTime.UtcNow - tWait).TotalMilliseconds:F0}ms");
+
+                try
+                {
+                    var tCheck = DateTime.UtcNow;
+                    bool useTunnel = ShouldUseTunnelTransfer();
+                    Diag($"[transfer] '{task.FileName}' ShouldUseTunnelTransfer={useTunnel} (判定耗时={(DateTime.UtcNow - tCheck).TotalMilliseconds:F1}ms)");
+                    if (useTunnel)
+                    {
+                        Diag($"[transfer] 走隧道多线程路径 '{task.FileName}'");
+                        // 隧道多线程：通过 Linux Monitor 的 HTTP 分段接口并行传输单个文件
+                        await DoTunnelTransferAsync(task);
+                    }
+                    else
+                    {
+                        Diag($"[transfer] 走普通 SFTP 路径 '{task.FileName}'");
+                        // 网络连接握手 + 整个文件读写都是阻塞操作，必须放到后台线程，
+                        // 否则会跑在 UI 线程上把界面卡死。
+                        await Task.Run(() =>
+                        {
+                            // 并发>1 时 SftpClient 非线程安全，必须各自新建独立连接（SSH 握手开销是并发的必要代价）；
+                            // 并发=1（默认）直接复用已连接的主连接，避免每次传输都做一次完整 SSH 握手——
+                            // 否则高延迟服务器上「进度/速度长时间为 0」其实是在等重连。
+                            if (_maxConcurrentTransfers > 1)
+                            {
+                                using var parallel = _session.OpenParallelSftpClient();
+                                var client = parallel ?? _session.SftpClient;
+                                if (client == null || !client.IsConnected) throw new InvalidOperationException("SFTP 未连接");
+                                if (parallel != null) DoTransfer(client, task);
+                                else lock (_session.SftpLock) DoTransfer(client, task);
+                            }
+                            else
+                            {
+                                var client = _session.SftpClient;
+                                if (client == null || !client.IsConnected) throw new InvalidOperationException("SFTP 未连接");
+                                lock (_session.SftpLock) DoTransfer(client, task);
+                            }
+                        });
+                    }
+
+                    YouShell.Core.UiDispatcher.Run(() => task.Status = TransferStatus.Completed);
+                }
+                finally
+                {
+                    _transferSlots.Release();
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                bool paused = task.Status == TransferStatus.Paused;
+                YouShell.Core.UiDispatcher.Run(() =>
+                {
+                    if (task.Status != TransferStatus.Paused)
+                        task.Status = TransferStatus.Canceled;
+                });
+                if (!paused) TryDeletePartialFile(task);
+            }
+            catch (Exception)
+            {
+                bool paused = task.Status == TransferStatus.Paused;
+                YouShell.Core.UiDispatcher.Run(() =>
+                {
+                    if (task.Status != TransferStatus.Paused)
+                        task.Status = TransferStatus.Failed;
+                });
+                if (!paused) TryDeletePartialFile(task);
+            }
+            finally
+            {
+                RefreshOverallStatus();
+            }
+        }
+
+        private static void DoTransfer(SftpClient client, TransferTask task)
+        {
+            if (task.Direction == TransferDirection.Download) DownloadFile(client, task);
+            else UploadFile(client, task);
+        }
+
+        private static void DownloadFile(SftpClient client, TransferTask task)
+        {
+            var t0 = DateTime.UtcNow;
+            Diag($"[sftp-download] 开始 '{task.FileName}' remote='{task.RemotePath}' local='{task.LocalPath}' total={task.TotalBytes}");
+            string? dir = Path.GetDirectoryName(task.LocalPath);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            using var fs = File.Create(task.LocalPath);
+            using var reg = task.Cts!.Token.Register(() => { try { fs.Close(); } catch { } });
+            try
+            {
+                client.DownloadFile(task.RemotePath, fs, uploaded => UpdateTaskProgress(task, (long)uploaded));
+                Diag($"[sftp-download] 完成 '{task.FileName}' 耗时={(DateTime.UtcNow - t0).TotalSeconds:F1}s");
+            }
+            catch (Exception ex) when (ex is ObjectDisposedException or IOException)
+            {
+                // 暂停/取消通过关闭流来中断传输，把随之抛出的 ObjectDisposedException/IOException
+                // 规范化为 OperationCanceledException，走正常的取消分支，避免被当成错误上报。
+                task.Cts!.Token.ThrowIfCancellationRequested();
+                throw;
+            }
+        }
+
+        private static void UploadFile(SftpClient client, TransferTask task)
+        {
+            var t0 = DateTime.UtcNow;
+            Diag($"[sftp-upload] 开始 '{task.FileName}' local='{task.LocalPath}' remote='{task.RemotePath}' total={task.TotalBytes}");
+            using var fs = File.OpenRead(task.LocalPath);
+            using var reg = task.Cts!.Token.Register(() => { try { fs.Close(); } catch { } });
+            try
+            {
+                client.UploadFile(fs, task.RemotePath, true, uploaded => UpdateTaskProgress(task, (long)uploaded));
+                Diag($"[sftp-upload] 完成 '{task.FileName}' 耗时={(DateTime.UtcNow - t0).TotalSeconds:F1}s");
+            }
+            catch (Exception ex) when (ex is ObjectDisposedException or IOException)
+            {
+                task.Cts!.Token.ThrowIfCancellationRequested();
+                throw;
+            }
+        }
+
+        private static void UpdateTaskProgress(TransferTask task, long uploaded)
+        {
+            if (Interlocked.Increment(ref s_diagProgressCount) <= 5)
+                Diag($"[progress] uploaded={uploaded} total={task.TotalBytes}");
+            task.TransferredBytes = uploaded;
+            int pct = task.TotalBytes > 0 ? (int)(uploaded * 100 / task.TotalBytes) : 0;
+            // 仅整百分比变化时才通知，避免高频率回调 flooding UI 线程；通知须在 UI 线程（WinRT PropertyChangedEventArgs）
+            if ((int)task.Progress != pct)
+                YouShell.Core.UiDispatcher.Run(() => task.Progress = pct);
+
+            // 实时速度：约每 0.5s 采样一次（uploaded 为累计字节数，求增量/时间）
+            var now = DateTime.UtcNow;
+            double elapsed = (now - task._lastSpeedAt).TotalSeconds;
+            if (elapsed >= 0.5)
+            {
+                double speed = elapsed > 0 ? (uploaded - task._lastBytes) / elapsed : 0;
+                task._lastBytes = uploaded;
+                task._lastSpeedAt = now;
+                YouShell.Core.UiDispatcher.Run(() => task.Speed = Math.Max(0, speed));
+            }
+        }
+
+        // ── 隧道多线程传输（通过 Linux Monitor 的 HTTP 分段接口并行读写单个文件） ──
+
+        private bool ShouldUseTunnelTransfer()
+        {
+            var settings = _settingsRepo.Load();
+            return settings.UseTunnelMultithreadTransfer
+                && _session.MonitorService != null
+                && _session.MonitorService.LinuxMonitorLocalPort > 0;
+        }
+
+        private async Task DoTunnelTransferAsync(TransferTask task)
+        {
+            var monitor = _session.MonitorService;
+            if (monitor == null || monitor.LinuxMonitorLocalPort == 0)
+                throw new InvalidOperationException("SSH 隧道监控未就绪");
+
+            int threads = Math.Clamp(_settingsRepo.Load().TransferThreadsPerTask, 1, 64);
+            long total = Math.Max(0, task.TotalBytes);
+            Diag($"[tunnel] DoTunnelTransferAsync 入口 '{task.FileName}' dir={task.Direction} total={total} threads={threads} port={monitor.LinuxMonitorLocalPort}");
+
+            // 切成固定 4MB 小块，用 threads 个并发 worker 流式传输：
+            // 内存有界（约 threads × 4MB），且每块完成即更新一次进度/速度。
+            const int BlockSize = 4 * 1024 * 1024;
+            var blocks = new List<(long Offset, int Length)>();
+            for (long off = 0; off < total; off += BlockSize)
+            {
+                int len = (int)Math.Min(BlockSize, total - off);
+                blocks.Add((off, len));
+            }
+            Diag($"[tunnel] 分块完成 块数={blocks.Count}");
+
+            if (task.Direction == TransferDirection.Download)
+                await TunnelDownloadAsync(monitor, task, blocks, threads);
+            else
+                await TunnelUploadAsync(monitor, task, blocks, threads);
+        }
+
+        private static async Task TunnelDownloadAsync(SshMonitorService monitor, TransferTask task, List<(long Offset, int Length)> blocks, int threads)
+        {
+            string? dir = Path.GetDirectoryName(task.LocalPath);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+
+            Diag($"[download] 打开本地文件 '{task.LocalPath}' 块数={blocks.Count} 线程={threads} 开始");
+            var tStart = DateTime.UtcNow;
+            using var fs = new FileStream(task.LocalPath, FileMode.Create, FileAccess.Write, FileShare.None, 1, FileOptions.Asynchronous);
+            Diag($"[download] 本地文件已打开 耗时={(DateTime.UtcNow - tStart).TotalMilliseconds:F0}ms");
+            // 不预先 SetLength：RandomAccess.WriteAsync 在偏移处写入会自动扩展文件（稀疏洞），
+            // 避免超大文件 SetLength 的潜在耗时；所有块最终都会覆盖 [0, TotalBytes) 每个字节。
+
+            long done = 0;
+            var ct = task.Cts!.Token;
+            using var gate = new SemaphoreSlim(threads, threads);
+            var firstBlockStart = DateTime.MinValue;
+            await Task.WhenAll(blocks.Select(async block =>
+            {
+                await gate.WaitAsync(ct).ConfigureAwait(false);
+                try
+                {
+                    var tb = DateTime.UtcNow;
+                    if (block.Offset == 0) firstBlockStart = tb;
+                    Diag($"[download] 请求块 offset={block.Offset} len={block.Length} 并发中");
+                    var data = await monitor.ReadFileRangeAsync(task.RemotePath, block.Offset, block.Length, ct).ConfigureAwait(false);
+                    var rb = DateTime.UtcNow;
+                    Diag($"[download] 收到块 offset={block.Offset} len={(data?.Length ?? 0)} 请求耗时={(rb - tb).TotalMilliseconds:F0}ms");
+                    if (data == null || data.Length != block.Length)
+                        throw new IOException($"读取远程片段失败: offset={block.Offset} 期望={block.Length} 实得={(data?.Length ?? 0)}");
+                    await RandomAccess.WriteAsync(fs.SafeFileHandle, data, block.Offset, ct).ConfigureAwait(false);
+                    Diag($"[download] 写入本地 offset={block.Offset} len={block.Length} 完成");
+                    UpdateTaskProgress(task, Interlocked.Add(ref done, block.Length));
+                }
+                finally { gate.Release(); }
+            }));
+            Diag($"[download] 全部块完成 '{task.FileName}' 总耗时={(DateTime.UtcNow - tStart).TotalSeconds:F1}s");
+        }
+
+        private static async Task TunnelUploadAsync(SshMonitorService monitor, TransferTask task, List<(long Offset, int Length)> blocks, int threads)
+        {
+            Diag($"[upload] 开始远程截断 '{task.FileName}' 块数={blocks.Count} 线程={threads}");
+            var tTrunc = DateTime.UtcNow;
+            if (!await monitor.TruncateRemoteFileAsync(task.RemotePath, task.Cts!.Token).ConfigureAwait(false))
+                throw new IOException("无法在远程创建目标文件");
+            Diag($"[upload] 截断完成 '{task.FileName}' 耗时={(DateTime.UtcNow - tTrunc).TotalMilliseconds:F0}ms");
+
+            var tStart = DateTime.UtcNow;
+            using var fs = new FileStream(task.LocalPath, FileMode.Open, FileAccess.Read, FileShare.Read, 1, FileOptions.Asynchronous);
+
+            long done = 0;
+            var ct = task.Cts!.Token;
+            using var gate = new SemaphoreSlim(threads, threads);
+            await Task.WhenAll(blocks.Select(async block =>
+            {
+                await gate.WaitAsync(ct).ConfigureAwait(false);
+                try
+                {
+                    var buf = new byte[block.Length];
+                    int read = await RandomAccess.ReadAsync(fs.SafeFileHandle, buf, block.Offset, ct).ConfigureAwait(false);
+                    if (read != block.Length) throw new IOException($"读取本地文件片段失败 offset={block.Offset} 期望={block.Length} 实得={read}");
+                    Diag($"[upload] 读取本地 offset={block.Offset} len={block.Length} 完成，发请求");
+                    var tw = DateTime.UtcNow;
+                    bool ok = await monitor.WriteFileRangeAsync(task.RemotePath, block.Offset, buf, ct).ConfigureAwait(false);
+                    Diag($"[upload] 写入远程 offset={block.Offset} len={block.Length} ok={ok} 请求耗时={(DateTime.UtcNow - tw).TotalMilliseconds:F0}ms");
+                    if (!ok)
+                        throw new IOException($"写入远程片段失败: offset={block.Offset}");
+                    UpdateTaskProgress(task, Interlocked.Add(ref done, block.Length));
+                }
+                finally { gate.Release(); }
+            }));
+            Diag($"[upload] 全部块完成 '{task.FileName}' 总耗时={(DateTime.UtcNow - tStart).TotalSeconds:F1}s");
+        }
+
+        private static void TryDeletePartialFile(TransferTask task)
+        {
+            if (task.Direction != TransferDirection.Download) return;
+            try { if (File.Exists(task.LocalPath)) File.Delete(task.LocalPath); } catch { }
+        }
+
+        private void RefreshOverallStatus()
+        {
+            YouShell.Core.UiDispatcher.Run(() =>
+            {
+                int active = TransferTasks.Count(t => t.Status is TransferStatus.Running or TransferStatus.Paused);
+                int done = TransferTasks.Count(t => t.Status == TransferStatus.Completed);
+                IsTransferring = active > 0;
+                StatusText = active > 0
+                    ? $"传输任务: {active} 个进行中，{done} 个已完成"
+                    : "当前没有传输任务";
+            });
+        }
+
+        public void PauseTask(TransferTask task)
+        {
+            task.Status = TransferStatus.Paused;
+            task.Cts?.Cancel();
+            RefreshOverallStatus();
+        }
+
+        public void ResumeTask(TransferTask task)
+        {
+            task.Cts = new CancellationTokenSource();
+            task.TransferredBytes = 0;
+            task.Progress = 0;
+            task._lastBytes = 0;
+            task._lastSpeedAt = DateTime.UtcNow;
+            task.Status = TransferStatus.Running;
+            _ = TransferFileAsync(task);
+            RefreshOverallStatus();
+        }
+
+        public void CancelTask(TransferTask task)
+        {
+            task.Status = TransferStatus.Canceled;
+            task.Cts?.Cancel();
+            TryDeletePartialFile(task);
+            RefreshOverallStatus();
+        }
+
         // ── 删除/重命名 ──────────────────────────────────────────
 
         public void Delete(IEnumerable<RemoteFile> items)
         {
             var sftp = Sftp;
             if (sftp == null || !sftp.IsConnected) return;
-            UpActive++;
             Task.Run(() =>
             {
                 try
                 {
-                    foreach (var item in items)
+                    lock (_session.SftpLock)
                     {
-                        if (item.IsDirectory) RecursiveDelete(item.FullName, sftp);
-                        else sftp.DeleteFile(item.FullName);
+                        foreach (var item in items)
+                        {
+                            if (item.IsDirectory) RecursiveDelete(item.FullName, sftp);
+                            else sftp.DeleteFile(item.FullName);
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -540,7 +756,6 @@ namespace YouShell.ViewModels
                 }
                 finally
                 {
-                    UpActive--;
                     YouShell.Core.UiDispatcher.Enqueue(() => LoadPath(CurrentPath, true));
                 }
             });
@@ -587,7 +802,6 @@ namespace YouShell.ViewModels
             if (string.IsNullOrEmpty(clipboardText)) return;
             if (clipboardText.StartsWith($"FreeWPFRemoteCopy|{_session.HostInfo.Id}|"))
             {
-                UpActive++;
                 Task.Run(() =>
                 {
                     try
@@ -601,7 +815,6 @@ namespace YouShell.ViewModels
                     }
                     finally
                     {
-                        UpActive--;
                         YouShell.Core.UiDispatcher.Enqueue(() => LoadPath(CurrentPath, true));
                     }
                 });
@@ -614,39 +827,11 @@ namespace YouShell.ViewModels
                 _ = _session.EditRemoteFileAsync(file.FullName, editor);
         }
 
-        // ── 传输状态 ─────────────────────────────────────────────
-
-        private void UpdateTransferStatus()
-        {
-            bool transferring = UpActive > 0 || DownActive > 0;
-            IsTransferring = transferring;
-
-            if (transferring)
-            {
-                var sb = new StringBuilder(256);
-                if (UpActive > 0 || (UpTotal > 0 && UpDone == UpTotal))
-                    sb.Append("上传: (").Append(UpDone).Append('/').Append(UpTotal).Append(") [")
-                      .Append((UpActive > 0 ? UpProgress : 100).ToString("F1")).Append("%] - ")
-                      .AppendLine(UpActive > 0 ? UpName : "已完成");
-                if (DownActive > 0 || (DownTotal > 0 && DownDone == DownTotal))
-                    sb.Append("下载: (").Append(DownDone).Append('/').Append(DownTotal).Append(") [")
-                      .Append((DownActive > 0 ? DownProgress : 100).ToString("F1")).Append("%] - ")
-                      .AppendLine(DownActive > 0 ? DownName : "已完成");
-                sb.Append("\n双击可取消所有任务");
-                StatusText = sb.ToString();
-            }
-            else
-            {
-                StatusText = "当前没有传输任务";
-                UpTotal = UpDone = 0;
-                DownTotal = DownDone = 0;
-            }
-        }
-
         [RelayCommand]
         private void CancelAllTransfers()
         {
-            _transferCts?.Cancel();
+            foreach (var t in TransferTasks.ToList())
+                if (t.CanCancel) CancelTask(t);
         }
     }
 }

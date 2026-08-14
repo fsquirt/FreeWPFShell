@@ -17,6 +17,7 @@ namespace YouShell.Views
         {
             InitializeComponent();
             XamlRoot = UserForm.ModernMessageBox.Root;
+            UserForm.ModernMessageBox.SyncTheme(this);
             var settings = _settingsRepo.Load();
             TogVault.IsOn = settings.UseWindowsHello;
             TogLinuxMonitor.IsOn = settings.UseLinuxMonitor;
@@ -31,6 +32,9 @@ namespace YouShell.Views
             TxtTerminalFontSize.Text = settings.TerminalFontSize.ToString();
             CmbBackdrop.SelectedIndex = BackdropToIndex(settings.BackdropType);
             CmbStretch.SelectedIndex = settings.ImageStretchMode;
+            TxtMaxConcurrent.Text = settings.MaxConcurrentTransfers.ToString();
+            TogTunnelTransfer.IsOn = settings.UseTunnelMultithreadTransfer;
+            TxtTransferThreads.Text = settings.TransferThreadsPerTask.ToString();
         }
 
         private async void BtnSelectImage_Click(object sender, RoutedEventArgs e)
@@ -65,6 +69,9 @@ namespace YouShell.Views
             if (int.TryParse(TxtTraceTimeout.Text, out int timeout)) settings.TracerouteTimeout = timeout;
             if (int.TryParse(TxtTraceMaxHops.Text, out int hops)) settings.TracerouteMaxHops = hops;
             settings.BackdropType = BackdropFromIndex();
+            if (int.TryParse(TxtMaxConcurrent.Text, out int mc)) settings.MaxConcurrentTransfers = Math.Clamp(mc, 1, 16);
+            settings.UseTunnelMultithreadTransfer = TogTunnelTransfer.IsOn;
+            if (int.TryParse(TxtTransferThreads.Text, out int tt)) settings.TransferThreadsPerTask = Math.Clamp(tt, 1, 64);
             _settingsRepo.Save(settings);
         }
 

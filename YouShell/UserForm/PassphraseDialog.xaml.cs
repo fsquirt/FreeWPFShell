@@ -14,6 +14,7 @@ namespace YouShell.UserForm
         {
             InitializeComponent();
             XamlRoot = ModernMessageBox.Root;
+            ModernMessageBox.SyncTheme(this);
             TxtPassphrase.Focus(FocusState.Programmatic);
         }
 

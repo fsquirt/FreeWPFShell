@@ -21,6 +21,10 @@ pub fn now_secs() -> i64 {
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as i64
 }
 
+pub fn now_secs_ms() -> i64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as i64
+}
+
 pub fn url_decode(s: &str) -> String {
     let mut res = String::new();
     let mut chars = s.chars();

@@ -34,6 +34,7 @@ namespace YouShell.Views
         {
             InitializeComponent();
             XamlRoot = ModernMessageBox.Root;
+            ModernMessageBox.SyncTheme(this);
             _hostRepo = Core.AppServices.GetService<HostRepository>();
             LoadKeys();
         }

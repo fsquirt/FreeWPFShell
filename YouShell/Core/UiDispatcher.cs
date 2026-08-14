@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
 
 namespace YouShell.Core
@@ -28,6 +29,25 @@ namespace YouShell.Core
         {
             if (_queue == null || _queue.HasThreadAccess) { action(); return; }
             _queue.TryEnqueue(() => action());
+        }
+
+        /// <summary>
+        /// 在 UI 线程执行异步操作并返回其结果；非 UI 线程调用时 marshal 过去。
+        /// 用于 ContentDialog 等必须在 UI 线程创建的 WinRT 对象（否则抛 0x8001010E）。
+        /// </summary>
+        public static Task<T> RunAsync<T>(Func<Task<T>> func)
+        {
+            if (_queue == null || _queue.HasThreadAccess) return func();
+
+            var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _queue.TryEnqueue(() => _ = InvokeAsync(func, tcs));
+            return tcs.Task;
+        }
+
+        private static async Task InvokeAsync<T>(Func<Task<T>> func, TaskCompletionSource<T> tcs)
+        {
+            try { tcs.TrySetResult(await func()); }
+            catch (Exception ex) { tcs.TrySetException(ex); }
         }
     }
 }

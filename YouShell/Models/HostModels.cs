@@ -63,5 +63,14 @@ namespace YouShell.Models
 
         /// <summary>仅 SSH 连接使用标签页；SFTP/隧道/路由追踪/系统管理改为独立弹窗。默认启用。</summary>
         public bool TabOnlySsh { get; set; } = true;
+
+        /// <summary>并发 SFTP 最大传输个数（同时传输的文件数，走独立 SFTP 连接）。默认 1。</summary>
+        public int MaxConcurrentTransfers { get; set; } = 1;
+
+        /// <summary>使用 SSH 隧道进行多线程 SFTP 上传/下载（单文件分段并行）。默认关闭。</summary>
+        public bool UseTunnelMultithreadTransfer { get; set; } = false;
+
+        /// <summary>单任务传输线程数量（隧道多线程模式下，单个文件切分的并行段数）。默认 10。</summary>
+        public int TransferThreadsPerTask { get; set; } = 10;
     }
 }

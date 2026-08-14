@@ -16,6 +16,7 @@ namespace YouShell.UserForm
         {
             InitializeComponent();
             XamlRoot = ModernMessageBox.Root;
+            ModernMessageBox.SyncTheme(this);
             TxtNewName.Text = oldName;
             TxtNewName.SelectAll();
             TxtNewName.Focus(FocusState.Programmatic);

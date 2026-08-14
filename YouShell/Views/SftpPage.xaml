@@ -53,6 +53,12 @@
                             <TextBlock Text="下载" />
                         </StackPanel>
                     </Button>
+                    <Button x:Name="BtnTasks" Click="BtnTasks_Click" Height="30" Padding="10,0" ToolTipService.ToolTip="查看所有传输任务">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <FontIcon Glyph="&#xE8FD;" FontSize="13" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                            <TextBlock x:Name="TxtTasksBtn" Text="传输任务" />
+                        </StackPanel>
+                    </Button>
 
                     <FontIcon x:Name="TxtStatusIcon" Glyph="&#xE73E;" Foreground="LimeGreen" FontSize="16"
                               VerticalAlignment="Center" Margin="0,0,8,0" DoubleTapped="StatusIcon_DoubleTapped"
@@ -66,7 +72,7 @@
         </Border>
 
         <!-- 文件列表 -->
-        <Grid Grid.Row="1">
+        <Grid x:Name="FileListPanel" Grid.Row="1">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
@@ -161,6 +167,83 @@
                             <TextBlock Grid.Column="3" Text="{Binding Date}" VerticalAlignment="Center" />
                             <TextBlock Grid.Column="4" Text="{Binding Perms}" VerticalAlignment="Center" />
                             <TextBlock Grid.Column="5" Text="{Binding Owner}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </Grid>
+
+        <!-- 传输任务列表（与文件列表切换显示） -->
+        <Grid x:Name="TaskListPanel" Grid.Row="1" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0" Padding="12,6" ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="1.5*" />
+                    <ColumnDefinition Width="2*" />
+                    <ColumnDefinition Width="1.5*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="1.5*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="文件名" FontWeight="SemiBold" />
+                <TextBlock Grid.Column="1" Text="远程路径" FontWeight="SemiBold" />
+                <TextBlock Grid.Column="2" Text="进度" FontWeight="SemiBold" />
+                <TextBlock Grid.Column="3" Text="创建时间" FontWeight="SemiBold" />
+                <TextBlock Grid.Column="4" Text="操作" FontWeight="SemiBold" />
+            </Grid>
+
+            <ListView
+                x:Name="TaskGrid"
+                Grid.Row="1"
+                ItemsSource="{Binding TransferTasks}"
+                SelectionMode="None"
+                HorizontalContentAlignment="Stretch">
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Padding="12,8" ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="1.5*" />
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="1.5*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="1.5*" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{Binding FileName}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding DirectionText}" FontSize="11"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            </StackPanel>
+
+                            <TextBlock Grid.Column="1" Text="{Binding RemotePath}" TextTrimming="CharacterEllipsis"
+                                       VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                            <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="2">
+                                <ProgressBar Value="{Binding Progress}" Minimum="0" Maximum="100" />
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <TextBlock Text="{Binding ProgressText}" FontSize="11" />
+                                    <TextBlock Text="{Binding SpeedText}" FontSize="11"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <TextBlock Grid.Column="3" Text="{Binding CreatedText}" FontSize="11"
+                                       VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                            <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                <Button Content="暂停" FontSize="12" Padding="8,2"
+                                        Visibility="{Binding CanPause, Converter={StaticResource BoolToVis}}"
+                                        Click="TaskPause_Click" />
+                                <Button Content="继续" FontSize="12" Padding="8,2"
+                                        Visibility="{Binding CanResume, Converter={StaticResource BoolToVis}}"
+                                        Click="TaskResume_Click" />
+                                <Button Content="取消" FontSize="12" Padding="8,2"
+                                        Visibility="{Binding CanCancel, Converter={StaticResource BoolToVis}}"
+                                        Click="TaskCancel_Click" />
+                            </StackPanel>
                         </Grid>
                     </DataTemplate>
                 </ListView.ItemTemplate>

@@ -13,7 +13,7 @@
 
         <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="0,0,0,10">
             <TextBlock Text="目标:" VerticalAlignment="Center" />
-            <TextBox Text="{Binding Target}" Width="220" VerticalAlignment="Center" />
+            <TextBox Text="{Binding Target, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="220" VerticalAlignment="Center" />
             <Button Content="开始追踪" Command="{Binding StartCommand}" Margin="10,0,0,0" />
             <Button Content="取消" Command="{Binding CancelCommand}"
                     Visibility="{Binding IsCancelVisible, Converter={StaticResource BoolToVis}}" />
@@ -42,10 +42,12 @@
             </Grid>
 
             <ListView
+                x:Name="HopsList"
                 Grid.Row="1"
                 ItemsSource="{Binding Hops}"
                 HorizontalContentAlignment="Stretch"
-                SelectionMode="Single">
+                SelectionMode="Single"
+                SelectionChanged="HopsList_SelectionChanged">
                 <ListView.ItemTemplate>
                     <DataTemplate>
                         <Grid Padding="12,8" ColumnSpacing="8">
