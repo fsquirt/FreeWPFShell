@@ -20,6 +20,7 @@ namespace YouShell.Views
             var settings = _settingsRepo.Load();
             TogVault.IsOn = settings.UseWindowsHello;
             TogLinuxMonitor.IsOn = settings.UseLinuxMonitor;
+            TogTabOnlySsh.IsOn = settings.TabOnlySsh;
             TogInjectLocale.IsOn = settings.InjectChineseLocale;
             TxtTerminalBg.Text = settings.TerminalBackground;
             TogImageBg.IsOn = settings.UseImageBackground;
@@ -53,6 +54,7 @@ namespace YouShell.Views
             var settings = _settingsRepo.Load();
             settings.UseWindowsHello = TogVault.IsOn;
             settings.UseLinuxMonitor = TogLinuxMonitor.IsOn;
+            settings.TabOnlySsh = TogTabOnlySsh.IsOn;
             settings.InjectChineseLocale = TogInjectLocale.IsOn;
             settings.TerminalBackground = TxtTerminalBg.Text.Trim();
             settings.UseImageBackground = TogImageBg.IsOn;

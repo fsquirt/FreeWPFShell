@@ -60,5 +60,8 @@ namespace YouShell.Models
         public string TerminalFont { get; set; } = "Cascadia Code";
         public int TerminalFontSize { get; set; } = 10;
         public bool InjectChineseLocale { get; set; } = true;
+
+        /// <summary>仅 SSH 连接使用标签页；SFTP/隧道/路由追踪/系统管理改为独立弹窗。默认启用。</summary>
+        public bool TabOnlySsh { get; set; } = true;
     }
 }

@@ -18,11 +18,13 @@ namespace YouShell.UserForm
     /// </summary>
     public static class ModernMessageBox
     {
-        /// <summary>解析对话框的 XamlRoot（主窗口根元素）。</summary>
-        private static XamlRoot? GetRoot() => App.MainWindow?.Content?.XamlRoot;
+        /// <summary>解析对话框的 XamlRoot（优先当前激活窗口，回退主窗口）。</summary>
+        private static XamlRoot? GetRoot()
+            => Services.WindowManager.ActiveWindow?.Content?.XamlRoot ?? App.MainWindow?.Content?.XamlRoot;
 
         /// <summary>供 ContentDialog 子类在代码里创建后共享的 XamlRoot。</summary>
-        public static XamlRoot? Root => App.MainWindow?.Content?.XamlRoot;
+        public static XamlRoot? Root
+            => Services.WindowManager.ActiveWindow?.Content?.XamlRoot ?? App.MainWindow?.Content?.XamlRoot;
 
         public static async Task<MessageBoxResult> ShowAsync(
             string message,

@@ -49,6 +49,7 @@ namespace YouShell
 
             MainWindow = new MainWindow();
             Core.UiDispatcher.Initialize(MainWindow.DispatcherQueue);
+            Services.WindowManager.Track(MainWindow);
             MainWindow.Activate();
         }
     }

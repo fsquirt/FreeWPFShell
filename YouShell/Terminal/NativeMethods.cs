@@ -91,6 +91,9 @@ namespace YouShell.Terminal
         [DllImport("user32.dll", SetLastError = true)]
         public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
+        [DllImport("user32.dll")]
+        public static extern uint GetDpiForWindow(IntPtr hWnd);
+
         public const int SW_SHOW = 5;
         public const int SW_HIDE = 0;
 

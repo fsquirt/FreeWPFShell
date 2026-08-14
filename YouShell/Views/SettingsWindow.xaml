@@ -28,6 +28,12 @@
                     <ToggleSwitch x:Name="TogLinuxMonitor" OnContent="启用" OffContent="禁止" VerticalAlignment="Center" />
                 </StackPanel>
 
+                <StackPanel Orientation="Horizontal" Spacing="10"
+                            ToolTipService.ToolTip="启用后，SFTP文件管理、SSH隧道管理、路由追踪、系统管理将单独弹出窗口，仅SSH连接使用标签页。">
+                    <TextBlock Text="TAB仅SSH连接" FontSize="14" VerticalAlignment="Center" />
+                    <ToggleSwitch x:Name="TogTabOnlySsh" OnContent="启用" OffContent="禁止" VerticalAlignment="Center" />
+                </StackPanel>
+
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <TextBlock Text="窗口背景渲染：" FontSize="14" VerticalAlignment="Center" />
                     <ComboBox x:Name="CmbBackdrop" Width="140" VerticalAlignment="Center"
