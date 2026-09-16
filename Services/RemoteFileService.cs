@@ -12,16 +12,28 @@ namespace FreeWPFShell.Services
 {
     public class RemoteFileService : IDisposable
     {
-        private readonly SftpClient _sftpClient;
         private readonly object _sftpLock;
         private readonly string _sessionId;
         private readonly Dictionary<string, FileSystemWatcher> _activeWatchers = new();
+        private SftpClient _sftpClient;
 
         public RemoteFileService(SftpClient sftpClient, object sftpLock, string sessionId)
         {
             _sftpClient = sftpClient;
             _sftpLock = sftpLock;
             _sessionId = sessionId;
+        }
+
+        /// <summary>
+        /// SFTP 自动重连后换绑新客户端。在 _sftpLock 内原子替换，
+        /// 保证与进行中的下载/上传操作互斥；已打开的编辑器 watcher 不受影响。
+        /// </summary>
+        public void UpdateClient(SftpClient newClient)
+        {
+            lock (_sftpLock)
+            {
+                _sftpClient = newClient;
+            }
         }
 
         public async Task EditRemoteFileAsync(string remotePath, string editorCommand)

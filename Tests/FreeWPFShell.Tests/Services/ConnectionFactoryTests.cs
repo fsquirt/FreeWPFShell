@@ -130,5 +130,15 @@ namespace FreeWPFShell.Tests.Services
             Assert.AreEqual(22, client.ConnectionInfo.Port);
             Assert.AreEqual("root", client.ConnectionInfo.Username);
         }
+
+        [TestMethod]
+        public void BuildSftpClient_SetsKeepAliveHeartbeat()
+        {
+            var factory = new ConnectionFactory();
+            using var client = factory.BuildSftpClient(BuildInfo(), null, null);
+
+            Assert.AreEqual(TimeSpan.FromSeconds(2), client.KeepAliveInterval,
+                "SFTP 应每 2 秒发送心跳包，防止空闲断联");
+        }
     }
 }

@@ -83,6 +83,14 @@ namespace FreeWPFShell.Services
         private RemoteFileService? _fileService;
         private SshMonitorService? _monitorService;
 
+        // SFTP 看门狗：SFTP 连接独立于主 SSH 且可能被服务器/NAT 掐断，断开后自动重连
+        private System.Timers.Timer? _sftpWatchdog;
+        // 0=空闲 1=重连中（Interlocked 防止并发重连循环）
+        private int _sftpReconnectState = 0;
+        private const int SftpReconnectMaxAttempts = 5;
+        private const int SftpReconnectIntervalMs = 3000;
+        private const int SftpReconnectCooldownMs = 30_000;
+
         public MonitorData Monitor { get; } = new();
         public event EventHandler<MonitorData>? MonitorUpdated;
 
@@ -107,6 +115,14 @@ namespace FreeWPFShell.Services
         public Action? OnConnected { get; set; }
         public Action<Exception>? OnConnectFailed { get; set; }
 
+        /// <summary>加载预载私钥（密钥认证时）。连接与 SFTP 重连共用。</summary>
+        private PrivateKeyFile? LoadPreloadedKey()
+        {
+            if (HostInfo.AuthMethod != SshAuthMethod.PrivateKey) return null;
+            var keyRepo = new KeyRepository();
+            return keyRepo.LoadPrivateKeyFileAsync(HostInfo.SshKeyId).GetAwaiter().GetResult();
+        }
+
         public void ConnectAsync()
         {
             PrivateKeyFile? preloadedKey = null;
@@ -117,8 +133,7 @@ namespace FreeWPFShell.Services
                     OnConnectFailed?.Invoke(new Exception("未配置 SSH 密钥，请在连接设置中选择一个已导入的密钥。"));
                     return;
                 }
-                var keyRepo = new KeyRepository();
-                preloadedKey = keyRepo.LoadPrivateKeyFileAsync(HostInfo.SshKeyId).GetAwaiter().GetResult();
+                preloadedKey = LoadPreloadedKey();
             }
 
             // SSH 隧道代理：预加载跳板机密钥
@@ -200,6 +215,7 @@ namespace FreeWPFShell.Services
                         SftpClient = sftp;
                         IsSftpConnected = true;
                         _fileService = new RemoteFileService(SftpClient, _sftpLock, SessionId);
+                        StartSftpWatchdog();
                     }
                     catch (Exception ex)
                     {
@@ -241,6 +257,84 @@ namespace FreeWPFShell.Services
 
         private SftpClient BuildSftpClient(PrivateKeyFile? preloadedKey = null)
             => _connectionFactory.BuildSftpClient(HostInfo, preloadedKey, _jumpPort);
+
+        #region SFTP 自动重连看门狗
+
+        private void StartSftpWatchdog()
+        {
+            if (_sftpWatchdog != null) return;
+            _sftpWatchdog = new System.Timers.Timer(2000) { AutoReset = true, Enabled = true };
+            _sftpWatchdog.Elapsed += OnSftpWatchdogTick;
+        }
+
+        /// <summary>
+        /// 每 2 秒检测 SFTP 连接健康状态。检测到断开且主 SSH 仍存活时，
+        /// 启动一次后台重连循环（最多 5 次、间隔 3s；全部失败冷却 30s 后由看门狗再次触发）。
+        /// 主 SSH 已断时重连无意义（隧道也断了），交给上层会话清理与探针自退兜底。
+        /// </summary>
+        private void OnSftpWatchdogTick(object? sender, System.Timers.ElapsedEventArgs e)
+        {
+            if (!IsConnected || SftpClient == null || SftpClient.IsConnected) return;
+            if (MasterClient == null || !MasterClient.IsConnected) return;
+            if (Interlocked.CompareExchange(ref _sftpReconnectState, 1, 0) != 0) return;
+
+            Task.Run(() =>
+            {
+                try
+                {
+                    for (int attempt = 1; attempt <= SftpReconnectMaxAttempts; attempt++)
+                    {
+                        if (!IsConnected || MasterClient == null || !MasterClient.IsConnected) return;
+
+                        ConnectionStatus = $"SFTP 重连中(第{attempt}次)...";
+                        try
+                        {
+                            var fresh = BuildSftpClient(LoadPreloadedKey());
+                            fresh.Connect();
+                            SwapSftpClient(fresh);
+                            IsSftpConnected = true;
+                            ConnectionStatus = "已连接";
+                            return;
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"[SFTP Reconnect] 第{attempt}次失败: {ex.Message}");
+                        }
+
+                        Thread.Sleep(SftpReconnectIntervalMs);
+                    }
+
+                    // 全部失败：标记断开并冷却，冷却结束后看门狗会再次触发重连循环
+                    IsSftpConnected = false;
+                    ConnectionStatus = "SFTP 重连失败，等待自动重试...";
+                    Thread.Sleep(SftpReconnectCooldownMs);
+                }
+                finally
+                {
+                    Interlocked.Exchange(ref _sftpReconnectState, 0);
+                }
+            });
+        }
+
+        /// <summary>在 _sftpLock 内原子替换 SFTP 客户端（新 client 已连接），旧 client 在锁外释放。</summary>
+        private void SwapSftpClient(SftpClient fresh)
+        {
+            SftpClient old;
+            lock (_sftpLock)
+            {
+                old = SftpClient;
+                SftpClient = fresh;
+            }
+            // 文件服务换绑新 client（保留已打开的编辑器 watcher）
+            _fileService?.UpdateClient(fresh);
+            if (old != null)
+            {
+                try { old.Disconnect(); } catch { }
+                try { old.Dispose(); } catch { }
+            }
+        }
+
+        #endregion
 
         private SshClient BuildJumpClient(PrivateKeyFile? jumpKey = null)
             => _connectionFactory.BuildJumpClient(HostInfo, jumpKey);
@@ -297,6 +391,10 @@ namespace FreeWPFShell.Services
             {
                 try { TerminalConnection?.Close(); } catch { }
                 TerminalConnection = null;
+
+                // 停止 SFTP 看门狗（会话已主动关闭，不再重连）
+                try { _sftpWatchdog?.Stop(); _sftpWatchdog?.Dispose(); } catch { }
+                _sftpWatchdog = null;
 
                 // 清理跳板机资源
                 try { _jumpPort?.Stop(); } catch { }

@@ -16,6 +16,12 @@ namespace FreeWPFShell.Services
     /// </summary>
     public class ConnectionFactory : IConnectionFactory
     {
+        /// <summary>
+        /// SFTP 心跳间隔。SFTP 是独立于主 SSH 的 TCP 连接且大部分时间空闲，
+        /// 每 2 秒发送一次 keepalive 心跳包，防止被服务器/NAT/防火墙空闲超时断联。
+        /// </summary>
+        private static readonly TimeSpan SftpKeepAliveInterval = TimeSpan.FromSeconds(2);
+
         public SshClient BuildSshClient(SshConnectionInfo info, PrivateKeyFile? preloadedKey, ForwardedPortLocal? jumpPort)
         {
             var client = new SshClient(BuildConnectionInfo(info, preloadedKey, jumpPort));
@@ -27,6 +33,8 @@ namespace FreeWPFShell.Services
         {
             var client = new SftpClient(BuildConnectionInfo(info, preloadedKey, jumpPort));
             client.ErrorOccurred += OnClientError;
+            // 连接建立后 SSH.NET 会按此间隔自动发送 keepalive@openssh.com 心跳
+            client.KeepAliveInterval = SftpKeepAliveInterval;
             return client;
         }
 
