@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -33,7 +32,6 @@ namespace FreeWPFShell.Services
 
         public uint LinuxMonitorLocalPort { get; private set; } = 0;
         private string _monitorToken = "";
-        private HttpClient? _monitorHttpClient;
         private CancellationTokenSource? _monitorCts;
         private Timer? _monitorTimer;
         private int _tickCount;
@@ -112,8 +110,6 @@ namespace FreeWPFShell.Services
 
             try
             {
-                _monitorHttpClient = CreateMonitorHttpClient();
-                _monitorHttpClient.Timeout = TimeSpan.FromSeconds(10);
                 _monitorCts = new CancellationTokenSource();
                 _monitorTimer = new Timer(2000) { AutoReset = true, Enabled = true };
                 _monitorTimer.Elapsed += OnMonitorTick;
@@ -121,6 +117,37 @@ namespace FreeWPFShell.Services
             catch (Exception ex)
             {
                 Debug.WriteLine("Monitor Init Failed: " + ex.Message);
+            }
+        }
+
+        /// <summary>构造探针请求参数（扁平键值，与 Rust 端 JSON 信封解析对应）。</summary>
+        private static IReadOnlyDictionary<string, object?> Args(params (string key, object? value)[] pairs)
+        {
+            var d = new Dictionary<string, object?>(pairs.Length);
+            foreach (var (key, value) in pairs) d[key] = value;
+            return d;
+        }
+
+        /// <summary>通过 SSH 隧道向探针发送一次 TCP 协议请求（短连接，语义对齐原 HttpClient）。</summary>
+        private Task<string> SendAsync(string op, IReadOnlyDictionary<string, object?>? args = null, int timeoutMs = MonitorProtocol.DefaultTimeoutMs)
+            => MonitorProtocol.SendRequestAsync("127.0.0.1", (int)LinuxMonitorLocalPort, _monitorToken, op, args, timeoutMs);
+
+        /// <summary>
+        /// 向探针发送退出指令（op=exit，agent 收到即退出进程，不回包）。
+        /// best-effort：仅在主 SSH 连接存活时尝试（隧道依赖其端口转发），
+        /// 失败静默忽略，由 pkill 兜底与 agent 30 秒空闲自退兜底。
+        /// </summary>
+        public void SendExitCommand()
+        {
+            try
+            {
+                if (LinuxMonitorLocalPort == 0 || !_sshClient.IsConnected) return;
+                SendAsync("exit", timeoutMs: 2000).GetAwaiter().GetResult();
+                Debug.WriteLine("[Monitor] 已向探针发送退出指令");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("[Monitor] 探针退出指令发送失败: " + ex.Message);
             }
         }
 
@@ -139,9 +166,7 @@ namespace FreeWPFShell.Services
             {
                 if (LinuxMonitorLocalPort > 0)
                 {
-                    var hc = _monitorHttpClient;
-                    if (hc == null) return;
-                    string json = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/stats");
+                    string json = await SendAsync("stats");
                     ParseLinuxMonitorJson(json);
                     return;
                 }
@@ -439,22 +464,12 @@ namespace FreeWPFShell.Services
             });
         }
 
-        private HttpClient CreateMonitorHttpClient()
-        {
-            var hc = new HttpClient();
-            if (!string.IsNullOrEmpty(_monitorToken))
-                hc.DefaultRequestHeaders.Add("X-Monitor-Token", _monitorToken);
-            return hc;
-        }
-
         public async Task<ProcessDetail?> GetProcessDetailAsync(uint pid)
         {
             if (LinuxMonitorLocalPort == 0) return null;
             try
             {
-                var hc = _monitorHttpClient;
-                if (hc == null) return null;
-                string json = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/process_detail?pid={pid}");
+                string json = await SendAsync("process_detail", Args(("pid", pid)));
                 return JsonSerializer.Deserialize<ProcessDetail>(json, s_jsonOptions);
             }
             catch { return null; }
@@ -465,9 +480,7 @@ namespace FreeWPFShell.Services
             if (LinuxMonitorLocalPort == 0) return false;
             try
             {
-                var hc = _monitorHttpClient;
-                if (hc == null) return false;
-                string result = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/kill?pid={pid}&sig={signal}");
+                string result = await SendAsync("kill", Args(("pid", pid), ("sig", signal)));
                 return result.ToLower() == "true";
             }
             catch { return false; }
@@ -478,22 +491,18 @@ namespace FreeWPFShell.Services
             if (LinuxMonitorLocalPort == 0) return new List<ProcessItem>();
             try
             {
-                var hc = _monitorHttpClient;
-                if (hc == null) return new List<ProcessItem>();
-                string json = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/all_processes");
+                string json = await SendAsync("all_processes");
                 return JsonSerializer.Deserialize<List<ProcessItem>>(json, s_jsonOptions) ?? new List<ProcessItem>();
             }
             catch { return new List<ProcessItem>(); }
         }
 
-        public async Task<List<LoginRecord>> GetLoginRecordsAsync(string endpoint)
+        public async Task<List<LoginRecord>> GetLoginRecordsAsync(string kind, int count)
         {
             if (LinuxMonitorLocalPort == 0) return new List<LoginRecord>();
             try
             {
-                var hc = _monitorHttpClient;
-                if (hc == null) return new List<LoginRecord>();
-                string json = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}{endpoint}");
+                string json = await SendAsync("login_records", Args(("kind", kind), ("count", count)));
                 return JsonSerializer.Deserialize<List<LoginRecord>>(json, s_jsonOptions) ?? new List<LoginRecord>();
             }
             catch { return new List<LoginRecord>(); }
@@ -504,9 +513,7 @@ namespace FreeWPFShell.Services
             if (LinuxMonitorLocalPort == 0) return new List<ServiceItem>();
             try
             {
-                var hc = _monitorHttpClient;
-                if (hc == null) return new List<ServiceItem>();
-                string json = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/services");
+                string json = await SendAsync("services");
                 return JsonSerializer.Deserialize<List<ServiceItem>>(json, s_jsonOptions) ?? new List<ServiceItem>();
             }
             catch { return new List<ServiceItem>(); }
@@ -517,10 +524,7 @@ namespace FreeWPFShell.Services
             if (LinuxMonitorLocalPort == 0) return false;
             try
             {
-                var hc = _monitorHttpClient;
-                if (hc == null) return false;
-                string encodedName = System.Net.WebUtility.UrlEncode(serviceName);
-                string result = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/service_{action}?name={encodedName}");
+                string result = await SendAsync("service_action", Args(("name", serviceName), ("action", action)));
                 return result.ToLower() == "true";
             }
             catch { return false; }
@@ -531,10 +535,7 @@ namespace FreeWPFShell.Services
             if (LinuxMonitorLocalPort == 0) return "";
             try
             {
-                var hc = _monitorHttpClient;
-                if (hc == null) return "";
-                string encodedName = System.Net.WebUtility.UrlEncode(serviceName);
-                return await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/service_log?name={encodedName}");
+                return await SendAsync("service_log", Args(("name", serviceName)));
             }
             catch { return ""; }
         }
@@ -544,10 +545,7 @@ namespace FreeWPFShell.Services
             if (LinuxMonitorLocalPort == 0) return false;
             try
             {
-                var hc = _monitorHttpClient;
-                if (hc == null) return false;
-                string encodedPath = System.Net.WebUtility.UrlEncode(fullPath);
-                string result = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/killall?path={encodedPath}&sig={signal}");
+                string result = await SendAsync("killall", Args(("path", fullPath), ("sig", signal)));
                 return result.ToLower() == "true";
             }
             catch { return false; }
@@ -558,9 +556,7 @@ namespace FreeWPFShell.Services
             if (LinuxMonitorLocalPort == 0) return new List<NetConnItem>();
             try
             {
-                var hc = _monitorHttpClient;
-                if (hc == null) return new List<NetConnItem>();
-                string json = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/net_conns");
+                string json = await SendAsync("net_conns");
                 return JsonSerializer.Deserialize<List<NetConnItem>>(json, s_jsonOptions) ?? new List<NetConnItem>();
             }
             catch { return new List<NetConnItem>(); }
@@ -571,9 +567,7 @@ namespace FreeWPFShell.Services
             if (LinuxMonitorLocalPort == 0) return new List<CronJobItem>();
             try
             {
-                var hc = _monitorHttpClient;
-                if (hc == null) return new List<CronJobItem>();
-                string json = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/cron_list");
+                string json = await SendAsync("cron_list");
                 return JsonSerializer.Deserialize<List<CronJobItem>>(json, s_jsonOptions) ?? new List<CronJobItem>();
             }
             catch { return new List<CronJobItem>(); }
@@ -584,10 +578,7 @@ namespace FreeWPFShell.Services
             if (LinuxMonitorLocalPort == 0) return false;
             try
             {
-                var hc = _monitorHttpClient;
-                if (hc == null) return false;
-                string encoded = System.Net.WebUtility.UrlEncode(rawLine);
-                string result = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/cron_add?raw={encoded}");
+                string result = await SendAsync("cron_add", Args(("raw", rawLine)));
                 return result.ToLower() == "true";
             }
             catch { return false; }
@@ -598,9 +589,7 @@ namespace FreeWPFShell.Services
             if (LinuxMonitorLocalPort == 0) return false;
             try
             {
-                var hc = _monitorHttpClient;
-                if (hc == null) return false;
-                string result = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/cron_remove?line={lineIndex}");
+                string result = await SendAsync("cron_remove", Args(("line", lineIndex)));
                 return result.ToLower() == "true";
             }
             catch { return false; }
@@ -611,9 +600,7 @@ namespace FreeWPFShell.Services
             if (LinuxMonitorLocalPort == 0) return false;
             try
             {
-                var hc = _monitorHttpClient;
-                if (hc == null) return false;
-                string result = await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/cron_toggle?line={lineIndex}&enabled={enabled.ToString().ToLowerInvariant()}");
+                string result = await SendAsync("cron_toggle", Args(("line", lineIndex), ("enabled", enabled)));
                 return result.ToLower() == "true";
             }
             catch { return false; }
@@ -624,23 +611,23 @@ namespace FreeWPFShell.Services
             if (LinuxMonitorLocalPort == 0) return "未连接";
             try
             {
-                var hc = _monitorHttpClient;
-                if (hc == null) return "未知";
-                return await hc.GetStringAsync($"http://127.0.0.1:{LinuxMonitorLocalPort}/cron_status");
+                return await SendAsync("cron_status");
             }
             catch { return "未知"; }
         }
 
         public void Stop()
         {
+            // 优先让探针优雅退出（走隧道发送退出指令，主 SSH 存活时必达），
+            // pkill 仅作兜底（探针卡死/服务器上残留旧版本 agent 的场景）
+            SendExitCommand();
+
             _monitorCts?.Cancel();
             _monitorTimer?.Stop();
             _monitorTimer?.Dispose();
             _monitorTimer = null;
 
-            _monitorHttpClient?.Dispose();
             try { _ping.Dispose(); } catch { }
-            _monitorHttpClient = null;
 
             if (LinuxMonitorLocalPort > 0 && _sshClient != null && _sshClient.IsConnected)
             {

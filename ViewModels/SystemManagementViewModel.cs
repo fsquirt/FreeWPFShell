@@ -110,7 +110,7 @@ namespace FreeWPFShell.ViewModels
         {
             try
             {
-                _wtmpRaw = await _session.GetLoginRecordsAsync($"/wtmp?count={count}");
+                _wtmpRaw = await _session.GetLoginRecordsAsync("wtmp", count);
                 ApplyWtmpFilter();
             }
             catch (Exception ex) { ShowError?.Invoke("读取登录记录失败", ex.Message); }
@@ -120,7 +120,7 @@ namespace FreeWPFShell.ViewModels
         {
             try
             {
-                _btmpRaw = await _session.GetLoginRecordsAsync($"/btmp?count={count}");
+                _btmpRaw = await _session.GetLoginRecordsAsync("btmp", count);
                 ApplyBtmpFilter();
             }
             catch (Exception ex) { ShowError?.Invoke("读取登录失败记录失败", ex.Message); }
@@ -159,7 +159,7 @@ namespace FreeWPFShell.ViewModels
 
         public async Task<string> BuildWtmpCsvAsync()
         {
-            var records = await _session.GetLoginRecordsAsync("/wtmp");
+            var records = await _session.GetLoginRecordsAsync("wtmp", 0);
             var geoService = IpGeoService.Instance;
             var sb = new StringBuilder();
             sb.AppendLine("登录时间,登录用户,登录来源(IP),IP归属地");
@@ -181,7 +181,7 @@ namespace FreeWPFShell.ViewModels
 
         public async Task<string> BuildBtmpCsvAsync()
         {
-            var records = await _session.GetLoginRecordsAsync("/btmp");
+            var records = await _session.GetLoginRecordsAsync("btmp", 100);
             var geoService = IpGeoService.Instance;
             var sb = new StringBuilder();
             sb.AppendLine("登录时间,登录用户,登录来源(IP),IP归属地");

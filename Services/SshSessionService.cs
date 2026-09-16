@@ -365,7 +365,7 @@ namespace FreeWPFShell.Services
         public Task<ProcessDetail?> GetProcessDetailAsync(uint pid) => _monitorService?.GetProcessDetailAsync(pid) ?? Task.FromResult<ProcessDetail?>(null);
         public Task<bool> KillProcessAsync(uint pid, int signal) => _monitorService?.KillProcessAsync(pid, signal) ?? Task.FromResult(false);
         public Task<List<ProcessItem>> GetAllProcessesAsync() => _monitorService?.GetAllProcessesAsync() ?? Task.FromResult(new List<ProcessItem>());
-        public Task<List<LoginRecord>> GetLoginRecordsAsync(string endpoint) => _monitorService?.GetLoginRecordsAsync(endpoint) ?? Task.FromResult(new List<LoginRecord>());
+        public Task<List<LoginRecord>> GetLoginRecordsAsync(string kind, int count) => _monitorService?.GetLoginRecordsAsync(kind, count) ?? Task.FromResult(new List<LoginRecord>());
         public Task<List<ServiceItem>> GetServicesAsync() => _monitorService?.GetServicesAsync() ?? Task.FromResult(new List<ServiceItem>());
         public Task<bool> ServiceActionAsync(string serviceName, string action) => _monitorService?.ServiceActionAsync(serviceName, action) ?? Task.FromResult(false);
         public Task<string> GetServiceLogAsync(string serviceName) => _monitorService?.GetServiceLogAsync(serviceName) ?? Task.FromResult("");
@@ -396,14 +396,16 @@ namespace FreeWPFShell.Services
                 try { _sftpWatchdog?.Stop(); _sftpWatchdog?.Dispose(); } catch { }
                 _sftpWatchdog = null;
 
+                // 先停监控（内部会向探针发退出指令并 pkill 兜底）：
+                // 必须在跳板机隧道关闭之前执行，否则隧道已断，退出指令与 pkill 都无法到达探针
+                try { _monitorService?.Stop(); } catch { }
+                _monitorService = null;
+
                 // 清理跳板机资源
                 try { _jumpPort?.Stop(); } catch { }
                 _jumpPort = null;
                 try { _jumpClient?.Disconnect(); _jumpClient?.Dispose(); } catch { }
                 _jumpClient = null;
-
-                try { _monitorService?.Stop(); } catch { }
-                _monitorService = null;
 
                 try { _fileService?.Dispose(); } catch { }
                 _fileService = null;

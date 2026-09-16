@@ -4,18 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [profile.release]
-opt-level = 3
+opt-level = "z"
 lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
 
+# 零依赖设计：数据采集全部走 /proc 与系统命令行（systemctl/journalctl/crontab），
+# 磁盘空间用 extern "C" 直接声明 statvfs，不引入任何第三方 crate
 [dependencies]
-sysinfo = "0.30.7"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-tiny_http = "0.12.0"
-utmp-rs = "0.4"
-time = "0.3"
-zbus = { version = "5", default-features = false, features = ["tokio"] }
-tokio = { version = "1", features = ["rt"] }

@@ -1,14 +1,26 @@
 use std::process::{Command, Stdio};
 use std::io::Write;
-use serde::Serialize;
+use crate::utils::json_escape;
 
-#[derive(Serialize, Clone)]
 pub struct CronJobItem {
     pub line_index: usize,
     pub schedule: String,
     pub command: String,
     pub enabled: bool,
     pub raw: String,
+}
+
+impl CronJobItem {
+    pub fn json(&self) -> String {
+        format!(
+            "{{\"line_index\":{},\"schedule\":\"{}\",\"command\":\"{}\",\"enabled\":{},\"raw\":\"{}\"}}",
+            self.line_index,
+            json_escape(&self.schedule),
+            json_escape(&self.command),
+            self.enabled,
+            json_escape(&self.raw)
+        )
+    }
 }
 
 fn read_crontab_lines() -> Vec<String> {
