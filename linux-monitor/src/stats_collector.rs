@@ -326,7 +326,8 @@ fn read_disks() -> Vec<DiskItem> {
     for line in mounts.lines() {
         let parts: Vec<&str> = line.split_whitespace().collect();
         if parts.len() < 3 { continue; }
-        let (dev, mp, fstype) = (parts[0], parts[2], parts[1]);
+        // /proc/mounts 格式：<设备> <挂载点> <文件系统类型> <选项...>
+        let (dev, mp, fstype) = (parts[0], parts[1], parts[2]);
         // 只保留真实块设备（与 sysinfo 行为一致），排除伪文件系统与重复挂载
         if !dev.starts_with("/dev/") || fstype == "squashfs" { continue; }
         if !seen.insert(dev.to_string()) { continue; }

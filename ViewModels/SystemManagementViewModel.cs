@@ -106,7 +106,7 @@ namespace FreeWPFShell.ViewModels
 
         // ── 登录记录 ─────────────────────────────────────────────
 
-        public async Task LoadWtmpAsync(int count = 100)
+        public async Task LoadWtmpAsync(int count = 10)
         {
             try
             {
@@ -116,7 +116,7 @@ namespace FreeWPFShell.ViewModels
             catch (Exception ex) { ShowError?.Invoke("读取登录记录失败", ex.Message); }
         }
 
-        public async Task LoadBtmpAsync(int count = 100)
+        public async Task LoadBtmpAsync(int count = 10)
         {
             try
             {

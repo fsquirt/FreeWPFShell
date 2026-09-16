@@ -116,8 +116,34 @@ fn handle_conn(
         "killall" => {
             let path = get_str(&envelope, "path").unwrap_or("");
             let sig = get_u64(&envelope, "sig").unwrap_or(15) as i32;
-            let proc_name = Path::new(path).file_name().and_then(|n| n.to_str()).unwrap_or(path);
-            let success = std::process::Command::new("killall").arg(format!("-{}", sig)).arg(proc_name).status().map(|s| s.success()).unwrap_or(false);
+            // C# 传的是 /proc/[pid]/exe 的 readlink 结果，直接扫描 /proc 按 exe 全路径精确匹配；
+            // 不用 killall 命令优先的原因：它只认 15 字符 comm，长进程名/改名进程会匹配不到
+            let mut targets: Vec<u32> = Vec::new();
+            if !path.is_empty() {
+                if let Ok(entries) = fs::read_dir("/proc") {
+                    for entry in entries.flatten() {
+                        let pid: u32 = match entry.file_name().to_string_lossy().parse() {
+                            Ok(p) => p,
+                            Err(_) => continue,
+                        };
+                        if let Ok(exe) = fs::read_link(format!("/proc/{}/exe", pid)) {
+                            if exe.to_string_lossy() == path {
+                                targets.push(pid);
+                            }
+                        }
+                    }
+                }
+            }
+            let success = if !targets.is_empty() {
+                for pid in targets {
+                    let _ = std::process::Command::new("kill").arg(format!("-{}", sig)).arg(pid.to_string()).status();
+                }
+                true
+            } else {
+                // exe 精确匹配不到（如二进制已被删除/替换），退回 killall 按名称匹配
+                let proc_name = Path::new(path).file_name().and_then(|n| n.to_str()).unwrap_or(path);
+                std::process::Command::new("killall").arg(format!("-{}", sig)).arg(proc_name).status().map(|s| s.success()).unwrap_or(false)
+            };
             ok_body(success)
         }
         "kill" => {

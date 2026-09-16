@@ -87,13 +87,13 @@ namespace FreeWPFShell.Views
         private void BtnRefreshWtmp_Click(object sender, RoutedEventArgs e) => _ = _vm.LoadWtmpAsync(GetWtmpCount());
         private void BtnRefreshBtmp_Click(object sender, RoutedEventArgs e) => _ = _vm.LoadBtmpAsync(GetBtmpCount());
 
-        /// <summary>解析"成功登录条数"输入框，无效则用默认 100。</summary>
+        /// <summary>解析"成功登录条数"输入框，无效则用默认 10。</summary>
         private int GetWtmpCount()
-            => int.TryParse(TxtWtmpCount.Text, out int c) && c > 0 ? c : 100;
+            => int.TryParse(TxtWtmpCount.Text, out int c) && c > 0 ? c : 10;
 
-        /// <summary>解析"失败登录条数"输入框，无效则用默认 100。</summary>
+        /// <summary>解析"失败登录条数"输入框，无效则用默认 10。</summary>
         private int GetBtmpCount()
-            => int.TryParse(TxtBtmpCount.Text, out int c) && c > 0 ? c : 100;
+            => int.TryParse(TxtBtmpCount.Text, out int c) && c > 0 ? c : 10;
         private void BtnExportWtmp_Click(object sender, RoutedEventArgs e) => ExportCsv(_vm.BuildWtmpCsvAsync, "登录记录");
         private void BtnExportBtmp_Click(object sender, RoutedEventArgs e) => ExportCsv(_vm.BuildBtmpCsvAsync, "登录失败记录");
 
