@@ -1,13 +1,17 @@
-<UserControl x:Class="FreeWPFShell.Views.WelcomePage"
+﻿<UserControl x:Class="FreeWPFShell.Views.WelcomePage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:mica="clr-namespace:MicaWPF.Controls;assembly=MicaWPF"
              xmlns:icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
-             mc:Ignorable="d" 
+             xmlns:views="clr-namespace:FreeWPFShell.Views"
+             mc:Ignorable="d"
              d:DesignHeight="800" d:DesignWidth="800"
              FontFamily="Microsoft YaHei">
+    <UserControl.Resources>
+        <views:DistroLogoConverter x:Key="DistroLogoConverter"/>
+    </UserControl.Resources>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -60,30 +64,36 @@
                                 <MenuItem Header="删除连接" Command="{Binding PlacementTarget.Tag.DeleteCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
                             </ContextMenu>
                         </Border.ContextMenu>
-                        <StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
-                                <icon:PackIconRemixIcon Kind="LockPasswordLine" Foreground="#00BCFF" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,5,0" ToolTip="由 Windows Hello 凭据保险箱保护">
-                                    <icon:PackIconRemixIcon.Style>
-                                        <Style TargetType="icon:PackIconRemixIcon">
-                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding UseVault}" Value="True">
-                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </icon:PackIconRemixIcon.Style>
-                                </icon:PackIconRemixIcon>
-                                <TextBlock Text="{Binding HostName}" FontWeight="Bold" FontSize="16" Foreground="White" VerticalAlignment="Center"/>
+                        <Grid>
+                            <!-- 发行版 logo 水印：右侧、文字下层，随 LinuxDistro 实时刷新 -->
+                            <Image Source="{Binding LinuxDistro, Converter={StaticResource DistroLogoConverter}}"
+                                   Width="76" Height="76" Stretch="Uniform"
+                                   HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
+                                    <icon:PackIconRemixIcon Kind="LockPasswordLine" Foreground="#00BCFF" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,5,0" ToolTip="由 Windows Hello 凭据保险箱保护">
+                                        <icon:PackIconRemixIcon.Style>
+                                            <Style TargetType="icon:PackIconRemixIcon">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding UseVault}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </icon:PackIconRemixIcon.Style>
+                                    </icon:PackIconRemixIcon>
+                                    <TextBlock Text="{Binding HostName}" FontWeight="Bold" FontSize="16" Foreground="White" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding IpAddress}" FontSize="13" Foreground="#B0BEC5"/>
+                                <TextBlock Text="{Binding SimpleIpGEO}" FontSize="11" Foreground="#78909C" Margin="0,2,0,0"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                    <TextBlock Text="{Binding SshUser}" FontSize="12" Foreground="#78909C"/>
+                                    <TextBlock Text=" : " FontSize="12" Foreground="#78909C"/>
+                                    <TextBlock Text="{Binding SshPort}" FontSize="12" Foreground="#78909C"/>
+                                </StackPanel>
                             </StackPanel>
-                            <TextBlock Text="{Binding IpAddress}" FontSize="13" Foreground="#B0BEC5"/>
-                            <TextBlock Text="{Binding SimpleIpGEO}" FontSize="11" Foreground="#78909C" Margin="0,2,0,0"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
-                                <TextBlock Text="{Binding SshUser}" FontSize="12" Foreground="#78909C"/>
-                                <TextBlock Text=" : " FontSize="12" Foreground="#78909C"/>
-                                <TextBlock Text="{Binding SshPort}" FontSize="12" Foreground="#78909C"/>
-                            </StackPanel>
-                        </StackPanel>
+                        </Grid>
                     </Border>
                 </DataTemplate>
             </ListBox.ItemTemplate>

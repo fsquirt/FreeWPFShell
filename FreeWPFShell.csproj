@@ -48,6 +48,8 @@
 
   <ItemGroup>
     <None Include="IPDataBase\**\*.mmdb" CopyToOutputDirectory="PreserveNewest" LinkBase="IPDataBase" />
+    <!-- 发行版 logo（首页主机卡片水印），Resource 方式嵌入程序集 -->
+    <Resource Include="LinuxLogo\*.png" />
   </ItemGroup>
 
   <!-- 排除测试项目目录，避免测试代码被主项目默认编译规则包含 -->

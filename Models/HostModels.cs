@@ -1,9 +1,15 @@
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
 
 namespace FreeWPFShell.Models
 {
-    public class SshConnectionInfo
+    public class SshConnectionInfo : INotifyPropertyChanged
     {
+        public event PropertyChangedEventHandler? PropertyChanged;
+        private void OnPropertyChanged([CallerMemberName] string? name = null)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+
         public string Id { get; set; } = string.Empty;
         public string HostName { get; set; } = string.Empty;
         public string IpAddress { get; set; } = string.Empty;
@@ -16,6 +22,14 @@ namespace FreeWPFShell.Models
         public string? ProtectedSecret { get; set; }
         /// <summary>密钥登录时引用的 Key ID（来自 KeyRepository）</summary>
         public string? SshKeyId { get; set; }
+
+        private string _linuxDistro = string.Empty;
+        /// <summary>发行版标识（探针读取 /etc/os-release 的 ID= 上报，连接时刷新并持久化），用于匹配首页卡片 logo</summary>
+        public string LinuxDistro
+        {
+            get => _linuxDistro;
+            set { if (_linuxDistro != value) { _linuxDistro = value; OnPropertyChanged(); } }
+        }
 
         [JsonIgnore] public string? DecryptedSshSecret { get; set; }
         [JsonIgnore] public string? SimpleIpGEO { get; set; }

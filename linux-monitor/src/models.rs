@@ -98,6 +98,7 @@ pub struct SysStats {
     pub rx_speed: u64,
     pub tx_speed: u64,
     pub iface: String,
+    pub os_id: String,
     pub processes: Vec<ProcessItem>,
     pub disks: Vec<DiskItem>,
 }
@@ -107,7 +108,7 @@ impl SysStats {
         let procs = json_array(&self.processes, |p| p.json());
         let disks = json_array(&self.disks, |d| d.json());
         format!(
-            "{{\"cpu_pct\":{:.2},\"mem_used\":{},\"mem_total\":{},\"swap_used\":{},\"swap_total\":{},\"uptime\":\"{}\",\"load\":\"{}\",\"rx_speed\":{},\"tx_speed\":{},\"iface\":\"{}\",\"processes\":{},\"disks\":{}}}",
+            "{{\"cpu_pct\":{:.2},\"mem_used\":{},\"mem_total\":{},\"swap_used\":{},\"swap_total\":{},\"uptime\":\"{}\",\"load\":\"{}\",\"rx_speed\":{},\"tx_speed\":{},\"iface\":\"{}\",\"os_id\":\"{}\",\"processes\":{},\"disks\":{}}}",
             self.cpu_pct,
             self.mem_used,
             self.mem_total,
@@ -118,6 +119,7 @@ impl SysStats {
             self.rx_speed,
             self.tx_speed,
             json_escape(&self.iface),
+            json_escape(&self.os_id),
             procs,
             disks
         )

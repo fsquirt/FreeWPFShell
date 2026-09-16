@@ -18,6 +18,8 @@ namespace FreeWPFShell.Models.Dto
         public ulong rx_speed { get; set; }
         public ulong tx_speed { get; set; }
         public string iface { get; set; } = string.Empty;
+        /// <summary>发行版标识（/etc/os-release 的 ID=，如 debian/ubuntu/almalinux），用于匹配 logo</summary>
+        public string os_id { get; set; } = string.Empty;
         public List<ProcessItem> processes { get; set; } = new();
         public List<DiskItem> disks { get; set; } = new();
     }

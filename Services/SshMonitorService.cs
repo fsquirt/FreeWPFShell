@@ -65,6 +65,9 @@ namespace FreeWPFShell.Services
         public Action<SshTunnelInfo>? RegisterTunnelCallback { get; set; }
         // 当监控轮询检测到 SSH 连接断开时触发，用于清理会话相关资源（如隧道）
         public Action? ConnectionLostCallback { get; set; }
+        // 探针上报发行版标识（/etc/os-release 的 ID=）时触发，连接建立后首次 stats 即回调
+        public Action<string>? DistroDetectedCallback { get; set; }
+        private string _lastDistro = "";
 
         private void NotifyStatus(string status)
         {
@@ -221,6 +224,12 @@ namespace FreeWPFShell.Services
             double maxVal = Monitor.GetNetHistoryMax();
             Monitor.NetMax = FormatNetSpeed(maxVal);
             Monitor.NetMid = FormatNetSpeed(maxVal / 2);
+
+            if (!string.IsNullOrEmpty(stats.os_id) && stats.os_id != _lastDistro)
+            {
+                _lastDistro = stats.os_id;
+                DistroDetectedCallback?.Invoke(stats.os_id);
+            }
 
             if (stats.processes != null && stats.processes.Count > 0)
                 Monitor.UpdateProcesses(stats.processes);

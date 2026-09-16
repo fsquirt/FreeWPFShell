@@ -231,6 +231,22 @@ namespace FreeWPFShell.Services
                             _monitorService.MonitorUpdated += (s, e) => MonitorUpdated?.Invoke(this, e);
                             _monitorService.ConnectionStatusCallback = (status) => ConnectionStatus = status;
                             _monitorService.RegisterTunnelCallback = RegisterTunnel;
+                            // 探针上报发行版标识：先持久化到 hosts.json（再刷新内存值）。
+                            // 顺序不能反：HostInfo 与列表/仓库是同一实例，先赋值会让
+                            // UpdateLinuxDistro 的变更检查误判"无变化"而跳过 Save
+                            _monitorService.DistroDetectedCallback = distro =>
+                            {
+                                Task.Run(() =>
+                                {
+                                    try
+                                    {
+                                        var repo = Core.AppServices.GetService<Repositories.HostRepository>();
+                                        repo.UpdateLinuxDistro(HostInfo.Id, distro);
+                                        HostInfo.LinuxDistro = distro;
+                                    }
+                                    catch (Exception ex) { Debug.WriteLine("保存发行版标识失败: " + ex.Message); }
+                                });
+                            };
                             // 监控轮询检测到连接断开时，自动清理隧道（兜底信号，覆盖终端流未及时返回 0 的场景）
                             _monitorService.ConnectionLostCallback = CleanupTunnels;
                             _monitorService.StartAsync().GetAwaiter().GetResult();

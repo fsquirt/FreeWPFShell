@@ -84,6 +84,15 @@ namespace FreeWPFShell.Repositories
             });
         }
 
+        /// <summary>探针上报发行版标识后持久化（连接时刷新）。</summary>
+        public void UpdateLinuxDistro(string id, string distro)
+        {
+            var host = FindById(id);
+            if (host == null || host.LinuxDistro == distro) return;
+            host.LinuxDistro = distro;
+            Save();
+        }
+
         public void Delete(string id)
         {
             var host = FindById(id);

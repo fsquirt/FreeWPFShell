@@ -40,6 +40,7 @@ pub struct Collector {
     prev_net_time: Option<std::time::Instant>,
     page_size: u64,
     ncpus: u64,
+    os_id: String,                         // /etc/os-release 的 ID=（发行版标识）
 }
 
 impl Collector {
@@ -51,6 +52,7 @@ impl Collector {
             prev_net_time: None,
             page_size: unsafe { sysconf(SC_PAGESIZE) }.max(512) as u64,
             ncpus: unsafe { sysconf(SC_NPROCESSORS_ONLN) }.max(1) as u64,
+            os_id: read_os_id(),
         }
     }
 
@@ -154,11 +156,24 @@ impl Collector {
             rx_speed,
             tx_speed,
             iface,
+            os_id: self.os_id.clone(),
             processes: all_processes.iter().take(15).cloned().collect(),
             disks,
         };
         (stats, all_processes)
     }
+}
+
+/// 读取 /etc/os-release 的 ID= 字段（发行版标识，如 debian/ubuntu/almalinux）。
+/// 客户端用它匹配发行版 logo。
+fn read_os_id() -> String {
+    let Ok(content) = fs::read_to_string("/etc/os-release") else { return String::new() };
+    for line in content.lines() {
+        if let Some(v) = line.strip_prefix("ID=") {
+            return v.trim().trim_matches('"').to_string();
+        }
+    }
+    String::new()
 }
 
 fn parse_pct(s: &str) -> f64 {
