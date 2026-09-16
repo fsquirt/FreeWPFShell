@@ -75,6 +75,7 @@ namespace FreeWPFShell.Repositories
                 existing.SshPort = updated.SshPort;
                 existing.SshUser = updated.SshUser;
                 existing.AuthMethod = updated.AuthMethod;
+                existing.SshKeyId = updated.SshKeyId;
                 existing.UseProxy = updated.UseProxy;
                 existing.Proxy = updated.Proxy;
                 if (!string.IsNullOrEmpty(newSecret))
