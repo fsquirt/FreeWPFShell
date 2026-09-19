@@ -267,7 +267,12 @@ namespace FreeWPFShell.Views
         {
             var history = d.NetHistory;
             int count = history.Count;
-            if (count == 0) return;
+            if (count == 0)
+            {
+                NetChartCanvas.Children.Clear();
+                _chartInitialized = false;
+                return;
+            }
 
             double width = NetChartCanvas.ActualWidth, height = NetChartCanvas.ActualHeight;
             if (width == 0 || height == 0) return;

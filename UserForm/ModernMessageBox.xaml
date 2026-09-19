@@ -35,6 +35,12 @@
                 <mica:Button x:Name="BtnNo" Content="否" Width="80" Height="30" Click="BtnNo_Click" Visibility="Collapsed"/>
                 <mica:Button x:Name="BtnOk" Content="确定" Width="80" Height="30" Click="BtnOk_Click" Visibility="Visible"/>
             </StackPanel>
+
+            <StackPanel x:Name="PnlOptions" Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,20,0" Visibility="Collapsed">
+                <mica:Button x:Name="BtnOpt1" Height="30" MinWidth="96" Padding="14,0" Margin="0,0,10,0" Click="BtnOpt_Click" Tag="1"/>
+                <mica:Button x:Name="BtnOpt2" Height="30" MinWidth="96" Padding="14,0" Margin="0,0,10,0" Click="BtnOpt_Click" Tag="2"/>
+                <mica:Button x:Name="BtnOpt3" Height="30" MinWidth="96" Padding="14,0" Click="BtnOpt_Click" Tag="3"/>
+            </StackPanel>
         </Grid>
     </Border>
 </mica:MicaWindow>

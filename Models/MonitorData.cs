@@ -95,6 +95,26 @@ namespace FreeWPFShell.Models
         }
 
 
+        public void Reset()
+        {
+            CpuPct = 0;
+            MemPct = 0; MemText = "0M/0M";
+            SwapPct = 0; SwapText = "0M/0M";
+            Uptime = "运行 -- 天...";
+            Load = "负载 --, --, --";
+            NetUp = "0K/s"; NetDown = "0K/s"; NetIface = "--";
+            NetMax = "100K"; NetMid = "50K";
+            NetRxSpeed = 0; NetTxSpeed = 0;
+            Ping = "--ms";
+
+            _netHistoryCount = 0;
+            OnPropertyChanged(nameof(NetHistory));
+
+            UpdateProcesses(System.Array.Empty<ProcessItem>());
+            UpdateDisks(System.Array.Empty<DiskItem>());
+        }
+
+
         public void NotifyBulkRefresh()
         {
             OnPropertyChanged(nameof(CpuPct));

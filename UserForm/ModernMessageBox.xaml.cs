@@ -11,6 +11,8 @@ namespace FreeWPFShell.UserForm
     {
         public MessageBoxResult Result { get; private set; } = MessageBoxResult.Cancel;
 
+        public int OptionIndex { get; private set; }
+
         public ModernMessageBox(string message, string title, MessageBoxButton button, MessageBoxImage image)
         {
             InitializeComponent();
@@ -86,6 +88,37 @@ namespace FreeWPFShell.UserForm
         {
             Result = MessageBoxResult.OK;
             DialogResult = true;
+        }
+
+        private void BtnOpt_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.Tag is string tag && int.TryParse(tag, out int index))
+                OptionIndex = index;
+
+            DialogResult = true;
+        }
+
+        public static int ShowOptions(string message, string title, string option1, string option2, string option3, MessageBoxImage image = MessageBoxImage.Question)
+        {
+            return App.Current.Dispatcher.Invoke(() =>
+            {
+                var msgBox = new ModernMessageBox(message, title, MessageBoxButton.OK, image);
+
+                msgBox.BtnOpt1.Content = option1;
+                msgBox.BtnOpt2.Content = option2;
+                msgBox.BtnOpt3.Content = option3;
+                msgBox.PnlButtons.Visibility = Visibility.Collapsed;
+                msgBox.PnlOptions.Visibility = Visibility.Visible;
+
+                var mainWin = Application.Current.MainWindow;
+                if (mainWin != null && mainWin.IsVisible)
+                {
+                    try { msgBox.Owner = mainWin; } catch { }
+                }
+
+                msgBox.ShowDialog();
+                return msgBox.OptionIndex;
+            });
         }
 
         public static MessageBoxResult Show(string message, string title = "提示", MessageBoxButton button = MessageBoxButton.OK, MessageBoxImage image = MessageBoxImage.None)

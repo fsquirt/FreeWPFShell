@@ -231,6 +231,7 @@ namespace FreeWPFShell.Services
                             _monitorService.MonitorUpdated += (s, e) => MonitorUpdated?.Invoke(this, e);
                             _monitorService.ConnectionStatusCallback = (status) => ConnectionStatus = status;
                             _monitorService.RegisterTunnelCallback = RegisterTunnel;
+                            _monitorService.UnregisterTunnelCallback = id => SshTunnelManager.Instance.UnregisterTunnel(id);
 
                             _monitorService.DistroDetectedCallback = distro =>
                             {

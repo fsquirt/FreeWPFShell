@@ -31,10 +31,15 @@ namespace FreeWPFShell.Services
         public event EventHandler<MonitorData>? MonitorUpdated;
 
         public uint LinuxMonitorLocalPort { get; private set; } = 0;
+        private ForwardedPortLocal? _monitorPort;
         private string _monitorToken = "";
         private CancellationTokenSource? _monitorCts;
         private Timer? _monitorTimer;
         private int _tickCount;
+
+        private int _probeFailStreak;
+        private int _probeDialogPending;
+        private const int ProbeFailThreshold = 3;
 
         private ulong _lastCpuTotal, _lastCpuIdle;
         private ulong _lastRx, _lastTx;
@@ -63,6 +68,7 @@ namespace FreeWPFShell.Services
 
         public Action<string>? ConnectionStatusCallback { get; set; }
         public Action<SshTunnelInfo>? RegisterTunnelCallback { get; set; }
+        public Action<string>? UnregisterTunnelCallback { get; set; }
 
         public Action? ConnectionLostCallback { get; set; }
 
@@ -151,22 +157,37 @@ namespace FreeWPFShell.Services
         {
             if (!_sshClient.IsConnected)
             {
-
                 ConnectionLostCallback?.Invoke();
                 _monitorTimer?.Stop();
                 return;
             }
             _tickCount++;
             await PingCheckAsync();
-            try
+
+            if (LinuxMonitorLocalPort > 0)
             {
-                if (LinuxMonitorLocalPort > 0)
+                try
                 {
                     string json = await SendAsync("stats");
                     ParseLinuxMonitorJson(json);
+                    _probeFailStreak = 0;
                     return;
                 }
+                catch (Exception ex)
+                {
+                    _probeFailStreak++;
+                    Debug.WriteLine($"[Monitor] 探针采样失败({_probeFailStreak}/{ProbeFailThreshold}): {ex.Message}");
+                    if (_probeFailStreak >= ProbeFailThreshold)
+                    {
+                        _probeFailStreak = 0;
+                        await AskProbeFallbackAsync(ex.Message);
+                        return;
+                    }
+                }
+            }
 
+            try
+            {
                 _cmdBuilder.Clear();
                 _cmdBuilder.Append("echo \"==STAT==\"; head -n 1 /proc/stat; echo \"==TOP==\"; top -b -n 1 | head -n 5; echo \"==PROC==\"; ps axo %mem,%cpu,command --sort=-%cpu | head -n 11; echo \"==NET==\"; cat /proc/net/dev");
                 if (_tickCount % 60 == 1)
@@ -176,6 +197,107 @@ namespace FreeWPFShell.Services
                 ParseTopOutput(result);
             }
             catch { }
+        }
+
+        private void ReleaseProbePort()
+        {
+            var port = _monitorPort;
+            _monitorPort = null;
+            LinuxMonitorLocalPort = 0;
+            _monitorToken = "";
+            _probeFailStreak = 0;
+
+            try { port?.Stop(); } catch { }
+            try { if (port != null) _sshClient.RemoveForwardedPort(port); } catch { }
+            try { UnregisterTunnelCallback?.Invoke($"Mon_{_sessionId}"); } catch { }
+        }
+
+        private void TearDownProbe(string reason)
+        {
+            Debug.WriteLine("[Monitor] 探针不可用，回退 Shell 解析模式: " + reason);
+            ReleaseProbePort();
+            NotifyStatus("探针不可用，已回退 Shell 解析模式");
+        }
+
+        private void DisableMonitor(string reason)
+        {
+            Debug.WriteLine("[Monitor] 用户选择仅使用 SSH + SFTP，停止监控采集: " + reason);
+            ReleaseProbePort();
+            try { _monitorCts?.Cancel(); } catch { }
+
+            Monitor.Reset();
+            MonitorUpdated?.Invoke(this, Monitor);
+
+            NotifyStatus("监控已关闭（仅使用 SSH + SFTP）");
+        }
+
+        private async Task AskProbeFallbackAsync(string reason)
+        {
+            if (Interlocked.CompareExchange(ref _probeDialogPending, 1, 0) != 0) return;
+
+            bool resumeTimer = true;
+            try
+            {
+                _monitorTimer?.Stop();
+
+                int choice = await Task.Run(() => UserForm.ModernMessageBox.ShowOptions(
+                    $"Linux 监控探针连续 {ProbeFailThreshold} 次无响应，已无法获取实时监控数据。\n\n错误信息：{reason}\n\n请选择后续的监控方式：\n\n重新部署探针：重新上传并启动探针，保留完整的监控能力\n改用 Shell 解析：停用探针，改用 SSH 命令解析，数据粒度较低\n仅使用 SSH + SFTP：关闭监控采集，只保留终端与文件传输",
+                    "监控探针无响应",
+                    "重新部署探针",
+                    "改用 Shell 解析",
+                    "仅使用 SSH + SFTP",
+                    System.Windows.MessageBoxImage.Warning));
+
+                switch (choice)
+                {
+                    case 1:
+                        NotifyStatus("探针无响应，正在重新部署...");
+                        if (await RedeployProbeAsync()) return;
+                        NotifyStatus("探针重新部署失败，已回退 Shell 解析模式");
+                        TearDownProbe(reason);
+                        break;
+
+                    case 3:
+                        resumeTimer = false;
+                        DisableMonitor(reason);
+                        break;
+
+                    default:
+                        TearDownProbe(reason);
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("[Monitor] 处理探针失败时出错: " + ex.Message);
+                TearDownProbe(reason);
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _probeDialogPending, 0);
+                if (resumeTimer) _monitorTimer?.Start();
+            }
+        }
+
+        private async Task<bool> RedeployProbeAsync()
+        {
+            try
+            {
+                ReleaseProbePort();
+
+                await DeployLinuxMonitorAsync();
+                if (LinuxMonitorLocalPort == 0) return false;
+
+                string json = await SendAsync("stats", timeoutMs: 3000);
+                ParseLinuxMonitorJson(json);
+                NotifyStatus("探针已重新部署");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("[Monitor] 重新部署探针失败: " + ex.Message);
+                return false;
+            }
         }
 
         private async Task PingCheckAsync()
@@ -378,6 +500,15 @@ namespace FreeWPFShell.Services
 
 
             await Task.Run(() => port.Start());
+            _monitorPort = port;
+
+            string binPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "linux-monitor", "linux-monitor");
+            if (!File.Exists(binPath))
+            {
+                Debug.WriteLine("[Monitor] 未找到本地探针二进制，回退 Shell 解析: " + binPath);
+                TearDownProbe("未找到本地探针二进制");
+                return;
+            }
 
             var tunnelInfo = new SshTunnelInfo
             {
@@ -390,9 +521,6 @@ namespace FreeWPFShell.Services
             };
 
             RegisterTunnelCallback?.Invoke(tunnelInfo);
-
-            string binPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "linux-monitor", "linux-monitor");
-            if (!File.Exists(binPath)) return;
 
 
             string localHash = "";
@@ -463,6 +591,8 @@ namespace FreeWPFShell.Services
                 _sshClient.CreateCommand($"pkill -9 -f \"linux-monitor {LinuxMonitorLocalPort}\"").Execute();
                 _sshClient.CreateCommand($"nohup /tmp/FreeWPFShell/linux-monitor {LinuxMonitorLocalPort} {tokenPath} >/dev/null 2>&1 &").Execute();
             });
+
+            _probeFailStreak = 0;
         }
 
         public async Task<ProcessDetail?> GetProcessDetailAsync(uint pid)
@@ -629,11 +759,17 @@ namespace FreeWPFShell.Services
 
             try { _ping.Dispose(); } catch { }
 
+            var monitorPort = _monitorPort;
+            _monitorPort = null;
+
             if (LinuxMonitorLocalPort > 0 && _sshClient != null && _sshClient.IsConnected)
             {
                 try { _sshClient.CreateCommand($"pkill -9 -f \"linux-monitor {LinuxMonitorLocalPort}\"")?.Execute(); } catch { }
                 try { _sshClient.CreateCommand($"rm -f /tmp/FreeWPFShell/.mon_token_{LinuxMonitorLocalPort}")?.Execute(); } catch { }
             }
+
+            try { monitorPort?.Stop(); } catch { }
+            try { if (monitorPort != null) _sshClient?.RemoveForwardedPort(monitorPort); } catch { }
         }
 
         public void Dispose() => Stop();
