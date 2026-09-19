@@ -391,6 +391,13 @@ namespace FreeWPFShell.Services
 
             new Thread(() =>
             {
+                try
+                {
+                    if (TerminalConnection != null)
+                        TerminalConnection.ConnectionLost -= OnTerminalConnectionLost;
+                }
+                catch { }
+
                 try { TerminalConnection?.Close(); } catch { }
                 TerminalConnection = null;
 
@@ -412,14 +419,6 @@ namespace FreeWPFShell.Services
                 _fileService = null;
 
 
-                try
-                {
-                    if (TerminalConnection != null)
-                    {
-                        TerminalConnection.ConnectionLost -= OnTerminalConnectionLost;
-                    }
-                }
-                catch { }
                 try { _tunnelService?.Dispose(); } catch { }
 
                 try
