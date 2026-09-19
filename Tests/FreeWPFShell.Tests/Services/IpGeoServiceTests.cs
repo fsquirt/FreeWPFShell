@@ -35,6 +35,25 @@ namespace FreeWPFShell.Tests.Services
         }
 
         [TestMethod]
+        [DataRow("::1")]
+        [DataRow("fe80::1")]
+        [DataRow("fc00::1")]
+        [DataRow("100.64.0.1")]
+        public void Query_PrivateIpv6AndCgnat_IsInternal(string ip)
+        {
+            var result = IpGeoService.Instance.Query(ip);
+            Assert.AreEqual("内网IP", result.SimpleGeo, $"{ip} 应判定为内网");
+        }
+
+        [TestMethod]
+        [DataRow("2001:4860:4860::8888")]
+        public void Query_PublicIpv6_NotInternal(string ip)
+        {
+            var result = IpGeoService.Instance.Query(ip);
+            Assert.AreNotEqual("内网IP", result.SimpleGeo, $"{ip} 不应判定为内网");
+        }
+
+        [TestMethod]
         public void Query_InvalidIp_DoesNotThrow()
         {
 

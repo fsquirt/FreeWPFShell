@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
+using System.Net.Sockets;
 using MaxMind.Db;
 
 using FreeWPFShell.Models;
@@ -171,6 +172,18 @@ namespace FreeWPFShell.Share
 
         private static bool IsPrivate(IPAddress ip)
         {
+            if (ip.AddressFamily == AddressFamily.InterNetworkV6)
+            {
+                if (IPAddress.IsLoopback(ip)) return true;
+                if (ip.IsIPv6LinkLocal) return true;
+                if (ip.IsIPv6SiteLocal) return true;
+                if (ip.IsIPv6UniqueLocal) return true;
+                if (ip.Equals(IPAddress.IPv6Any)) return true;
+                if (ip.IsIPv4MappedToIPv6) return IsPrivate(ip.MapToIPv4());
+                return false;
+            }
+
+            if (IPAddress.IsLoopback(ip)) return true;
 
             string s = ip.ToString();
 
@@ -193,6 +206,7 @@ namespace FreeWPFShell.Share
             if (first == 172 && second >= 16 && second <= 31) return true;
             if (first == 192 && second == 168) return true;
             if (first == 169 && second == 254) return true;
+            if (first == 100 && second >= 64 && second <= 127) return true;
 
             return false;
         }
