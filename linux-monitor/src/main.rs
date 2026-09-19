@@ -25,7 +25,7 @@ use std::net::{TcpListener, TcpStream};
 use std::path::Path;
 
 
-const MAX_FRAME_LEN: usize = 10 * 1024 * 1024;
+const MAX_FRAME_LEN: usize = 16 * 1024 * 1024;
 
 const READ_TIMEOUT: Duration = Duration::from_secs(15);
 

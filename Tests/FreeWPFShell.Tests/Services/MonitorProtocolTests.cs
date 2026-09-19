@@ -54,6 +54,22 @@ namespace FreeWPFShell.Tests.Services
         }
 
         [TestMethod]
+        public void MaxFrameLength_MatchesProbeLimit()
+        {
+            Assert.AreEqual(16 * 1024 * 1024, MonitorProtocol.MaxFrameLength);
+        }
+
+        [TestMethod]
+        public void ReadFrame_RejectsFrameJustOverLimit()
+        {
+            var header = new byte[4];
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(
+                header, (uint)(MonitorProtocol.MaxFrameLength + 1));
+            using var ms = new MemoryStream(header);
+            Assert.ThrowsException<IOException>(() => MonitorProtocol.ReadFrame(ms));
+        }
+
+        [TestMethod]
         public void BuildEnvelope_ContainsOpTokenAndArgs()
         {
             var bytes = MonitorProtocol.BuildEnvelope("tok-123", "kill", new Dictionary<string, object?>

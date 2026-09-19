@@ -14,7 +14,7 @@ namespace FreeWPFShell.Services
     public static class MonitorProtocol
     {
 
-        public const int MaxFrameLength = 64 * 1024 * 1024;
+        public const int MaxFrameLength = 16 * 1024 * 1024;
 
 
         public const int DefaultTimeoutMs = 10_000;
