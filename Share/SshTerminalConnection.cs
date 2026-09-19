@@ -23,6 +23,8 @@ namespace FreeWPFShell
         private string _cursorScanTail = "";
         private bool? _lastAppCursorMode;
 
+        private readonly Decoder _utf8Decoder = new UTF8Encoding(false).GetDecoder();
+
         public event EventHandler<TerminalOutputEventArgs>? TerminalOutput;
 
 
@@ -88,6 +90,7 @@ namespace FreeWPFShell
         private async Task ReadOutputAsync(CancellationToken token)
         {
             var buffer = new byte[8192];
+            var charBuffer = new char[Encoding.UTF8.GetMaxCharCount(buffer.Length)];
 
             try
             {
@@ -96,8 +99,10 @@ namespace FreeWPFShell
                     int bytesRead = await _shellStream.ReadAsync(buffer, 0, buffer.Length, token);
                     if (bytesRead > 0)
                     {
-                        string data = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                        int charCount = _utf8Decoder.GetChars(buffer, 0, bytesRead, charBuffer, 0, false);
+                        if (charCount <= 0) continue;
 
+                        string data = new string(charBuffer, 0, charCount);
 
                         DetectCursorMode(data);
 
