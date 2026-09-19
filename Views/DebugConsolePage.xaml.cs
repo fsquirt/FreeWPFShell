@@ -1,6 +1,9 @@
 using System;
+using System.Diagnostics;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
 using FreeWPFShell.Services;
@@ -28,6 +31,58 @@ namespace FreeWPFShell.Views
 
             DebugConsoleService.Instance.Output += OnOutput;
         }
+
+        private void BtnGc_Click(object sender, RoutedEventArgs e)
+        {
+            Task.Run(() =>
+            {
+                long before = GC.GetTotalMemory(false);
+                int g0 = GC.CollectionCount(0), g1 = GC.CollectionCount(1), g2 = GC.CollectionCount(2);
+                var sw = Stopwatch.StartNew();
+
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                GC.Collect();
+
+                sw.Stop();
+                long after = GC.GetTotalMemory(false);
+
+                DebugConsoleService.Log($"[GC] 托管堆 {FormatBytes(before)} → {FormatBytes(after)}，释放 {FormatBytes(Math.Max(0, before - after))}，耗时 {sw.ElapsedMilliseconds}ms，各代回收 {GC.CollectionCount(0) - g0}/{GC.CollectionCount(1) - g1}/{GC.CollectionCount(2) - g2}");
+            });
+        }
+
+        private void BtnTerminalForm_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var window = new FreeWPFShell.View.TerminalForm();
+                window.Show();
+                DebugConsoleService.Log("[Debug] 已打开 TerminalForm 窗口");
+            }
+            catch (Exception ex)
+            {
+                DebugConsoleService.Log("[Debug] 打开 TerminalForm 失败: " + ex.Message);
+            }
+        }
+
+        private void BtnTerminalWithOther_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var window = new FreeWPFShell.DebugForm.TerminalWithOther();
+                window.Show();
+                DebugConsoleService.Log("[Debug] 已打开 TerminalWithOther 窗口");
+            }
+            catch (Exception ex)
+            {
+                DebugConsoleService.Log("[Debug] 打开 TerminalWithOther 失败: " + ex.Message);
+            }
+        }
+
+        private static string FormatBytes(long bytes)
+            => bytes >= 1073741824L
+                ? (bytes / 1073741824.0).ToString("F2") + " GB"
+                : (bytes / 1048576.0).ToString("F2") + " MB";
 
         private void OnOutput(string text)
         {
