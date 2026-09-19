@@ -19,6 +19,10 @@ namespace FreeWPFShell
         private bool _connectionLostTriggered = false;
         private bool _started;
 
+        private const int CursorScanTailLength = 4;
+        private string _cursorScanTail = "";
+        private bool? _lastAppCursorMode;
+
         public event EventHandler<TerminalOutputEventArgs>? TerminalOutput;
 
 
@@ -85,8 +89,6 @@ namespace FreeWPFShell
         {
             var buffer = new byte[8192];
 
-            var scanBuffer = new StringBuilder(256);
-
             try
             {
                 while (!token.IsCancellationRequested && _shellStream != null && _shellStream.CanRead)
@@ -124,13 +126,27 @@ namespace FreeWPFShell
 
         private void DetectCursorMode(string data)
         {
+            string scan = _cursorScanTail + data;
+            _cursorScanTail = scan.Length > CursorScanTailLength
+                ? scan.Substring(scan.Length - CursorScanTailLength)
+                : scan;
 
-            if (!data.Contains('\x1b')) return;
+            if (scan.IndexOf('\x1b') < 0) return;
 
-            if (data.Contains("\x1b[?1h"))
-                AppCursorModeChanged?.Invoke(true);
-            if (data.Contains("\x1b[?1l"))
-                AppCursorModeChanged?.Invoke(false);
+            const string appModeOn = "\x1b[?1h";
+            const string appModeOff = "\x1b[?1l";
+
+            int lastOn = scan.LastIndexOf(appModeOn, StringComparison.Ordinal);
+            int lastOff = scan.LastIndexOf(appModeOff, StringComparison.Ordinal);
+            if (lastOn < 0 && lastOff < 0) return;
+
+            bool isApp = lastOn > lastOff;
+
+            if (_lastAppCursorMode != isApp)
+            {
+                _lastAppCursorMode = isApp;
+                AppCursorModeChanged?.Invoke(isApp);
+            }
         }
 
         public void WriteInput(string data)
@@ -172,6 +188,8 @@ namespace FreeWPFShell
             _cts?.Cancel();
             _started = false;
             _connectionLostTriggered = false;
+            _cursorScanTail = "";
+            _lastAppCursorMode = null;
             try { _shellStream?.Dispose(); } catch { }
             _shellStream = null;
 
