@@ -147,6 +147,7 @@ namespace FreeWPFShell.Services
             }
 
             ConnectionStatus = "SSH.NET 建立连接...";
+            DebugConsoleService.Log($"[SSH] {DisplayName} 开始连接 {HostInfo.SshUser}@{HostInfo.IpAddress}:{HostInfo.SshPort}");
 
             new Thread(() =>
             {
@@ -160,12 +161,14 @@ namespace FreeWPFShell.Services
                         ConnectionStatus = "连接跳板机...";
                         _jumpClient = BuildJumpClient(jumpKey);
                         _jumpClient.Connect();
+                        DebugConsoleService.Log($"[SSH] 跳板机 {HostInfo.Proxy?.ServerAddress} 已连接");
 
                         ConnectionStatus = "建立SSH隧道...";
                         uint localPort = (uint)Random.Shared.Next(40000, 60000);
                         _jumpPort = new ForwardedPortLocal("127.0.0.1", localPort, HostInfo.IpAddress, (uint)HostInfo.SshPort);
                         _jumpClient.AddForwardedPort(_jumpPort);
                         _jumpPort.Start();
+                        DebugConsoleService.Log($"[SSH] 跳板隧道 127.0.0.1:{localPort} → {HostInfo.IpAddress}:{HostInfo.SshPort}");
 
 
                         var tunnelInfo = new SshTunnelInfo
@@ -192,6 +195,7 @@ namespace FreeWPFShell.Services
                     }
 
                     MasterClient.Connect();
+                    DebugConsoleService.Log($"[SSH] {DisplayName} SSH 连接已建立");
 
                     TerminalConnection = new SshTerminalConnection(MasterClient!, 120, 30);
                     TerminalConnection.InjectChineseLocale = settings.InjectChineseLocale;
@@ -204,6 +208,7 @@ namespace FreeWPFShell.Services
 
 
                     TerminalConnection.Start();
+                    DebugConsoleService.Log("[SSH] 交互终端已启动 120x30");
 
                     IsConnected = true;
                     Application.Current?.Dispatcher.BeginInvoke(() => OnConnected?.Invoke());
@@ -218,10 +223,11 @@ namespace FreeWPFShell.Services
                         IsSftpConnected = true;
                         _fileService = new RemoteFileService(SftpClient, _sftpLock, SessionId);
                         StartSftpWatchdog();
+                        DebugConsoleService.Log("[SFTP] 已连接，自动重连看门狗已启动");
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine("SFTP Connection Failed: " + ex.Message);
+                        DebugConsoleService.Log("[SFTP] 建立连接失败: " + ex.Message);
                     }
 
 
@@ -245,24 +251,27 @@ namespace FreeWPFShell.Services
                                         repo.UpdateLinuxDistro(HostInfo.Id, distro);
                                         HostInfo.LinuxDistro = distro;
                                     }
-                                    catch (Exception ex) { Debug.WriteLine("保存发行版标识失败: " + ex.Message); }
+                                    catch (Exception ex) { DebugConsoleService.Log("[Monitor] 保存发行版标识失败: " + ex.Message); }
                                 });
                             };
 
                             _monitorService.ConnectionLostCallback = CleanupTunnels;
                             _monitorService.StartAsync().GetAwaiter().GetResult();
+                            DebugConsoleService.Log("[Monitor] 监控服务已启动");
                         }
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine("Monitor Init Failed: " + ex.Message);
+                        DebugConsoleService.Log("[Monitor] 初始化失败: " + ex.Message);
                     }
 
                     ConnectionStatus = "已连接";
+                    DebugConsoleService.Log($"[SSH] {DisplayName} 连接完成");
                 }
                 catch (Exception ex)
                 {
                     ConnectionStatus = "连接失败: " + ex.Message;
+                    DebugConsoleService.Log($"[SSH] {DisplayName} 连接失败: {ex.GetType().Name}: {ex.Message}");
                     Application.Current?.Dispatcher.BeginInvoke(() => OnConnectFailed?.Invoke(ex));
                 }
             })
@@ -307,11 +316,12 @@ namespace FreeWPFShell.Services
                             SwapSftpClient(fresh);
                             IsSftpConnected = true;
                             ConnectionStatus = "已连接";
+                            DebugConsoleService.Log($"[SFTP Reconnect] 第{attempt}次重连成功");
                             return;
                         }
                         catch (Exception ex)
                         {
-                            Debug.WriteLine($"[SFTP Reconnect] 第{attempt}次失败: {ex.Message}");
+                            DebugConsoleService.Log($"[SFTP Reconnect] 第{attempt}次失败: {ex.Message}");
                         }
 
                         Thread.Sleep(SftpReconnectIntervalMs);
@@ -394,6 +404,7 @@ namespace FreeWPFShell.Services
 
             new Thread(() =>
             {
+                DebugConsoleService.Log($"[SSH] 断开会话 {DisplayName}");
                 try
                 {
                     if (TerminalConnection != null)

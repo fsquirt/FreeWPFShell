@@ -1,3 +1,4 @@
+using FreeWPFShell.Services;
 using Microsoft.Terminal.Wpf;
 using Renci.SshNet;
 using System;
@@ -171,7 +172,7 @@ namespace FreeWPFShell
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[SshTerminalConnection WriteInput Error] {ex.Message}");
+                DebugConsoleService.Log($"[SshTerminalConnection WriteInput Error] {ex.Message}");
                 RaiseConnectionLost();
             }
         }

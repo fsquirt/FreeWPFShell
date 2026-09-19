@@ -19,6 +19,8 @@ namespace FreeWPFShell.Services
         {
             var client = new SshClient(BuildConnectionInfo(info, preloadedKey, jumpPort));
             client.ErrorOccurred += OnClientError;
+            string route = jumpPort != null ? $" 经隧道端口 {jumpPort.BoundPort}" : "";
+            DebugConsoleService.Log($"[SSH] 构建 SshClient → {info.SshUser}@{info.IpAddress}:{info.SshPort}{route}");
             return client;
         }
 
@@ -28,6 +30,7 @@ namespace FreeWPFShell.Services
             client.ErrorOccurred += OnClientError;
 
             client.KeepAliveInterval = SftpKeepAliveInterval;
+            DebugConsoleService.Log($"[SFTP] 构建 SftpClient → {info.SshUser}@{info.IpAddress}:{info.SshPort}");
             return client;
         }
 
@@ -52,6 +55,7 @@ namespace FreeWPFShell.Services
 
             var client = new SshClient(connInfo);
             client.ErrorOccurred += OnClientError;
+            DebugConsoleService.Log($"[SSH] 构建跳板机客户端 → {info.Proxy.ServerAddress}:{info.Proxy.Port} 用户 {info.Proxy.Username}");
             return client;
         }
 
@@ -110,7 +114,7 @@ namespace FreeWPFShell.Services
 
         private static void OnClientError(object? sender, ExceptionEventArgs e)
         {
-            try { Debug.WriteLine($"[SshClient Error] {e.Exception?.Message}"); } catch { }
+            try { DebugConsoleService.Log($"[SshClient Error] {e.Exception?.Message}"); } catch { }
         }
     }
 }

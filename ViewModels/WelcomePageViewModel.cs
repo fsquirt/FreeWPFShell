@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FreeWPFShell.Models;
 using FreeWPFShell.Repositories;
+using FreeWPFShell.Services;
 using FreeWPFShell.Share;
 
 namespace FreeWPFShell.ViewModels
@@ -58,7 +59,7 @@ namespace FreeWPFShell.ViewModels
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine("LoadHosts Error: " + ex.Message);
+                DebugConsoleService.Log("LoadHosts Error: " + ex.Message);
             }
         }
 

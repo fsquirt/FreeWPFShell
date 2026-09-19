@@ -107,11 +107,12 @@ namespace FreeWPFShell.Services
         {
             try
             {
+                DebugConsoleService.Log("[Monitor] 开始部署探针");
                 await DeployLinuxMonitorAsync();
             }
             catch (Exception ex)
             {
-                Debug.WriteLine("Deploy Linux Monitor Failed: " + ex.Message);
+                DebugConsoleService.Log("[Monitor] 部署探针失败: " + ex.Message);
             }
 
             try
@@ -119,10 +120,11 @@ namespace FreeWPFShell.Services
                 _monitorCts = new CancellationTokenSource();
                 _monitorTimer = new Timer(2000) { AutoReset = true, Enabled = true };
                 _monitorTimer.Elapsed += OnMonitorTick;
+                DebugConsoleService.Log("[Monitor] 采样定时器已启动 2000ms");
             }
             catch (Exception ex)
             {
-                Debug.WriteLine("Monitor Init Failed: " + ex.Message);
+                DebugConsoleService.Log("[Monitor] 启动采样定时器失败: " + ex.Message);
             }
         }
 
@@ -145,11 +147,11 @@ namespace FreeWPFShell.Services
             {
                 if (LinuxMonitorLocalPort == 0 || !_sshClient.IsConnected) return;
                 SendAsync("exit", timeoutMs: 2000).GetAwaiter().GetResult();
-                Debug.WriteLine("[Monitor] 已向探针发送退出指令");
+                DebugConsoleService.Log("[Monitor] 已向探针发送退出指令");
             }
             catch (Exception ex)
             {
-                Debug.WriteLine("[Monitor] 探针退出指令发送失败: " + ex.Message);
+                DebugConsoleService.Log("[Monitor] 探针退出指令发送失败: " + ex.Message);
             }
         }
 
@@ -176,7 +178,7 @@ namespace FreeWPFShell.Services
                 catch (Exception ex)
                 {
                     _probeFailStreak++;
-                    Debug.WriteLine($"[Monitor] 探针采样失败({_probeFailStreak}/{ProbeFailThreshold}): {ex.Message}");
+                    DebugConsoleService.Log($"[Monitor] 探针采样失败({_probeFailStreak}/{ProbeFailThreshold}): {ex.Message}");
                     if (_probeFailStreak >= ProbeFailThreshold)
                     {
                         _probeFailStreak = 0;
@@ -214,14 +216,14 @@ namespace FreeWPFShell.Services
 
         private void TearDownProbe(string reason)
         {
-            Debug.WriteLine("[Monitor] 探针不可用，回退 Shell 解析模式: " + reason);
+            DebugConsoleService.Log("[Monitor] 探针不可用，回退 Shell 解析模式: " + reason);
             ReleaseProbePort();
             NotifyStatus("探针不可用，已回退 Shell 解析模式");
         }
 
         private void DisableMonitor(string reason)
         {
-            Debug.WriteLine("[Monitor] 用户选择仅使用 SSH + SFTP，停止监控采集: " + reason);
+            DebugConsoleService.Log("[Monitor] 用户选择仅使用 SSH + SFTP，停止监控采集: " + reason);
             ReleaseProbePort();
             try { _monitorCts?.Cancel(); } catch { }
 
@@ -269,7 +271,7 @@ namespace FreeWPFShell.Services
             }
             catch (Exception ex)
             {
-                Debug.WriteLine("[Monitor] 处理探针失败时出错: " + ex.Message);
+                DebugConsoleService.Log("[Monitor] 处理探针失败时出错: " + ex.Message);
                 TearDownProbe(reason);
             }
             finally
@@ -295,7 +297,7 @@ namespace FreeWPFShell.Services
             }
             catch (Exception ex)
             {
-                Debug.WriteLine("[Monitor] 重新部署探针失败: " + ex.Message);
+                DebugConsoleService.Log("[Monitor] 重新部署探针失败: " + ex.Message);
                 return false;
             }
         }
@@ -484,8 +486,16 @@ namespace FreeWPFShell.Services
         private async Task DeployLinuxMonitorAsync()
         {
             var settings = _settingsRepo.Load();
-            if (!settings.UseLinuxMonitor) return;
-            if (!_sshClient.IsConnected || !_sftpClient.IsConnected) return;
+            if (!settings.UseLinuxMonitor)
+            {
+                DebugConsoleService.Log("[Monitor] 设置中未启用 Linux 监控探针，跳过部署");
+                return;
+            }
+            if (!_sshClient.IsConnected || !_sftpClient.IsConnected)
+            {
+                DebugConsoleService.Log("[Monitor] SSH/SFTP 尚未就绪，跳过探针部署");
+                return;
+            }
 
             NotifyStatus("建立 ssh 隧道...");
             LinuxMonitorLocalPort = (uint)(System.Security.Cryptography.RandomNumberGenerator.GetInt32(40000, 60001));
@@ -494,18 +504,19 @@ namespace FreeWPFShell.Services
             var port = new ForwardedPortLocal("127.0.0.1", LinuxMonitorLocalPort, monitorRemoteHost, LinuxMonitorLocalPort);
             port.Exception += (sender, e) =>
             {
-                try { Debug.WriteLine($"[ForwardedPort Exception] {e.Exception?.Message}"); } catch { }
+                try { DebugConsoleService.Log($"[ForwardedPort Exception] {e.Exception?.Message}"); } catch { }
             };
             _sshClient.AddForwardedPort(port);
 
 
             await Task.Run(() => port.Start());
             _monitorPort = port;
+            DebugConsoleService.Log($"[Monitor] 转发已建立 127.0.0.1:{LinuxMonitorLocalPort} → {monitorRemoteHost}:{LinuxMonitorLocalPort}");
 
             string binPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "linux-monitor", "linux-monitor");
             if (!File.Exists(binPath))
             {
-                Debug.WriteLine("[Monitor] 未找到本地探针二进制，回退 Shell 解析: " + binPath);
+                DebugConsoleService.Log("[Monitor] 未找到本地探针二进制，回退 Shell 解析: " + binPath);
                 TearDownProbe("未找到本地探针二进制");
                 return;
             }
@@ -591,6 +602,10 @@ namespace FreeWPFShell.Services
                 _sshClient.CreateCommand($"pkill -9 -f \"linux-monitor {LinuxMonitorLocalPort}\"").Execute();
                 _sshClient.CreateCommand($"nohup /tmp/FreeWPFShell/linux-monitor {LinuxMonitorLocalPort} {tokenPath} >/dev/null 2>&1 &").Execute();
             });
+
+            DebugConsoleService.Log(needsUpload
+                ? $"[Monitor] 探针已上传并启动，端口 {LinuxMonitorLocalPort}"
+                : $"[Monitor] 远端探针哈希一致，直接启动，端口 {LinuxMonitorLocalPort}");
 
             _probeFailStreak = 0;
         }
