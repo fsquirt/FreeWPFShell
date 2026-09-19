@@ -82,6 +82,14 @@ impl Collector {
             (Some((pt, _)), (t, _)) if t > pt => t - pt,
             _ => 0,
         };
+        let cpu_pct = match (self.prev_cpu, total_cpu) {
+            (Some((pt, pi)), (t, i)) if t > pt => {
+                let dt = t - pt;
+                let di = i.saturating_sub(pi);
+                if dt > 0 { (1.0 - di as f64 / dt as f64).clamp(0.0, 1.0) as f32 * 100.0 } else { 0.0 }
+            }
+            _ => 0.0,
+        };
         let elapsed = match self.prev_net_time {
             Some(prev) => now.duration_since(prev).as_secs_f64().max(0.001),
             None => 1.0,
@@ -146,7 +154,7 @@ impl Collector {
         self.prev_procs = new_prev_procs;
 
         let stats = SysStats {
-            cpu_pct: read_cpu_pct(),
+            cpu_pct,
             mem_used: mem.mem_used,
             mem_total: mem.mem_total,
             swap_used: mem.swap_used,
@@ -216,27 +224,6 @@ fn read_total_cpu_jiffies() -> (u64, u64) {
     let total: u64 = vals.iter().sum();
     let idle = vals.get(3).copied().unwrap_or(0) + vals.get(4).copied().unwrap_or(0);
     (total, idle)
-}
-
-fn read_cpu_pct() -> f32 {
-    // 基于连续两次采样差值：用独立静态状态保存上次值
-    thread_local! {
-        static PREV: std::cell::RefCell<Option<(u64, u64)>> = const { std::cell::RefCell::new(None) };
-    }
-    let cur = read_total_cpu_jiffies();
-    PREV.with(|p| {
-        let mut p = p.borrow_mut();
-        let pct = match (*p, cur) {
-            (Some((pt, pi)), (t, i)) if t > pt => {
-                let dt = t - pt;
-                let di = i.saturating_sub(pi);
-                if dt > 0 { (1.0 - di as f64 / dt as f64).clamp(0.0, 1.0) as f32 * 100.0 } else { 0.0 }
-            }
-            _ => 0.0,
-        };
-        *p = Some(cur);
-        pct
-    })
 }
 
 struct MemInfo {
