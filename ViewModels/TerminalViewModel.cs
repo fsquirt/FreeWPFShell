@@ -328,7 +328,7 @@ namespace FreeWPFShell.ViewModels
 
         private async Task DownloadItemAsync(RemoteFile item, string localDir, SftpClient sftp)
         {
-            Task.Run(() =>
+            await Task.Run(() =>
             {
                 try
                 {

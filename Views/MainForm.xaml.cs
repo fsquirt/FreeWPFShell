@@ -182,8 +182,8 @@ namespace FreeWPFShell.Views
                 foreach (UIElement child in PagesContainer.Children)
                     child.Visibility = (child == activeView) ? Visibility.Visible : Visibility.Collapsed;
 
-                if (activeView is TerminalAndSFTP tp)
-                    SwitchMonitorToSession(tp.Session);
+                if (activeView is TerminalAndSFTP tp && tp.Session is SshSessionService session)
+                    SwitchMonitorToSession(session);
                 else
                 {
                     UnsubscribeMonitor();

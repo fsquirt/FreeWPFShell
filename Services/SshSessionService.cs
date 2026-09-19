@@ -119,8 +119,10 @@ namespace FreeWPFShell.Services
         private PrivateKeyFile? LoadPreloadedKey()
         {
             if (HostInfo.AuthMethod != SshAuthMethod.PrivateKey) return null;
+            string? keyId = HostInfo.SshKeyId;
+            if (string.IsNullOrEmpty(keyId)) return null;
             var keyRepo = new KeyRepository();
-            return keyRepo.LoadPrivateKeyFileAsync(HostInfo.SshKeyId).GetAwaiter().GetResult();
+            return keyRepo.LoadPrivateKeyFileAsync(keyId).GetAwaiter().GetResult();
         }
 
         public void ConnectAsync()
@@ -330,7 +332,7 @@ namespace FreeWPFShell.Services
 
         private void SwapSftpClient(SftpClient fresh)
         {
-            SftpClient old;
+            SftpClient? old;
             lock (_sftpLock)
             {
                 old = SftpClient;
