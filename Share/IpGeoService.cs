@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -21,7 +22,7 @@ namespace FreeWPFShell.Share
         private readonly Reader? _geoLite2City;
 
 
-        private readonly Dictionary<string, IpGeoResult> _queryCache = new(32);
+        private readonly ConcurrentDictionary<string, IpGeoResult> _queryCache = new();
 
         private IpGeoService()
         {
