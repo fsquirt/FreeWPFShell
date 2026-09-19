@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FreeWPFShell.Models;
 using FreeWPFShell.Services;
+using FreeWPFShell.Share;
 using Renci.SshNet;
 using Renci.SshNet.Sftp;
 
@@ -53,7 +54,7 @@ namespace FreeWPFShell.ViewModels
         [ObservableProperty]
         private bool _isTransferring;
 
-        private CancellationTokenSource? _transferCts;
+        private readonly SftpTransferManager _transfers;
 
         private readonly object _counterLock = new();
 
@@ -88,9 +89,12 @@ namespace FreeWPFShell.ViewModels
         public TerminalViewModel(SshSessionService session)
         {
             _session = session;
+            _transfers = session.Transfers;
         }
 
         public SshSessionService Session => _session;
+
+        public SftpTransferManager Transfers => _transfers;
 
         partial void OnIsTransferringChanged(bool value)
         {
@@ -292,9 +296,9 @@ namespace FreeWPFShell.ViewModels
             var sftp = Sftp;
             if (sftp == null || !sftp.IsConnected) return;
 
-            if (UpActive == 0 && DownActive == 0)
+            if ((UpActive == 0 && DownActive == 0) || _transfers.IsBatchCancelled)
             {
-                _transferCts = new CancellationTokenSource();
+                _transfers.BeginBatch();
                 ResetTransferCounters();
             }
 
@@ -330,9 +334,12 @@ namespace FreeWPFShell.ViewModels
         {
             await Task.Run(() =>
             {
+                bool failed = false;
+                SftpTransferTask? task = null;
+                string? localPath = null;
                 try
                 {
-                    string localPath = GetUniqueLocalPath(Path.Combine(localDir, item.Name));
+                    localPath = GetUniqueLocalPath(Path.Combine(localDir, item.Name));
                     DownName = item.Name;
                     if (item.IsDirectory)
                     {
@@ -340,31 +347,37 @@ namespace FreeWPFShell.ViewModels
                         foreach (var c in sftp.ListDirectory(item.FullName))
                         {
                             if (c.Name == "." || c.Name == "..") continue;
-                            if (_transferCts?.IsCancellationRequested == true) break;
+                            if (_transfers.IsBatchCancelled) break;
                             DownloadItemSync(c, localPath, sftp);
                         }
                     }
                     else
                     {
-                        using var s = File.Create(localPath);
-                        using (var reg = _transferCts?.Token.Register(() => { try { s.Close(); } catch { } }))
+                        var t = _transfers.Create(SftpTransferKind.Download, item.Name, localPath, item.FullName, item.Length);
+                        task = t;
+                        t.Start();
+                        RunDownload(sftp, t, item.FullName, localPath, item.Length, uploaded =>
                         {
-                            sftp.DownloadFile(item.FullName, s, uploaded =>
-                            {
-                                DownProgress = item.Length > 0 ? (double)uploaded / item.Length * 100 : 0;
-                                System.Windows.Application.Current?.Dispatcher.BeginInvoke(UpdateTransferStatus);
-                            });
-                        }
+                            DownProgress = item.Length > 0 ? (double)uploaded / item.Length * 100 : 0;
+                            t.ReportProgress((long)uploaded);
+                            System.Windows.Application.Current?.Dispatcher.BeginInvoke(UpdateTransferStatus);
+                        });
                     }
                 }
                 catch (Exception ex) when (ex is OperationCanceledException || ex is IOException || ex is ObjectDisposedException || ex is Renci.SshNet.Common.SshException)
                 { }
                 catch (Exception ex)
                 {
+                    failed = true;
                     System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => ShowMessage?.Invoke($"下载失败 {item.Name}", ex.Message));
                 }
                 finally
                 {
+                    if (item.IsDirectory && localPath != null && _transfers.IsBatchCancelled)
+                    {
+                        try { Directory.Delete(localPath, false); } catch { }
+                    }
+                    FinishTask(task, failed);
                     AddDownDone(1);
                     AddDownActive(-1);
                     System.Windows.Application.Current?.Dispatcher.BeginInvoke(UpdateTransferStatus);
@@ -372,37 +385,123 @@ namespace FreeWPFShell.ViewModels
             });
         }
 
+        private static void FinishTask(SftpTransferTask? task, bool failed)
+        {
+            if (task == null) return;
+            if (task.Cts.IsCancellationRequested) task.FinishCancelled();
+            else if (failed) task.FinishFailed();
+            else task.FinishCompleted();
+        }
+
+        private static void RunDownload(SftpClient sftp, SftpTransferTask task, string remotePath, string localPath, long expectedBytes, Action<ulong> onProgress)
+        {
+            try
+            {
+                using (var raw = File.Create(localPath))
+                using (var s = new PausableStream(raw, task.Gate, task.Cts.Token))
+                using (var reg = task.Cts.Token.Register(() => { try { s.Close(); } catch { } }))
+                {
+                    sftp.DownloadFile(remotePath, s, onProgress);
+                }
+                task.MarkArtifactComplete();
+            }
+            catch
+            {
+                try
+                {
+                    var fi = new FileInfo(localPath);
+                    if (fi.Exists && (expectedBytes <= 0 || fi.Length < expectedBytes)) fi.Delete();
+                }
+                catch { }
+                throw;
+            }
+        }
+
+        private static void RunUpload(SftpClient sftp, SshSessionService session, SftpTransferTask task, string localPath, string remotePath, Action<ulong> onProgress)
+        {
+            long remoteBefore = -1;
+            bool touched = false;
+            try
+            {
+                using (var raw = File.OpenRead(localPath))
+                using (var s = new PausableStream(raw, task.Gate, task.Cts.Token))
+                using (var reg = task.Cts.Token.Register(() => { try { s.Close(); } catch { } }))
+                {
+                    task.WaitIfPaused();
+                    lock (session.SftpLock)
+                    {
+                        try { remoteBefore = sftp.GetAttributes(remotePath).Size; } catch { remoteBefore = -1; }
+                        touched = true;
+                        sftp.UploadFile(s, remotePath, onProgress);
+                    }
+                }
+                task.MarkArtifactComplete();
+            }
+            catch
+            {
+                if (touched) TryDeletePartialUpload(sftp, session, localPath, remotePath, remoteBefore);
+                throw;
+            }
+        }
+
+        private static void TryDeletePartialUpload(SftpClient sftp, SshSessionService session, string localPath, string remotePath, long remoteBefore)
+        {
+            try
+            {
+                if (!sftp.IsConnected) return;
+                long localLength;
+                try { localLength = new FileInfo(localPath).Length; } catch { return; }
+                lock (session.SftpLock)
+                {
+                    if (!sftp.Exists(remotePath)) return;
+                    long now = sftp.GetAttributes(remotePath).Size;
+                    if (now >= localLength) return;
+                    if (remoteBefore >= 0 && now == remoteBefore) return;
+                    sftp.DeleteFile(remotePath);
+                }
+            }
+            catch { }
+        }
+
         private void DownloadItemSync(ISftpFile item, string localDir, SftpClient sftp)
         {
-            if (_transferCts?.IsCancellationRequested == true) return;
+            if (_transfers.IsBatchCancelled) return;
             string lp = Path.Combine(localDir, item.Name);
             DownName = item.Name;
             if (item.IsDirectory)
             {
+                bool created = !Directory.Exists(lp);
                 Directory.CreateDirectory(lp);
                 foreach (var c in sftp.ListDirectory(item.FullName))
                 {
                     if (c.Name == "." || c.Name == "..") continue;
-                    if (_transferCts?.IsCancellationRequested == true) break;
+                    if (_transfers.IsBatchCancelled) break;
                     DownloadItemSync(c, lp, sftp);
                 }
+                if (created && _transfers.IsBatchCancelled) { try { Directory.Delete(lp, false); } catch { } }
             }
             else
             {
+                lp = GetUniqueLocalPath(lp);
+                var task = _transfers.Create(SftpTransferKind.Download, item.Name, lp, item.FullName, item.Length);
+                task.Start();
+                bool ok = false;
                 try
                 {
-                    using var s = File.Create(lp);
-                    using (var reg = _transferCts?.Token.Register(() => { try { s.Close(); } catch { } }))
+                    RunDownload(sftp, task, item.FullName, lp, item.Length, uploaded =>
                     {
-                        sftp.DownloadFile(item.FullName, s, uploaded =>
-                        {
-                            DownProgress = item.Length > 0 ? (double)uploaded / item.Length * 100 : 0;
-                            System.Windows.Application.Current?.Dispatcher.BeginInvoke(UpdateTransferStatus);
-                        });
-                    }
+                        DownProgress = item.Length > 0 ? (double)uploaded / item.Length * 100 : 0;
+                        task.ReportProgress((long)uploaded);
+                        System.Windows.Application.Current?.Dispatcher.BeginInvoke(UpdateTransferStatus);
+                    });
+                    ok = true;
                     AddDownDone(1);
                 }
                 catch { }
+                finally
+                {
+                    FinishTask(task, !ok);
+                }
             }
         }
 
@@ -414,9 +513,9 @@ namespace FreeWPFShell.ViewModels
             var sftp = Sftp;
             if (sftp == null || !sftp.IsConnected) return;
 
-            if (UpActive == 0 && DownActive == 0)
+            if ((UpActive == 0 && DownActive == 0) || _transfers.IsBatchCancelled)
             {
-                _transferCts = new CancellationTokenSource();
+                _transfers.BeginBatch();
                 ResetTransferCounters();
             }
 
@@ -426,6 +525,8 @@ namespace FreeWPFShell.ViewModels
 
             Task.Run(() =>
             {
+                bool failed = false;
+                SftpTransferTask? task = null;
                 try
                 {
                     bool isDir = (File.GetAttributes(localPath) & FileAttributes.Directory) == FileAttributes.Directory;
@@ -439,28 +540,27 @@ namespace FreeWPFShell.ViewModels
                     else
                     {
                         long fileSize = new FileInfo(localPath).Length;
-                        using var s = File.OpenRead(localPath);
-                        using (var reg = _transferCts?.Token.Register(() => { try { s.Close(); } catch { } }))
+                        var t = _transfers.Create(SftpTransferKind.Upload, name, localPath, rp, fileSize);
+                        task = t;
+                        t.Start();
+                        RunUpload(sftp, session, t, localPath, rp, uploaded =>
                         {
-                            lock (session.SftpLock)
-                            {
-                                sftp.UploadFile(s, rp, uploaded =>
-                                {
-                                    UpProgress = fileSize > 0 ? (double)uploaded / fileSize * 100 : 0;
-                                    System.Windows.Application.Current?.Dispatcher.BeginInvoke(UpdateTransferStatus);
-                                });
-                            }
-                        }
+                            UpProgress = fileSize > 0 ? (double)uploaded / fileSize * 100 : 0;
+                            t.ReportProgress((long)uploaded);
+                            System.Windows.Application.Current?.Dispatcher.BeginInvoke(UpdateTransferStatus);
+                        });
                     }
                 }
                 catch (Exception ex) when (ex is OperationCanceledException || ex is IOException || ex is ObjectDisposedException || ex is Renci.SshNet.Common.SshException)
                 { }
                 catch (Exception ex)
                 {
+                    failed = true;
                     System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => ShowMessage?.Invoke("上传失败", ex.Message));
                 }
                 finally
                 {
+                    FinishTask(task, failed);
                     AddUpDone(1);
                     AddUpActive(-1);
                     System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
@@ -474,35 +574,42 @@ namespace FreeWPFShell.ViewModels
 
         private void UploadDirSync(string localDir, string remoteDir, SshSessionService session, SftpClient sftp)
         {
-            if (_transferCts?.IsCancellationRequested == true) return;
+            if (_transfers.IsBatchCancelled) return;
             var files = Directory.GetFiles(localDir);
 
-            Parallel.ForEach(files, new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = _transferCts?.Token ?? default }, f =>
+            Parallel.ForEach(files, new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = _transfers.BatchToken }, f =>
             {
+                SftpTransferTask? task = null;
+                bool ok = false;
                 try
                 {
                     string fileName = Path.GetFileName(f);
                     long fileSize = new FileInfo(f).Length;
+                    string rp = remoteDir.TrimEnd('/') + "/" + fileName;
+                    var t = _transfers.Create(SftpTransferKind.Upload, fileName, f, rp, fileSize);
+                    task = t;
+                    t.Start();
                     UpName = fileName;
                     System.Windows.Application.Current?.Dispatcher.BeginInvoke(UpdateTransferStatus);
-                    using var s = File.OpenRead(f);
-                    using (var reg = _transferCts?.Token.Register(() => { try { s.Close(); } catch { } }))
+                    RunUpload(sftp, session, t, f, rp, uploaded =>
                     {
-                        lock (session.SftpLock)
-                        {
-                            sftp.UploadFile(s, remoteDir.TrimEnd('/') + "/" + fileName,
-                                uploaded => { UpProgress = fileSize > 0 ? (double)uploaded / fileSize * 100 : 0; });
-                        }
-                    }
+                        UpProgress = fileSize > 0 ? (double)uploaded / fileSize * 100 : 0;
+                        t.ReportProgress((long)uploaded);
+                    });
+                    ok = true;
                     AddUpDone(1);
                 }
                 catch { }
+                finally
+                {
+                    FinishTask(task, !ok);
+                }
             });
 
-            if (_transferCts?.IsCancellationRequested == true) return;
+            if (_transfers.IsBatchCancelled) return;
             foreach (var d in Directory.GetDirectories(localDir))
             {
-                if (_transferCts?.IsCancellationRequested == true) break;
+                if (_transfers.IsBatchCancelled) break;
                 string rp = remoteDir.TrimEnd('/') + "/" + Path.GetFileName(d);
                 lock (session.SftpLock) { if (!sftp.Exists(rp)) sftp.CreateDirectory(rp); }
                 UploadDirSync(d, rp, session, sftp);
@@ -645,7 +752,7 @@ namespace FreeWPFShell.ViewModels
                     sb.Append("下载: (").Append(DownDone).Append('/').Append(DownTotal).Append(") [")
                       .Append((DownActive > 0 ? DownProgress : 100).ToString("F1")).Append("%] - ")
                       .AppendLine(DownActive > 0 ? DownName : "已完成");
-                sb.Append("\n双击可取消所有任务");
+                sb.Append("\n点击状态图标查看传输任务");
                 StatusText = sb.ToString();
             }
             else
@@ -658,7 +765,7 @@ namespace FreeWPFShell.ViewModels
         [RelayCommand]
         private void CancelAllTransfers()
         {
-            _transferCts?.Cancel();
+            _transfers.CancelAll();
         }
     }
 }

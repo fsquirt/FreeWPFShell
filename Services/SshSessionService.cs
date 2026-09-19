@@ -92,6 +92,7 @@ namespace FreeWPFShell.Services
         private const int SftpReconnectCooldownMs = 30_000;
 
         public MonitorData Monitor { get; } = new();
+        public SftpTransferManager Transfers { get; } = new();
         public event EventHandler<MonitorData>? MonitorUpdated;
 
         public SshSessionService(SshConnectionInfo hostInfo, SettingsRepository? settingsRepo = null)
@@ -401,6 +402,8 @@ namespace FreeWPFShell.Services
 
             OnConnected = null;
             OnConnectFailed = null;
+
+            try { Transfers.CancelAndClear(); } catch { }
 
             new Thread(() =>
             {

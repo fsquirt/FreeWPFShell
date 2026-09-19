@@ -239,11 +239,9 @@ namespace FreeWPFShell.Views
 
         private void TxtStatusIcon_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            if (e.ClickCount == 2 && (ViewModel.IsTransferring))
-            {
-                if (ModernMessageBox.Show("确定要中断当前所有的传输任务吗？", "中断传输", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
-                    ViewModel.CancelAllTransfersCommand.Execute(null);
-            }
+            var session = Session;
+            if (session == null) return;
+            (Application.Current.MainWindow as MainForm)?.OpenSftpTransferPage(session);
         }
 
         private void BtnBack_Click(object sender, RoutedEventArgs e) => ViewModel.GoBackCommand.Execute(null);

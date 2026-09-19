@@ -104,6 +104,20 @@ namespace FreeWPFShell.Views
             AddTab($"系统管理-{session.DisplayName}", page);
         }
 
+        public void OpenSftpTransferPage(SshSessionService session)
+        {
+            foreach (TabItem item in SessionTabs.Items)
+            {
+                if (item.Tag is SftpTransferPage transferPage && transferPage.Session == session)
+                {
+                    SessionTabs.SelectedItem = item;
+                    return;
+                }
+            }
+
+            AddTab($"传输任务-{session.DisplayName}", new SftpTransferPage(session));
+        }
+
         public void OpenDebugConsolePage()
         {
             foreach (TabItem item in SessionTabs.Items)
@@ -144,6 +158,7 @@ namespace FreeWPFShell.Views
                     if (session != null)
                     {
                         ActiveSessions.Remove(session);
+                        CloseTransferTabs(session);
                         session.Dispose(); 
                     }
                 }
@@ -163,6 +178,18 @@ namespace FreeWPFShell.Views
                     SetProcessWorkingSetSize(Process.GetCurrentProcess().Handle, (IntPtr)(-1), (IntPtr)(-1));
                 });
             }
+        }
+
+        private void CloseTransferTabs(SshSessionService session)
+        {
+            var targets = new System.Collections.Generic.List<UIElement>();
+            foreach (TabItem item in SessionTabs.Items)
+            {
+                if (item.Tag is SftpTransferPage page && page.Session == session)
+                    targets.Add(page);
+            }
+
+            foreach (var page in targets) CloseTab(page);
         }
 
         private TabItem AddTab(string header, UIElement content)
