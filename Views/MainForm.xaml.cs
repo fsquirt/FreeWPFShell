@@ -104,6 +104,20 @@ namespace FreeWPFShell.Views
             AddTab($"系统管理-{session.DisplayName}", page);
         }
 
+        public void OpenDebugConsolePage()
+        {
+            foreach (TabItem item in SessionTabs.Items)
+            {
+                if (item.Tag is DebugConsolePage)
+                {
+                    SessionTabs.SelectedItem = item;
+                    return;
+                }
+            }
+
+            AddTab("调试控制台", new DebugConsolePage());
+        }
+
         public void CloseTab(UIElement content)
         {
             TabItem? targetTab = null;

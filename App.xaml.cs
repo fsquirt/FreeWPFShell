@@ -9,6 +9,9 @@ namespace FreeWPFShell
         protected override void OnStartup(StartupEventArgs e)
         {
 
+            Services.DebugConsoleService.Instance.Install();
+            Services.DebugConsoleService.Log($"[启动] 运行时 {Environment.Version}，工作目录 {Environment.CurrentDirectory}");
+
             AppServices.Initialize();
 
             base.OnStartup(e);

@@ -31,7 +31,9 @@
             <TextBlock Text="使用 Windows Hello 保护密码" FontSize="14" VerticalAlignment="Center" ToolTip="启用后，新保存的凭据将强制要求通过本机 PIN 或生物识别才能解锁。"/>
         </StackPanel>
 
-        <TextBlock Grid.Row="2" Text="系统设置" FontSize="20" FontWeight="Bold" Margin="0,0,0,15"/>
+        <Border Grid.Row="2" Background="Transparent" MouseLeftButtonDown="SysSettingsTitle_Click">
+            <TextBlock Text="系统设置" FontSize="20" FontWeight="Bold" Margin="0,0,0,15"/>
+        </Border>
 
         <StackPanel Grid.Row="3" Margin="0,0,0,10">
             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">

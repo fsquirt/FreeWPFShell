@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using MicaWPF.Controls;
 using MicaWPF.Core.Extensions;
 using FreeWPFShell.Repositories;
@@ -12,6 +13,12 @@ namespace FreeWPFShell.Views
     public partial class SettingsWindow : MicaWindow
     {
         private readonly SettingsRepository _settingsRepo = new();
+
+        private const int DebugOpenClickCount = 5;
+        private static readonly TimeSpan DebugClickInterval = TimeSpan.FromSeconds(1.5);
+
+        private int _sysTitleClickCount;
+        private DateTime _sysTitleLastClick = DateTime.MinValue;
 
         public SettingsWindow()
         {
@@ -82,6 +89,24 @@ namespace FreeWPFShell.Views
 
             _settingsRepo.Save(settings);
             base.OnClosing(e);
+        }
+
+        private void SysSettingsTitle_Click(object sender, MouseButtonEventArgs e)
+        {
+            DateTime now = DateTime.UtcNow;
+            if (now - _sysTitleLastClick > DebugClickInterval) _sysTitleClickCount = 0;
+            _sysTitleLastClick = now;
+            _sysTitleClickCount++;
+
+            if (_sysTitleClickCount < DebugOpenClickCount) return;
+
+            _sysTitleClickCount = 0;
+
+            var mainForm = Owner as MainForm ?? Application.Current.MainWindow as MainForm;
+            if (mainForm == null) return;
+
+            mainForm.OpenDebugConsolePage();
+            Close();
         }
 
         private void Hyperlink_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
