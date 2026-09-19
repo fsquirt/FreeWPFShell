@@ -381,9 +381,15 @@ pub fn get_process_detail(pid_val: u32) -> Option<ProcessDetail> {
     }
 
     let stat_content = fs::read_to_string(format!("{}/stat", proc_path)).unwrap_or_default();
-    let stat_parts: Vec<&str> = stat_content.split_whitespace().collect();
-    let (priority, nice, utime, stime) = if stat_parts.len() > 18 {
-        (stat_parts[17], stat_parts[18], stat_parts[13].parse::<u64>().unwrap_or(0), stat_parts[14].parse::<u64>().unwrap_or(0))
+    let stat_tail = stat_content.rsplit_once(')').map(|(_, t)| t.trim()).unwrap_or("");
+    let stat_parts: Vec<&str> = stat_tail.split_whitespace().collect();
+    let (priority, nice, utime, stime) = if stat_parts.len() > 16 {
+        (
+            stat_parts[15],
+            stat_parts[16],
+            stat_parts[11].parse::<u64>().unwrap_or(0),
+            stat_parts[12].parse::<u64>().unwrap_or(0),
+        )
     } else { ("0", "0", 0, 0) };
 
     let fd_count = fs::read_dir(format!("{}/fd", proc_path)).map(|d| d.count()).unwrap_or(0);
