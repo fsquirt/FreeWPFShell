@@ -5,10 +5,7 @@ using Renci.SshNet;
 
 namespace FreeWPFShell.Tests.Integration
 {
-    /// <summary>
-    /// SSH 隧道集成测试。连接真实服务器，创建本地/远程端口转发并验证连通性。
-    /// 配置缺失时跳过。
-    /// </summary>
+
     [TestClass]
     public class TunnelIntegrationTests
     {
@@ -41,7 +38,7 @@ namespace FreeWPFShell.Tests.Integration
             {
                 Assert.IsTrue(port.IsStarted, "本地转发端口应已启动");
 
-                // 通过本地端口连接，验证能到达服务器 SSH 端口
+
                 using var client = new TcpClient();
                 client.Connect("127.0.0.1", localPort);
                 Assert.IsTrue(client.Connected, "应能通过隧道连接本地转发端口");
@@ -60,7 +57,7 @@ namespace FreeWPFShell.Tests.Integration
             using var ssh = new SshClient(_cfg!.Host, _cfg.Port, _cfg.User, _cfg.Password);
             ssh.Connect();
 
-            // 用 TunnelService 管理一个隧道，验证注册与清理
+
             using var tunnelSvc = new TunnelService(_cfg.Host, _cfg.User);
             int localPort = new Random().Next(30000, 50000);
             var port = new ForwardedPortLocal("127.0.0.1", (uint)localPort, "127.0.0.1", (uint)_cfg.Port);

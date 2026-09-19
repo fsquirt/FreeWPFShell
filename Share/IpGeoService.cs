@@ -19,7 +19,7 @@ namespace FreeWPFShell.Share
         private readonly Reader? _geoLite2ASN;
         private readonly Reader? _geoLite2City;
 
-        // IP 查询缓存，避免重复查询相同 IP 创建大量对象
+
         private readonly Dictionary<string, IpGeoResult> _queryCache = new(32);
 
         private IpGeoService()
@@ -165,18 +165,18 @@ namespace FreeWPFShell.Share
 
         private static Dictionary<string, object>? GetNested(Dictionary<string, object> d, string key) => d.TryGetValue(key, out var val) && val is Dictionary<string, object> n ? n : null;
 
-        // 不拷贝列表：直接返回 IList，调用方只用 Count 和索引访问
+
         private static IList? GetList(Dictionary<string, object> d, string key) => d.TryGetValue(key, out var val) && val is IList l ? l : null;
 
-        /// <summary>不调用 GetAddressBytes（分配 byte[]），直接检查 IP 字符串前两个段。</summary>
+
         private static bool IsPrivate(IPAddress ip)
         {
-            // AddressFamily.InterNetwork (IPv4) → ToString() 返回 a.b.c.d 格式
+
             string s = ip.ToString();
-            // 快速路径：检查第一个数字
+
             int firstDot = s.IndexOf('.');
-            if (firstDot < 0) return false; // IPv6 不在此判断
-#if NET // .NET 6+ 支持 span 解析
+            if (firstDot < 0) return false; 
+#if NET 
             if (!int.TryParse(s.AsSpan(0, firstDot), out int first)) return false;
 #else
             if (!int.TryParse(s.Substring(0, firstDot), out int first)) return false;
@@ -206,7 +206,7 @@ namespace FreeWPFShell.Share
                 bool hasDistricts = !string.IsNullOrEmpty(r.Districts);
                 bool hasISP = !string.IsNullOrEmpty(r.ISP);
 
-                // 直接用 + 拼接，编译器/运行时会对少量字符串做优化
+
                 string result = hasProvince ? r.Province : "";
                 if (hasCity) result += r.City;
                 if (hasDistricts) result += r.Districts;
@@ -224,7 +224,7 @@ namespace FreeWPFShell.Share
 
         private static string BuildDetailText(IpGeoResult r)
         {
-            // 预估容量，一次性分配 StringBuilder
+
             int est = 256;
             var sb = new System.Text.StringBuilder(est);
 

@@ -5,11 +5,7 @@ using FreeWPFShell.Repositories;
 
 namespace FreeWPFShell.Tests.Repositories
 {
-    /// <summary>
-    /// SSH 密钥导入/导出功能测试。
-    /// 使用 ssh-keygen 生成临时测试密钥，验证导入、查询、导出还原。
-    /// KeyRepository 使用临时文件路径，不污染真实密钥库。
-    /// </summary>
+
     [TestClass]
     public class KeyRepositoryTests : IDisposable
     {
@@ -41,7 +37,7 @@ namespace FreeWPFShell.Tests.Repositories
             return _repo;
         }
 
-        /// <summary>用 ssh-keygen 生成一个密钥文件，返回路径。</summary>
+
         private string GenerateKey(string name, string? passphrase = null)
         {
             string keyPath = Path.Combine(_tempDir, name);
@@ -93,7 +89,7 @@ namespace FreeWPFShell.Tests.Repositories
 
             var key = repo.Import(keyFile, "export-test", null);
 
-            // 导出：从 PrivateKeyBase64 解码还原
+
             string exported = Encoding.UTF8.GetString(Convert.FromBase64String(key.PrivateKeyBase64));
             Assert.AreEqual(originalContent.Trim(), exported.Trim(), "导出内容应与原始密钥文件一致");
         }
@@ -107,7 +103,7 @@ namespace FreeWPFShell.Tests.Repositories
             var key = repo.Import(keyFile, "pass-test", "secret123");
 
             Assert.IsTrue(key.HasPassphrase, "带密码密钥应标记 HasPassphrase");
-            // 应能用密码加载为 PrivateKeyFile
+
             var loaded = repo.LoadPrivateKeyFile(key.Id);
             Assert.IsNotNull(loaded);
         }

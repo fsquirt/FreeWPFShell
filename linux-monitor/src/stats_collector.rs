@@ -5,7 +5,7 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 use std::os::raw::c_char;
 use std::ffi::CString;
 
-// ── 系统调用直接声明（零依赖，不引入 libc crate）──────────────────────────
+
 
 #[repr(C)]
 struct StatVfs {
@@ -31,16 +31,16 @@ extern "C" {
 const SC_PAGESIZE: i32 = 30;
 const SC_NPROCESSORS_ONLN: i32 = 84;
 
-// ── /proc 采集器（替代 sysinfo crate）────────────────────────────────────
+
 
 pub struct Collector {
-    prev_cpu: Option<(u64, u64)>,          // (total, idle) jiffies
-    prev_procs: HashMap<u32, u64>,         // pid -> utime+stime jiffies
-    prev_net: HashMap<String, (u64, u64)>, // iface -> (rx, tx) bytes
+    prev_cpu: Option<(u64, u64)>,          
+    prev_procs: HashMap<u32, u64>,         
+    prev_net: HashMap<String, (u64, u64)>, 
     prev_net_time: Option<std::time::Instant>,
     page_size: u64,
     ncpus: u64,
-    os_id: String,                         // /etc/os-release 的 ID=（发行版标识）
+    os_id: String,                         
 }
 
 impl Collector {
@@ -60,9 +60,9 @@ impl Collector {
         let mem = read_meminfo();
         let now = std::time::Instant::now();
 
-        // ── 进程列表 ──
+
         let total_cpu = read_total_cpu_jiffies();
-        let mut procs: Vec<(u32, u64, u64)> = Vec::new(); // (pid, jiffies, rss_bytes)
+        let mut procs: Vec<(u32, u64, u64)> = Vec::new(); 
         if let Ok(entries) = fs::read_dir("/proc") {
             for entry in entries.flatten() {
                 let pid: u32 = match entry.file_name().to_string_lossy().parse() {
@@ -97,7 +97,7 @@ impl Collector {
                     Some(prev) if jiffies > *prev => jiffies - *prev,
                     _ => 0,
                 };
-                // 与 top 的 %CPU 一致：多核进程可超过 100%
+
                 100.0 * (p_delta * self.ncpus) as f64 / cpu_delta_total as f64
             } else {
                 0.0
@@ -131,7 +131,7 @@ impl Collector {
             pb.partial_cmp(&pa).unwrap_or(std::cmp::Ordering::Equal).then(a.pid.cmp(&b.pid))
         });
 
-        // ── 网络 ──
+
         let (rx_speed, tx_speed, iface) = read_net_speed(
             &mut self.prev_net,
             self.prev_net_time.is_none(),
@@ -139,7 +139,7 @@ impl Collector {
         );
         self.prev_net_time = Some(now);
 
-        // ── 磁盘 ──
+
         let disks = read_disks();
 
         self.prev_cpu = Some(total_cpu);
@@ -164,8 +164,7 @@ impl Collector {
     }
 }
 
-/// 读取 /etc/os-release 的 ID= 字段（发行版标识，如 debian/ubuntu/almalinux）。
-/// 客户端用它匹配发行版 logo。
+
 fn read_os_id() -> String {
     let Ok(content) = fs::read_to_string("/etc/os-release") else { return String::new() };
     for line in content.lines() {

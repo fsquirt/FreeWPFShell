@@ -5,12 +5,7 @@ using Renci.SshNet.Sftp;
 
 namespace FreeWPFShell.Tests.Integration
 {
-    /// <summary>
-    /// SFTP 模块完整功能集成测试。
-    /// 使用真实 SftpClient 连接 sshtest.json 配置的服务器，
-    /// 在 /tmp/fwpt_sftp_test_&lt;guid&gt; 测试沙箱中执行，测试后清理。
-    /// 配置缺失时跳过（Assert.Inconclusive）。
-    /// </summary>
+
     [TestClass]
     public class SftpIntegrationTests
     {
@@ -52,7 +47,7 @@ namespace FreeWPFShell.Tests.Integration
 
         private string Remote(string name) => $"{_sandbox}/{name}";
 
-        /// <summary>递归删除远程目录/文件。</summary>
+
         private void CleanupRemote(string path)
         {
             foreach (var f in _sftp!.ListDirectory(path))
@@ -64,7 +59,7 @@ namespace FreeWPFShell.Tests.Integration
             _sftp.DeleteDirectory(path);
         }
 
-        /// <summary>在远程创建目录（含多级）。</summary>
+
         private void CreateRemoteDir(string path)
         {
             var parts = path.Trim('/').Split('/');
@@ -77,7 +72,7 @@ namespace FreeWPFShell.Tests.Integration
             }
         }
 
-        // ── 1. 创建文件 / 文件夹 ───────────────────────────────────
+
 
         [TestMethod]
         public void Create_FileAndDirectory()
@@ -103,7 +98,7 @@ namespace FreeWPFShell.Tests.Integration
             Assert.IsTrue(_sftp!.Exists(nested), "多级目录应创建成功");
         }
 
-        // ── 2. 删除文件 / 文件夹 ───────────────────────────────────
+
 
         [TestMethod]
         public void Delete_File()
@@ -126,11 +121,11 @@ namespace FreeWPFShell.Tests.Integration
             using (var ms = new MemoryStream(Encoding.UTF8.GetBytes("content")))
                 _sftp!.UploadFile(ms, $"{dir}/inner.txt", true);
 
-            CleanupRemote(dir); // 递归删除
+            CleanupRemote(dir); 
             Assert.IsFalse(_sftp.Exists(dir), "递归删除后目录应不存在");
         }
 
-        // ── 3. 重命名文件 / 文件夹 ─────────────────────────────────
+
 
         [TestMethod]
         public void Rename_File()
@@ -162,7 +157,7 @@ namespace FreeWPFShell.Tests.Integration
             Assert.IsTrue(_sftp.Exists($"{dst}/f.txt"), "重命名后目录内容应保留");
         }
 
-        // ── 4. 上传文件 / 文件夹 ───────────────────────────────────
+
 
         [TestMethod]
         public void Upload_File_ContentVerified()
@@ -213,7 +208,7 @@ namespace FreeWPFShell.Tests.Integration
             }
         }
 
-        // ── 5. 下载文件 / 文件夹 ───────────────────────────────────
+
 
         [TestMethod]
         public void Download_File_ContentVerified()
@@ -268,7 +263,7 @@ namespace FreeWPFShell.Tests.Integration
             }
         }
 
-        // ── 6. 实时传输进度回调 ───────────────────────────────────
+
 
         [TestMethod]
         public void Upload_ReportsProgress()
@@ -287,7 +282,7 @@ namespace FreeWPFShell.Tests.Integration
             }
 
             Assert.IsTrue(progressPoints.Count > 0, "应触发进度回调");
-            // SSH.NET 回调的最后一个值不保证等于文件总大小，改用远程文件实际大小验证上传完成
+
             Assert.IsTrue(progressPoints.All(p => p <= (ulong)data.Length), "进度不应超过文件大小");
             long remoteSize = _sftp!.GetAttributes(remoteFile).Size;
             Assert.AreEqual(data.LongLength, remoteSize, "上传后远程文件大小应等于源文件");
@@ -312,12 +307,12 @@ namespace FreeWPFShell.Tests.Integration
 
             Assert.IsTrue(progressPoints.Count > 0, "应触发进度回调");
             Assert.IsTrue(progressPoints.All(p => p <= (ulong)data.Length), "进度不应超过文件大小");
-            // 用本地文件实际大小验证下载完成
+
             long localSize = new FileInfo(localFile).Length;
             Assert.AreEqual(data.LongLength, localSize, "下载后本地文件大小应等于远程文件");
         }
 
-        // ── 7. 在线编辑 → 自动回传 ─────────────────────────────────
+
 
         [TestMethod]
         public void EditRoundTrip_DownloadModifyUpload()
@@ -328,19 +323,19 @@ namespace FreeWPFShell.Tests.Integration
             using (var ms = new MemoryStream(Encoding.UTF8.GetBytes(original)))
                 _sftp!.UploadFile(ms, remoteFile, true);
 
-            // 1) 下载到本地临时文件
+
             string localFile = Path.Combine(_localSandbox, "edit.txt");
             using (var fs = File.Create(localFile))
                 _sftp.DownloadFile(remoteFile, fs);
 
-            // 2) 本地修改（模拟编辑器保存）
+
             File.AppendAllText(localFile, "line3\n");
 
-            // 3) 回传到远程
+
             using (var fs = File.OpenRead(localFile))
                 _sftp.UploadFile(fs, remoteFile, true);
 
-            // 4) 校验远端已被更新
+
             using var download = new MemoryStream();
             _sftp.DownloadFile(remoteFile, download);
             string updated = Encoding.UTF8.GetString(download.ToArray());
@@ -348,14 +343,14 @@ namespace FreeWPFShell.Tests.Integration
             Assert.IsTrue(updated.StartsWith("line1"), "原内容应保留");
         }
 
-        // ── 8. 中断传输 ───────────────────────────────────────────
+
 
         [TestMethod]
         public async Task Cancel_Upload_ByDisconnecting_InterruptsTransfer()
         {
             SkipIfNoConfig();
             string localFile = Path.Combine(_localSandbox, "cancel_upload.bin");
-            // 大文件确保传输不会在触发中断前完成
+
             var data = new byte[64 * 1024 * 1024];
             new Random(99).NextBytes(data);
             File.WriteAllBytes(localFile, data);
@@ -363,7 +358,7 @@ namespace FreeWPFShell.Tests.Integration
             string remoteFile = Remote("cancel_upload.bin");
             bool interrupted = false;
 
-            // 使用独立 SftpClient，断开连接以可靠中断上传
+
             using var sftp = new SftpClient(_cfg!.Host, _cfg.Port, _cfg.User, _cfg.Password);
             sftp.Connect();
 
@@ -375,12 +370,12 @@ namespace FreeWPFShell.Tests.Integration
                     catch (Exception) { }
                 });
 
-                await Task.Delay(200); // 让传输开始
-                // 断开连接强制中断
+                await Task.Delay(200); 
+
                 try { sftp.Disconnect(); } catch { }
 
                 await uploadTask;
-                interrupted = true; // 传输被中断
+                interrupted = true; 
             }
 
             Assert.IsTrue(interrupted, "断开连接后上传应被中断");
@@ -394,7 +389,7 @@ namespace FreeWPFShell.Tests.Integration
             var data = new byte[64 * 1024 * 1024];
             new Random(5).NextBytes(data);
 
-            // 先把大文件放到远程
+
             using (var prep = new SftpClient(_cfg!.Host, _cfg.Port, _cfg.User, _cfg.Password))
             {
                 prep.Connect();
@@ -405,7 +400,7 @@ namespace FreeWPFShell.Tests.Integration
             string localFile = Path.Combine(_localSandbox, "cancel_dl.bin");
             bool interrupted = false;
 
-            // 独立 SftpClient 下载，断开以中断
+
             using (var sftp = new SftpClient(_cfg.Host, _cfg.Port, _cfg.User, _cfg.Password))
             {
                 sftp.Connect();

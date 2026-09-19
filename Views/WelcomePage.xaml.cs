@@ -8,10 +8,7 @@ using FreeWPFShell.ViewModels;
 
 namespace FreeWPFShell.Views
 {
-    /// <summary>
-    /// 首页（主机列表）。业务逻辑已迁移到 WelcomePageViewModel，
-    /// Code-behind 仅负责注入 UI 交互回调（对话框、连接会话）与双击连接。
-    /// </summary>
+
     public partial class WelcomePage : UserControl
     {
         public WelcomePageViewModel ViewModel { get; }
@@ -22,7 +19,7 @@ namespace FreeWPFShell.Views
             ViewModel = new WelcomePageViewModel(Core.AppServices.GetService<HostRepository>());
             DataContext = ViewModel;
 
-            // 注入 UI 交互回调
+
             ViewModel.AddConnectionRequested = ShowAddConnection;
             ViewModel.EditRequested = ShowEditConnection;
             ViewModel.DeleteConfirm = ConfirmDelete;

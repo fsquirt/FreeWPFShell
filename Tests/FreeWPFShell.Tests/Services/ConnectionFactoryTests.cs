@@ -5,10 +5,7 @@ using Renci.SshNet;
 
 namespace FreeWPFShell.Tests.Services
 {
-    /// <summary>
-    /// ConnectionFactory 客户端构建逻辑测试。
-    /// 验证不同认证方式、代理类型、跳板机端口下生成的连接参数（不实际连接服务器）。
-    /// </summary>
+
     [TestClass]
     public class ConnectionFactoryTests
     {
@@ -70,7 +67,7 @@ namespace FreeWPFShell.Tests.Services
 
             using var client = factory.BuildSshClient(info, null, null);
 
-            // 直接连接信息不变（代理走 SSH.NET 内部）
+
             Assert.AreEqual("10.0.0.1", client.ConnectionInfo.Host);
         }
 
@@ -82,12 +79,12 @@ namespace FreeWPFShell.Tests.Services
             info.UseProxy = true;
             info.Proxy = new ProxyInfo { Type = ProxyType.Ssh, ServerAddress = "jump.example", Port = 22, Username = "jumpuser", Password = "jumppass" };
 
-            // 模拟已建立的跳板机转发端口
+
             var jumpPort = new ForwardedPortLocal("127.0.0.1", 50001, "10.0.0.1", 22);
 
             using var client = factory.BuildSshClient(info, null, jumpPort);
 
-            // 跳板机模式下应通过本地转发端口连接
+
             Assert.AreEqual("127.0.0.1", client.ConnectionInfo.Host);
             Assert.AreEqual(50001, client.ConnectionInfo.Port);
         }

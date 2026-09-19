@@ -1,6 +1,6 @@
 namespace FreeWPFShell.Models
 {
-    /// <summary>IP 归属地查询结果（纯数据模型）。</summary>
+
     public class IpGeoResult
     {
         public string Ip { get; set; } = string.Empty;

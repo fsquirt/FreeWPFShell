@@ -5,9 +5,7 @@ using FreeWPFShell.ViewModels;
 
 namespace FreeWPFShell.Tests.ViewModels
 {
-    /// <summary>
-    /// WelcomePageViewModel 测试。使用临时主机库文件，验证主机加载/删除命令。
-    /// </summary>
+
     [TestClass]
     public class WelcomePageViewModelTests : IDisposable
     {
@@ -32,7 +30,7 @@ namespace FreeWPFShell.Tests.ViewModels
 
         private void WriteHosts(params SshConnectionInfo[] hosts)
         {
-            // 通过 AddAsync 写入（会保存到临时文件）
+
             var settingsRepo = new SettingsRepository();
             var hostRepo = new HostRepository(settingsRepo, _tempFile);
             foreach (var h in hosts)
@@ -69,7 +67,7 @@ namespace FreeWPFShell.Tests.ViewModels
 
             var vm = CreateViewModel();
             vm.LoadHosts();
-            vm.DeleteConfirm = h => true; // 确认删除
+            vm.DeleteConfirm = h => true; 
             var host = vm.Hosts.First();
             vm.DeleteCommand.Execute(host);
 

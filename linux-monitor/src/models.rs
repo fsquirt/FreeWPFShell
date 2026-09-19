@@ -1,6 +1,6 @@
 use crate::utils::{json_escape, format_size};
 
-/// 输出 JSON 数组（字段结构与旧 serde 序列化版本完全一致，C# 端 DTO 不变）
+
 pub fn json_array<T, F: Fn(&T) -> String>(items: &[T], f: F) -> String {
     let parts: Vec<String> = items.iter().map(f).collect();
     format!("[{}]", parts.join(","))

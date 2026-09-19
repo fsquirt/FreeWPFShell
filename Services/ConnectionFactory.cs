@@ -9,17 +9,10 @@ using Renci.SshNet.Common;
 
 namespace FreeWPFShell.Services
 {
-    /// <summary>
-    /// SSH/SFTP 客户端工厂（单一职责）。
-    /// 集中封装认证方式、代理类型、跳板机转发端口等连接参数构建逻辑，
-    /// 避免连接编排代码中散落大量配置解析。
-    /// </summary>
+
     public class ConnectionFactory : IConnectionFactory
     {
-        /// <summary>
-        /// SFTP 心跳间隔。SFTP 是独立于主 SSH 的 TCP 连接且大部分时间空闲，
-        /// 每 2 秒发送一次 keepalive 心跳包，防止被服务器/NAT/防火墙空闲超时断联。
-        /// </summary>
+
         private static readonly TimeSpan SftpKeepAliveInterval = TimeSpan.FromSeconds(2);
 
         public SshClient BuildSshClient(SshConnectionInfo info, PrivateKeyFile? preloadedKey, ForwardedPortLocal? jumpPort)
@@ -33,7 +26,7 @@ namespace FreeWPFShell.Services
         {
             var client = new SftpClient(BuildConnectionInfo(info, preloadedKey, jumpPort));
             client.ErrorOccurred += OnClientError;
-            // 连接建立后 SSH.NET 会按此间隔自动发送 keepalive@openssh.com 心跳
+
             client.KeepAliveInterval = SftpKeepAliveInterval;
             return client;
         }
@@ -78,7 +71,7 @@ namespace FreeWPFShell.Services
                 authMethods.Add(new PrivateKeyAuthenticationMethod(info.SshUser, preloadedKey));
             }
 
-            // 跳板机模式：通过本地转发端口连接目标主机，不使用 SSH.NET 的 Proxy 机制
+
             if (info.UseProxy && info.Proxy?.Type == ProxyType.Ssh && jumpPort != null)
             {
                 var conn = new ConnectionInfo(

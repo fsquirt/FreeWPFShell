@@ -1,9 +1,8 @@
-//! 极简 JSON 解析器（替代 serde_json，仅用于解析 C# 客户端发来的请求信封）。
-//! 完整支持对象/数组/字符串(\uXXXX 转义含代理对)/数字/布尔/null；
-//! 深度限制防恶意嵌套输入导致栈溢出（解析发生在 token 校验之前，必须健壮）。
+
+
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)] // Arr/Obj 完整支持解析，响应端不读取数组值
+#[allow(dead_code)] 
 pub enum Json {
     Null,
     Bool(bool),

@@ -7,7 +7,7 @@ using System.Windows.Media.Imaging;
 
 namespace FreeWPFShell.Share
 {
-    /// <summary>发行版 ID → LinuxLogo/{ID}.png，没有就用 linux.png。</summary>
+
     public class DistroLogoConverter : IValueConverter
     {
         private static readonly Dictionary<string, ImageSource?> s_cache = new();

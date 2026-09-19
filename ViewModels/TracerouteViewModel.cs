@@ -12,10 +12,7 @@ using FreeWPFShell.Share;
 
 namespace FreeWPFShell.ViewModels
 {
-    /// <summary>
-    /// 路由追踪页 ViewModel。负责解析目标、并发探测 TTL 跳数、
-    /// 更新跳点列表与详情、取消追踪等业务逻辑，与 View 解耦。
-    /// </summary>
+
     public partial class TracerouteViewModel : ObservableObject
     {
         private const int ParallelLimit = 10;

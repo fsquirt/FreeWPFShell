@@ -4,9 +4,7 @@ using FreeWPFShell.ViewModels;
 
 namespace FreeWPFShell.Tests.ViewModels
 {
-    /// <summary>
-    /// TerminalViewModel 纯逻辑测试（不依赖真实 SSH 连接）。
-    /// </summary>
+
     [TestClass]
     public class TerminalViewModelTests
     {
@@ -56,7 +54,7 @@ namespace FreeWPFShell.Tests.ViewModels
         {
             using var session = CreateSession();
             var vm = new TerminalViewModel(session);
-            // 无传输任务时取消不应抛异常
+
             vm.CancelAllTransfersCommand.Execute(null);
             Assert.IsTrue(true);
         }

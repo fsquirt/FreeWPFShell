@@ -7,11 +7,7 @@ using FreeWPFShell.Share;
 
 namespace FreeWPFShell.ViewModels
 {
-    /// <summary>
-    /// 首页（主机列表）ViewModel。管理已保存的主机列表、加载刷新与 IP 地理编码，
-    /// 以及"新建/编辑/删除/连接/设置/密钥管理"等操作命令。
-    /// 窗口交互（对话框、连接会话）通过注入的回调委托完成，保持 VM 可测试。
-    /// </summary>
+
     public partial class WelcomePageViewModel : ObservableObject
     {
         private readonly HostRepository _hostRepo;
@@ -21,7 +17,7 @@ namespace FreeWPFShell.ViewModels
         [ObservableProperty]
         private SshConnectionInfo? _selectedHost;
 
-        // 由 View 注入的 UI 交互回调
+
         public Action<SshConnectionInfo>? ConnectRequested { get; set; }
         public Action<SshConnectionInfo>? EditRequested { get; set; }
         public Func<SshConnectionInfo, bool>? DeleteConfirm { get; set; }
@@ -35,7 +31,7 @@ namespace FreeWPFShell.ViewModels
             LoadHosts();
         }
 
-        /// <summary>加载主机列表，并异步填充 IP 地理编码。</summary>
+
         public async void LoadHosts()
         {
             try
@@ -46,7 +42,7 @@ namespace FreeWPFShell.ViewModels
                 Hosts.Clear();
                 foreach (var h in hosts) Hosts.Add(h);
 
-                // 异步获取地理位置，不阻塞 UI 渲染
+
                 await Task.Run(() =>
                 {
                     foreach (var host in hosts)
@@ -66,7 +62,7 @@ namespace FreeWPFShell.ViewModels
             }
         }
 
-        /// <summary>解密并返回指定主机的连接信息（含 SSH 密码/密钥）。</summary>
+
         public Task<SshConnectionInfo> GetAndDecryptAsync(string id)
             => _hostRepo.GetAndDecryptAsync(id);
 

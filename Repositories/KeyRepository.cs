@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -28,9 +28,7 @@ namespace FreeWPFShell.Repositories
             Reload();
         }
 
-        /// <summary>
-        /// 仅供单元测试使用：指定密钥库文件路径，避免污染真实用户数据。
-        /// </summary>
+
         internal KeyRepository(string keysFilePath)
         {
             _filePath = keysFilePath;
@@ -60,14 +58,12 @@ namespace FreeWPFShell.Repositories
 
         public SshKeyInfo? FindById(string id) => _keys.FirstOrDefault(k => k.Id == id);
 
-        /// <summary>
-        /// 导入密钥文件。如果密钥有密码保护，passphrase 必须提供。
-        /// </summary>
+
         public SshKeyInfo Import(string filePath, string name, string? passphrase)
         {
             byte[] keyContent = File.ReadAllBytes(filePath);
 
-            // 验证密钥是否可用
+
             PrivateKeyFile keyFile;
             bool hasPassphrase = false;
 
@@ -78,7 +74,7 @@ namespace FreeWPFShell.Repositories
             }
             catch (Renci.SshNet.Common.SshPassPhraseNullOrEmptyException)
             {
-                // 密钥需要密码
+
                 if (string.IsNullOrEmpty(passphrase))
                     throw new InvalidOperationException("此密钥有密码保护，请输入密钥密码。");
 
@@ -87,7 +83,7 @@ namespace FreeWPFShell.Repositories
                 hasPassphrase = true;
             }
 
-            // 尝试获取密钥类型作为标识
+
             string? fingerprint = null;
             try
             {
@@ -109,7 +105,7 @@ namespace FreeWPFShell.Repositories
                 ImportedAt = DateTime.Now
             };
 
-            // 保存 passphrase
+
             if (hasPassphrase && !string.IsNullOrEmpty(passphrase))
             {
                 SavePassphrase(keyInfo, passphrase);
@@ -120,14 +116,12 @@ namespace FreeWPFShell.Repositories
             return keyInfo;
         }
 
-        /// <summary>
-        /// 保存 passphrase：Windows Hello 启用时存 PasswordVault，否则 DPAPI。
-        /// </summary>
+
         private void SavePassphrase(SshKeyInfo keyInfo, string passphrase)
         {
             if (keyInfo.UseVault)
             {
-                // 存入 Windows 凭据保险箱
+
                 keyInfo.ProtectedPassphrase = null;
                 var vault = new PasswordVault();
                 RemoveFromVault(keyInfo.Id);
@@ -135,7 +129,7 @@ namespace FreeWPFShell.Repositories
             }
             else
             {
-                // DPAPI 加密
+
                 RemoveFromVault(keyInfo.Id);
                 byte[] passphraseBytes = Encoding.UTF8.GetBytes(passphrase);
                 byte[] encrypted = ProtectedData.Protect(passphraseBytes, null, DataProtectionScope.CurrentUser);
@@ -149,10 +143,7 @@ namespace FreeWPFShell.Repositories
             catch { }
         }
 
-        /// <summary>
-        /// 加载密钥为 PrivateKeyFile，自动解密 passphrase。
-        /// 如果使用 Windows Hello，需要先调用 LoadPrivateKeyFileAsync。
-        /// </summary>
+
         public PrivateKeyFile LoadPrivateKeyFile(string keyId)
         {
             var keyInfo = FindById(keyId) ?? throw new Exception($"未找到密钥 ID: {keyId}");
@@ -164,15 +155,13 @@ namespace FreeWPFShell.Repositories
                 return new PrivateKeyFile(stream);
             }
 
-            // 解密 passphrase
+
             string passphrase = DecryptPassphrase(keyInfo);
             using var stream2 = new MemoryStream(keyContent);
             return new PrivateKeyFile(stream2, passphrase);
         }
 
-        /// <summary>
-        /// 异步加载密钥（支持 Windows Hello 验证）。
-        /// </summary>
+
         public async Task<PrivateKeyFile> LoadPrivateKeyFileAsync(string keyId)
         {
             var keyInfo = FindById(keyId) ?? throw new Exception($"未找到密钥 ID: {keyId}");
@@ -184,7 +173,7 @@ namespace FreeWPFShell.Repositories
                 return new PrivateKeyFile(stream);
             }
 
-            // 如果是 Windows Hello 保护的，先验证身份
+
             if (keyInfo.UseVault)
             {
                 bool verified = await RequestAuthenticationAsync($"验证身份以解密密钥 \"{keyInfo.Name}\" 的密码");

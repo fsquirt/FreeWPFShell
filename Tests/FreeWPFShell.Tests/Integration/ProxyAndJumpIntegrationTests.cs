@@ -4,14 +4,7 @@ using Renci.SshNet;
 
 namespace FreeWPFShell.Tests.Integration
 {
-    /// <summary>
-    /// 认证 / 代理 / 跳板机分支集成测试。
-    /// 拓扑：
-    ///   - 代理服务器 127.0.0.1:10808 (HTTP/SOCKS5)
-    ///   - 远端目标 43.160.219.218 (RemoteHost)
-    ///   - 跳板机 172.17.77.135 (JumpHost) → 跳到远端目标
-    /// 验证 ConnectionFactory 构建的多种连接方式。配置缺失时跳过。
-    /// </summary>
+
     [TestClass]
     public class ProxyAndJumpIntegrationTests
     {
@@ -24,7 +17,7 @@ namespace FreeWPFShell.Tests.Integration
             return _cfg;
         }
 
-        /// <summary>构建"远端目标服务器"连接信息。</summary>
+
         private static SshConnectionInfo BuildRemoteInfo(SshTestConfig cfg)
         {
             return new SshConnectionInfo
@@ -164,18 +157,18 @@ namespace FreeWPFShell.Tests.Integration
                 return;
             }
 
-            // 1) 先连跳板机（WSL）
+
             using var jumpClient = new SshClient(cfg.JumpHost, cfg.JumpPort, cfg.JumpUser, cfg.JumpPassword);
             jumpClient.Connect();
             Assert.IsTrue(jumpClient.IsConnected, "跳板机应连接成功");
 
-            // 2) 在跳板机上建立本地转发到远端目标服务器 SSH 端口
+
             int localPort = new Random().Next(40000, 60000);
             var jumpPort = new ForwardedPortLocal("127.0.0.1", (uint)localPort, cfg.RemoteHost, (uint)cfg.RemotePort);
             jumpClient.AddForwardedPort(jumpPort);
             jumpPort.Start();
 
-            // 3) 通过跳板转发端口连接远端目标服务器
+
             var info = BuildRemoteInfo(cfg);
             info.UseProxy = true;
             info.Proxy = new ProxyInfo

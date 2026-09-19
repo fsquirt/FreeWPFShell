@@ -2,10 +2,7 @@ using FreeWPFShell.Models;
 
 namespace FreeWPFShell.Tests.Models
 {
-    /// <summary>
-    /// MonitorData 监控数据模型测试：环形网络历史缓冲区、最大值计算、
-    /// 进程/磁盘列表更新等纯逻辑。
-    /// </summary>
+
     [TestClass]
     public class MonitorDataTests
     {
@@ -29,7 +26,7 @@ namespace FreeWPFShell.Tests.Models
                 md.AddNetHistoryEntry(i, i * 2);
 
             Assert.AreEqual(50, md.NetHistory.Count);
-            // 最旧的 5 条(1..5)被挤出，第一条变为 6
+
             Assert.AreEqual(6, md.NetHistory[0].rx);
             Assert.AreEqual(55, md.NetHistory[49].rx);
             Assert.AreEqual(110, md.NetHistory[49].tx);
@@ -56,7 +53,7 @@ namespace FreeWPFShell.Tests.Models
         {
             var md = new MonitorData();
             md.AddNetHistoryEntry(10, 20);
-            // 都小于 1024 时下限为 1024（保证图表刻度合理）
+
             Assert.AreEqual(1024, md.GetNetHistoryMax());
         }
 

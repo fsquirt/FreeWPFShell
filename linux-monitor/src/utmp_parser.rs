@@ -1,14 +1,7 @@
 use crate::models::LoginRecord;
 use crate::utils::{epoch_to_string, now_secs};
 
-/// 手写 utmp/wtmp/btmp 二进制解析（替代 utmp-rs crate）。
-///
-/// 记录大小随平台而异（实测存在两种布局）：
-/// - 384 字节：32 位布局，tv_sec 为 i32 @340（常见于 32 位用户态/armhf 等）
-/// - 400 字节：64 位布局，tv_sec 为 i64 @344（x86_64/aarch64 glibc、musl）
-///
-/// 两种布局的公共字段偏移一致：ut_type: i16 @0, ut_user[32] @44, ut_host[256] @76。
-/// 文件尾部可能有写了一半的残留记录（如 btmp 异常截断），检测时不能只看整除。
+
 const RECORD_32: usize = 384;
 const RECORD_64: usize = 400;
 const TYPE_LOGIN_PROCESS: i16 = 6;
@@ -22,8 +15,7 @@ fn read_tv_sec(rec: &[u8], is32: bool) -> i64 {
     }
 }
 
-/// 检测记录布局：优先按文件大小整除判断；均不整除或均有歧义时，
-/// 抽样统计时间戳合理率（解析发生在数据不可信的前提下，需容错）。
+
 fn detect_layout(data: &[u8], now: i64) -> (usize, bool) {
     let div32 = data.len() % RECORD_32 == 0;
     let div64 = data.len() % RECORD_64 == 0;
@@ -63,8 +55,7 @@ pub fn extract_ip_from_host(host: &str) -> String {
     trimmed.to_string()
 }
 
-/// filter_user_process=true 时只取 USER_PROCESS（wtmp 登录成功记录），
-/// false 时也包含 LOGIN_PROCESS（btmp 失败登录记录，实测其记录类型为 6），与原 utmp-rs 版行为一致。
+
 pub fn parse_utmp_file(path: &str, filter_user_process: bool, max_count: Option<usize>) -> Vec<LoginRecord> {
     let data = match std::fs::read(path) {
         Ok(d) => d,
@@ -78,7 +69,7 @@ pub fn parse_utmp_file(path: &str, filter_user_process: bool, max_count: Option<
     if n == 0 { return Vec::new(); }
 
     let mut records = Vec::new();
-    // 文件按时间追加，倒序取最新记录
+
     for i in (0..n).rev() {
         if let Some(max) = max_count {
             if records.len() >= max { break; }
@@ -93,8 +84,7 @@ pub fn parse_utmp_file(path: &str, filter_user_process: bool, max_count: Option<
         let host = read_cstr(&rec[76..332]);
         if user.is_empty() && host.is_empty() { continue; }
 
-        // 时间戳异常的记录跳过：下限 1e9（2001-09 之前）基本可断定是半损坏/残留数据
-        // （实测 btmp 在截断后残留 1996 年时间戳的脏记录），上限防未来值
+
         let secs = read_tv_sec(rec, is32);
         if secs < 1_000_000_000 || secs > now_secs() + 86400 { continue; }
 
@@ -112,7 +102,7 @@ pub fn parse_utmp_file(path: &str, filter_user_process: bool, max_count: Option<
 mod tests {
     use super::*;
 
-    /// 用真实服务器下载的 wtmp/btmp 验证布局检测与解析（文件不在时跳过）
+
     #[test]
     fn parse_real_wtmp_btmp() {
         let wtmp = std::path::Path::new("../wtmp");

@@ -16,10 +16,7 @@ using SshNetException = Renci.SshNet.Common.SshException;
 
 namespace FreeWPFShell.Views
 {
-    /// <summary>
-    /// 终端 + SFTP 页。SFTP 数据与传输逻辑已迁移到 TerminalViewModel，
-    /// Code-behind 保留终端原生控件（Microsoft.Terminal.Wpf）交互与 SFTP 视图对接。
-    /// </summary>
+
     public partial class TerminalAndSFTP : UserControl
     {
         public TerminalViewModel ViewModel { get; }
@@ -37,7 +34,7 @@ namespace FreeWPFShell.Views
 
             FileGrid.ItemsSource = ViewModel.Files;
 
-            // 注入 UI 回调
+
             ViewModel.ShowMessage = (msg, title) => ModernMessageBox.Show(msg, title);
             ViewModel.Confirm = (msg, title) => ModernMessageBox.Show(msg, title, MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
             ViewModel.TransferStateChanged = UpdateStatusIcon;
@@ -60,7 +57,7 @@ namespace FreeWPFShell.Views
                     {
                         if (sess.IsSftpConnected)
                         {
-                            // SFTP 已连接：加载远程文件列表，并清除"SFTP 连接中"转圈状态
+
                             ViewModel.BindSftp();
                             UpdateStatusIcon();
                         }
@@ -70,7 +67,7 @@ namespace FreeWPFShell.Views
             Session.PropertyChanged += _sessionPropertyChangedHandler;
         }
 
-        /// <summary>关 Tab 时必须调用，断开引用链并释放资源。</summary>
+
         public void Cleanup()
         {
             if (Session != null && _sessionPropertyChangedHandler != null)
@@ -91,7 +88,7 @@ namespace FreeWPFShell.Views
             Session = null;
         }
 
-        // ── 终端 ─────────────────────────────────────────────────
+
 
         private void Terminal_Loaded(object sender, RoutedEventArgs e)
         {
@@ -217,7 +214,7 @@ namespace FreeWPFShell.Views
             });
         }
 
-        // ── SFTP 视图对接 ───────────────────────────────────────
+
 
         private void UpdateStatusIcon()
         {

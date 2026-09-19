@@ -3,17 +3,14 @@ using FreeWPFShell.Services;
 
 namespace FreeWPFShell.Tests.Services
 {
-    /// <summary>
-    /// TunnelService 隧道管理状态逻辑单元测试。
-    /// 验证注册、幂等清理、防重入等行为（不依赖真实 SSH 连接）。
-    /// </summary>
+
     [TestClass]
     public class TunnelServiceTests
     {
         [TestInitialize]
         public void Init()
         {
-            // 确保全局隧道表干净
+
             foreach (var t in Share.SshTunnelManager.Instance.ActiveTunnels.ToList())
                 Share.SshTunnelManager.Instance.UnregisterTunnel(t.Id);
         }
@@ -50,9 +47,9 @@ namespace FreeWPFShell.Tests.Services
             svc.RegisterTunnel(new SshTunnelInfo { Id = "t1", HostId = "host3", BindPort = 10004 });
 
             svc.CleanupTunnels();
-            // 第二次清理不应抛异常
+
             svc.CleanupTunnels();
-            svc.Dispose(); // Dispose 也触发清理，幂等
+            svc.Dispose(); 
 
             Assert.IsFalse(Share.SshTunnelManager.Instance.ActiveTunnels.Any(t => t.Id == "t1"));
         }
@@ -61,10 +58,10 @@ namespace FreeWPFShell.Tests.Services
         public void CleanupTunnels_WithNullOrUnstartedPort_DoesNotThrow()
         {
             using var svc = new TunnelService("host4", "test-host");
-            // PortConfig 为 null 的隧道
+
             svc.RegisterTunnel(new SshTunnelInfo { Id = "t_null", HostId = "host4", BindPort = 10005 });
 
-            // 不应抛异常
+
             svc.CleanupTunnels();
             Assert.IsFalse(Share.SshTunnelManager.Instance.ActiveTunnels.Any(t => t.Id == "t_null"));
         }
@@ -74,7 +71,7 @@ namespace FreeWPFShell.Tests.Services
         {
             using var svc = new TunnelService("host5", "test-host");
             svc.CleanupTunnels();
-            // 不应抛异常
+
             Assert.IsTrue(true);
         }
 

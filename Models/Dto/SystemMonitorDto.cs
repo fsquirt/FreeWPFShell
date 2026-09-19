@@ -2,10 +2,7 @@ using System.Collections.Generic;
 
 namespace FreeWPFShell.Models.Dto
 {
-    /// <summary>
-    /// Rust linux-monitor 探针返回的系统统计 DTO。
-    /// 字段名与 Rust 端 serde 序列化保持一致（snake_case），仅供反序列化使用。
-    /// </summary>
+
     public class SysStats
     {
         public float cpu_pct { get; set; }
@@ -18,15 +15,13 @@ namespace FreeWPFShell.Models.Dto
         public ulong rx_speed { get; set; }
         public ulong tx_speed { get; set; }
         public string iface { get; set; } = string.Empty;
-        /// <summary>发行版标识（/etc/os-release 的 ID=，如 debian/ubuntu/almalinux），用于匹配 logo</summary>
+
         public string os_id { get; set; } = string.Empty;
         public List<ProcessItem> processes { get; set; } = new();
         public List<DiskItem> disks { get; set; } = new();
     }
 
-    /// <summary>
-    /// 进程详细信息 DTO，由 Rust 探针 /process_detail 端点返回。
-    /// </summary>
+
     public class ProcessDetail
     {
         public uint pid { get; set; }

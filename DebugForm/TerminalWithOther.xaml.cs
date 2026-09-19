@@ -15,9 +15,7 @@ using System.Windows.Shapes;
 
 namespace FreeWPFShell.DebugForm
 {
-    /// <summary>
-    /// TerminalWithOther.xaml 的交互逻辑
-    /// </summary>
+
     public partial class TerminalWithOther : MicaWindow
     {
         private ConPtyConnection? _connection;

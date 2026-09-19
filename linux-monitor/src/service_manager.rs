@@ -73,9 +73,7 @@ pub fn read_pid_uid_gid(pid: u32) -> (u32, u32) {
     (uid, gid)
 }
 
-/// systemd 服务列表：systemctl list-units 一行含 名称/LOAD/ACTIVE/SUB/描述，
-/// 活跃服务的主 PID 用一次批量 `systemctl show <units...> -p MainPID --value` 获取
-/// （输出按参数顺序，每单元一行）。
+
 pub fn get_systemd_services() -> Vec<ServiceItem> {
     let out = match Command::new("systemctl")
         .args(["list-units", "--type=service", "--all", "--no-legend", "--no-pager"])
@@ -94,7 +92,7 @@ pub fn get_systemd_services() -> Vec<ServiceItem> {
         load_state: String,
         active_state: String,
         sub_state: String,
-        pid_slot: Option<usize>, // 活跃服务在 active_units/pids 中的下标
+        pid_slot: Option<usize>, 
     }
 
     let mut rows: Vec<Row> = Vec::new();
@@ -120,7 +118,7 @@ pub fn get_systemd_services() -> Vec<ServiceItem> {
         rows.push(Row { name, description, load_state, active_state, sub_state, pid_slot });
     }
 
-    // 批量查活跃服务主 PID：一条 systemctl 调用拿全部，避免逐个调用拖慢响应
+
     let mut pids: Vec<u32> = vec![0; active_units.len()];
     if !active_units.is_empty() {
         let mut cmd = Command::new("systemctl");

@@ -3,10 +3,7 @@ using FreeWPFShell.Services;
 
 namespace FreeWPFShell.Tests.Services
 {
-    /// <summary>
-    /// SshMonitorService 的 top/proc/net 文本解析逻辑测试。
-    /// 通过 internal 测试构造函数注入 MonitorData，无需真实 SSH 客户端。
-    /// </summary>
+
     [TestClass]
     public class MonitorParserTests
     {
@@ -49,7 +46,7 @@ Filesystem  Avail  Size
             var svc = CreateService();
             svc.ParseTopOutput(TopSample);
 
-            // 500*1024 KB = 500M；1000*1024 KB = 1000M
+
             Assert.AreEqual("500M/1000M", svc.Monitor.MemText);
         }
 
@@ -59,7 +56,7 @@ Filesystem  Avail  Size
             var svc = CreateService();
             svc.ParseTopOutput(TopSample);
 
-            // 50*1024 KB = 50M；200*1024 KB = 200M
+
             Assert.AreEqual("50M/200M", svc.Monitor.SwapText);
         }
 
@@ -87,9 +84,9 @@ Filesystem  Avail  Size
         public void ParseTopOutput_ComputesCpuUsage()
         {
             var svc = CreateService();
-            // 第一次建立基线（无输出）
+
             svc.ParseTopOutput(TopSample);
-            // 第二次 CPU 数值增大，应计算出 usage >= 0
+
             string secondSample = TopSample.Replace("cpu  1000", "cpu  2000");
             svc.ParseTopOutput(secondSample);
 

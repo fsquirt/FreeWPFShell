@@ -26,7 +26,7 @@ namespace FreeWPFShell.Repositories
             Reload();
         }
 
-        /// <summary>仅供单元测试使用：指定主机库文件路径，避免污染真实用户数据。</summary>
+
         internal HostRepository(SettingsRepository settingsRepo, string hostsFilePath)
         {
             _settingsRepo = settingsRepo;
@@ -84,7 +84,7 @@ namespace FreeWPFShell.Repositories
             });
         }
 
-        /// <summary>探针上报发行版标识后持久化（连接时刷新）。</summary>
+
         public void UpdateLinuxDistro(string id, string distro)
         {
             var host = FindById(id);
@@ -109,7 +109,7 @@ namespace FreeWPFShell.Repositories
             var host = FindById(id) ?? throw new Exception("未在配置文件中找到该主机。");
             var settings = _settingsRepo.Load();
 
-            // 密钥认证不需要解密主机密码（密钥密码由 KeyRepository 管理）
+
             if (host.AuthMethod == SshAuthMethod.PrivateKey)
             {
                 return host;

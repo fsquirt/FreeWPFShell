@@ -3,10 +3,7 @@ using FreeWPFShell.Share;
 
 namespace FreeWPFShell.Tests.Services
 {
-    /// <summary>
-    /// IpGeoService IP 归属地查询测试。
-    /// 内网 IP 判断不依赖 mmdb；公网 IP 查询依赖 IPDataBase/mmdb 已复制到输出目录。
-    /// </summary>
+
     [TestClass]
     public class IpGeoServiceTests
     {
@@ -29,7 +26,7 @@ namespace FreeWPFShell.Tests.Services
         }
 
         [TestMethod]
-        [DataRow("172.32.0.1")] // 172.31 之外不是内网
+        [DataRow("172.32.0.1")] 
         [DataRow("8.8.8.8")]
         public void Query_PublicIp_NotInternal(string ip)
         {
@@ -40,7 +37,7 @@ namespace FreeWPFShell.Tests.Services
         [TestMethod]
         public void Query_InvalidIp_DoesNotThrow()
         {
-            // 非法 IP 不应抛异常，返回空结果
+
             var result = IpGeoService.Instance.Query("not-an-ip");
             Assert.IsNotNull(result);
         }
@@ -56,7 +53,7 @@ namespace FreeWPFShell.Tests.Services
         [TestMethod]
         public void Query_PublicIp_ProducesSimpleGeo()
         {
-            // 公网 IP 应产生一个非空的归属地字符串（依赖 mmdb）
+
             var result = IpGeoService.Instance.Query("114.114.114.114");
             Assert.IsNotNull(result.SimpleGeo);
         }

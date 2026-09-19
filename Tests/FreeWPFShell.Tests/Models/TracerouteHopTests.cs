@@ -2,9 +2,7 @@ using FreeWPFShell.Models;
 
 namespace FreeWPFShell.Tests.Models
 {
-    /// <summary>
-    /// TracerouteHop 路由跳节点模型测试：属性变更通知。
-    /// </summary>
+
     [TestClass]
     public class TracerouteHopTests
     {
@@ -28,7 +26,7 @@ namespace FreeWPFShell.Tests.Models
             int count = 0;
             hop.PropertyChanged += (s, e) => { if (e.PropertyName == nameof(TracerouteHop.Latency)) count++; };
 
-            hop.Latency = "5ms"; // 相同值，不应触发
+            hop.Latency = "5ms"; 
 
             Assert.AreEqual(0, count);
         }

@@ -15,7 +15,7 @@ namespace FreeWPFShell.Share
 
         private readonly object _lock = new();
 
-        // Observable collection to allow real-time UI binding
+
         public ObservableCollection<SshTunnelInfo> ActiveTunnels { get; } = new ObservableCollection<SshTunnelInfo>();
 
         public void RegisterTunnel(SshTunnelInfo tunnelInfo)
@@ -41,7 +41,7 @@ namespace FreeWPFShell.Share
             });
         }
 
-        // Clean up tunnels by host, e.g. when session tab closes
+
         public void UnregisterTunnelsByHost(string hostId)
         {
             RunOnUiThread(() =>
@@ -57,10 +57,7 @@ namespace FreeWPFShell.Share
             });
         }
 
-        /// <summary>
-        /// 若存在 WPF UI 调度器，则在 UI 线程上执行；否则（无 Application 或已在 UI 线程）直接执行。
-        /// 避免在测试或非 UI 上下文（Application.Current 为 null）时抛空引用。
-        /// </summary>
+
         private static void RunOnUiThread(Action action)
         {
             var app = System.Windows.Application.Current;

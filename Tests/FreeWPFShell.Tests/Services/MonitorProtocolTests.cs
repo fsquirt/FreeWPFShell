@@ -10,10 +10,7 @@ using FreeWPFShell.Services;
 
 namespace FreeWPFShell.Tests.Services
 {
-    /// <summary>
-    /// MonitorProtocol 帧编解码与请求链路测试。
-    /// 用本地 TcpListener 假服务端验证全链路，不依赖真实 SSH/探针。
-    /// </summary>
+
     [TestClass]
     public class MonitorProtocolTests
     {
@@ -51,7 +48,7 @@ namespace FreeWPFShell.Tests.Services
         [TestMethod]
         public void ReadFrame_RejectsOversizedLength()
         {
-            // 0xFFFFFFFF 超过 MaxFrameLength，应拒绝而非分配内存
+
             using var ms = new MemoryStream(new byte[] { 0xFF, 0xFF, 0xFF, 0xFF, 1, 2 });
             Assert.ThrowsException<IOException>(() => MonitorProtocol.ReadFrame(ms));
         }
@@ -140,7 +137,7 @@ namespace FreeWPFShell.Tests.Services
             {
                 int port = ((IPEndPoint)listener.LocalEndpoint).Port;
 
-                // exit 语义：服务端读走请求后不回包直接关闭，客户端不应挂起或抛错
+
                 var serverTask = Task.Run(async () =>
                 {
                     using var client = await listener.AcceptTcpClientAsync();
@@ -168,7 +165,7 @@ namespace FreeWPFShell.Tests.Services
             {
                 int port = ((IPEndPoint)listener.LocalEndpoint).Port;
 
-                // 服务端只接受连接不响应，客户端应在超时后抛 TimeoutException
+
                 var serverTask = Task.Run(async () =>
                 {
                     using var client = await listener.AcceptTcpClientAsync();

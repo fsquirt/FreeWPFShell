@@ -49,7 +49,7 @@ namespace FreeWPFShell.UserForm
             if (editHost.AuthMethod == SshAuthMethod.PrivateKey)
             {
                 rbKey.IsChecked = true;
-                // 选中对应的密钥
+
                 if (!string.IsNullOrEmpty(editHost.SshKeyId))
                 {
                     for (int i = 0; i < cmbKeySelect.Items.Count; i++)
@@ -116,7 +116,7 @@ namespace FreeWPFShell.UserForm
             }
             if (rbKey.IsChecked == true && cmbKeySelect.SelectedItem == null) { ModernMessageBox.Show("请选择一个已导入的 SSH 密钥。\n\n请先在主界面的「密钥管理」中导入密钥。", "提示", MessageBoxButton.OK, MessageBoxImage.Information); return false; }
 
-            // SSH 隧道代理验证
+
             if (chkProxy.IsChecked == true && cmbProxyType.SelectedIndex == 3)
             {
                 if (string.IsNullOrWhiteSpace(txtJumpHost.Text)) { ModernMessageBox.Show("请输入跳板机IP地址。", "提示", MessageBoxButton.OK, MessageBoxImage.Information); txtJumpHost.Focus(); return false; }
@@ -139,7 +139,7 @@ namespace FreeWPFShell.UserForm
                 AuthMethod = rbPassword.IsChecked == true ? SshAuthMethod.Password : SshAuthMethod.PrivateKey,
                 UseProxy = chkProxy.IsChecked == true
             };
-            // 密钥登录：保存选中的 Key ID
+
             if (host.AuthMethod == SshAuthMethod.PrivateKey && cmbKeySelect.SelectedItem is SshKeyInfo selectedKey)
             {
                 host.SshKeyId = selectedKey.Id;
@@ -172,7 +172,7 @@ namespace FreeWPFShell.UserForm
             return host;
         }
 
-        /// <summary>密码模式返回密码，密钥模式返回空（密钥由 KeyRepository 管理）</summary>
+
         private string GetSecret() => rbPassword.IsChecked == true ? txtPassword.Text : "";
 
         private async void BtnSave_Click(object sender, RoutedEventArgs e)
@@ -218,7 +218,7 @@ namespace FreeWPFShell.UserForm
         private void chkProxy_Checked(object sender, RoutedEventArgs e)
         {
             if (pnlProxy != null) pnlProxy.IsEnabled = chkProxy.IsChecked == true;
-            // 切换代理面板可见性
+
             if (pnlNetProxy != null && pnlSshProxy != null)
             {
                 bool isSsh = chkProxy.IsChecked == true && cmbProxyType.SelectedIndex == 3;
@@ -267,7 +267,7 @@ namespace FreeWPFShell.UserForm
 
             try
             {
-                // SSH 隧道代理测试
+
                 if (cmbProxyType.SelectedIndex == 3)
                 {
                     await TestSshProxyAsync();
@@ -306,7 +306,7 @@ namespace FreeWPFShell.UserForm
             string jumpUser = txtJumpUser.Text.Trim();
             string jumpPassword = txtJumpPassword.Text;
 
-            // 预加载跳板机密钥
+
             Renci.SshNet.PrivateKeyFile? jumpKey = null;
             if (rbJumpKey.IsChecked == true && cmbJumpKeySelect.SelectedItem is SshKeyInfo selectedJumpKey)
             {
@@ -348,7 +348,7 @@ namespace FreeWPFShell.UserForm
 
             if (hasTarget)
             {
-                // 测试通过跳板机的端口转发连通性
+
                 bool tunnelOk = await Task.Run(() =>
                 {
                     Renci.SshNet.SshClient? jumpClient = null;
@@ -371,7 +371,7 @@ namespace FreeWPFShell.UserForm
                         jumpClient.AddForwardedPort(port);
                         port.Start();
 
-                        // 尝试连接转发端口
+
                         using var tcp = new System.Net.Sockets.TcpClient();
                         var result = tcp.BeginConnect("127.0.0.1", (int)localPort, null, null);
                         bool connected = result.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(5));

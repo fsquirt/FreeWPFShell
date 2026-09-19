@@ -10,10 +10,7 @@ using FreeWPFShell.ViewModels;
 
 namespace FreeWPFShell.Views
 {
-    /// <summary>
-    /// 系统管理页。数据与命令逻辑已迁移到 SystemManagementViewModel，
-    /// Code-behind 负责视图控件与 VM 的对接（面板切换、数据加载触发、UI 回调注入）。
-    /// </summary>
+
     public partial class SystemManagementPage : UserControl, IDisposable
     {
         public SystemManagementViewModel ViewModel { get; }
@@ -28,7 +25,7 @@ namespace FreeWPFShell.Views
             ViewModel = _vm;
             DataContext = _vm;
 
-            // 绑定数据网格到 VM 集合
+
             WtmpGrid.ItemsSource = _vm.WtmpRecords;
             BtmpGrid.ItemsSource = _vm.BtmpRecords;
             ServiceGrid.ItemsSource = _vm.ServiceRecords;
@@ -36,7 +33,7 @@ namespace FreeWPFShell.Views
             NetGrid.ItemsSource = _vm.NetConns;
             CronGrid.ItemsSource = _vm.CronJobs;
 
-            // 注入 UI 回调
+
             _vm.ShowMessage = (msg, title) => ModernMessageBox.Show(msg, title, MessageBoxButton.OK, MessageBoxImage.Information);
             _vm.ShowError = (msg, ex) => ModernMessageBox.Show(msg + "\n" + ex, "错误", MessageBoxButton.OK, MessageBoxImage.Error);
             _vm.Confirm = (msg, title) => ModernMessageBox.Show(msg, title, MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
@@ -46,7 +43,7 @@ namespace FreeWPFShell.Views
             _ = _vm.RefreshProcessData();
         }
 
-        // ── Tab 导航 ─────────────────────────────────────────────
+
 
         private void BtnTabProcess_Click(object sender, RoutedEventArgs e) => SwitchToTab("Process");
         private void BtnTabNet_Click(object sender, RoutedEventArgs e) => SwitchToTab("Net");
@@ -82,16 +79,16 @@ namespace FreeWPFShell.Views
             btn.Foreground = isActive ? System.Windows.Media.Brushes.White : System.Windows.Media.Brushes.Gray;
         }
 
-        // ── 登录记录 ─────────────────────────────────────────────
+
 
         private void BtnRefreshWtmp_Click(object sender, RoutedEventArgs e) => _ = _vm.LoadWtmpAsync(GetWtmpCount());
         private void BtnRefreshBtmp_Click(object sender, RoutedEventArgs e) => _ = _vm.LoadBtmpAsync(GetBtmpCount());
 
-        /// <summary>解析"成功登录条数"输入框，无效则用默认 10。</summary>
+
         private int GetWtmpCount()
             => int.TryParse(TxtWtmpCount.Text, out int c) && c > 0 ? c : 10;
 
-        /// <summary>解析"失败登录条数"输入框，无效则用默认 10。</summary>
+
         private int GetBtmpCount()
             => int.TryParse(TxtBtmpCount.Text, out int c) && c > 0 ? c : 10;
         private void BtnExportWtmp_Click(object sender, RoutedEventArgs e) => ExportCsv(_vm.BuildWtmpCsvAsync, "登录记录");
@@ -118,7 +115,7 @@ namespace FreeWPFShell.Views
             }
         }
 
-        // ── 服务管理 ─────────────────────────────────────────────
+
 
         private void BtnRefreshServices_Click(object sender, RoutedEventArgs e) => _ = _vm.LoadServicesAsync();
         private void TxtServiceSearch_TextChanged(object sender, TextChangedEventArgs e) => _vm.ServiceSearch = TxtServiceSearch.Text;
@@ -147,7 +144,7 @@ namespace FreeWPFShell.Views
             }
         }
 
-        // ── 进程管理 ─────────────────────────────────────────────
+
 
         private void BtnRefreshProcess_Click(object sender, RoutedEventArgs e) => _ = _vm.RefreshProcessData();
         private void TxtProcessSearch_TextChanged(object sender, TextChangedEventArgs e) => _vm.ProcessSearch = TxtProcessSearch.Text;
@@ -158,14 +155,14 @@ namespace FreeWPFShell.Views
         private void CtxKillAllForce_Click(object sender, RoutedEventArgs e) => _ = _vm.KillAllCommand.ExecuteAsync(9);
         private void CtxCopyPid_Click(object sender, RoutedEventArgs e) => _vm.CopyPidCommand.Execute(null);
 
-        // ── 网络连接 ─────────────────────────────────────────────
+
 
         private void BtnRefreshNet_Click(object sender, RoutedEventArgs e) => _ = _vm.LoadNetConnsAsync();
         private void TxtNetSearch_TextChanged(object sender, TextChangedEventArgs e) => _vm.NetSearch = TxtNetSearch.Text;
         private void CtxKillNet_Click(object sender, RoutedEventArgs e) => _ = _vm.KillNetCommand.ExecuteAsync(15);
         private void CtxKillNetForce_Click(object sender, RoutedEventArgs e) => _ = _vm.KillNetCommand.ExecuteAsync(9);
 
-        // ── Cron ─────────────────────────────────────────────────
+
 
         private void BtnRefreshCron_Click(object sender, RoutedEventArgs e) => _ = _vm.LoadCronJobsAsync();
         private void TxtCronSearch_TextChanged(object sender, TextChangedEventArgs e) => _vm.CronSearch = TxtCronSearch.Text;

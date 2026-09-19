@@ -10,18 +10,13 @@ using System.Threading.Tasks;
 
 namespace FreeWPFShell.Services
 {
-    /// <summary>
-    /// linux-monitor 探针的纯 TCP 通信协议（替代原 HTTP 实现，Rust 端不再依赖 tiny_http）。
-    /// 帧格式：[4 字节大端长度][payload UTF-8]。
-    /// 请求为 JSON 信封 {"op":"...","token":"...",...参数}；响应体与旧 HTTP 响应一致（JSON / "true"/"false" / 纯文本），
-    /// 鉴权失败或未知 op 返回 {"err":"..."}。
-    /// </summary>
+
     public static class MonitorProtocol
     {
-        /// <summary>读帧上限，防止垃圾数据导致无界内存分配。</summary>
+
         public const int MaxFrameLength = 64 * 1024 * 1024;
 
-        /// <summary>请求超时，对齐原 HttpClient.Timeout = 10s。</summary>
+
         public const int DefaultTimeoutMs = 10_000;
 
         #region 帧编解码
@@ -93,7 +88,7 @@ namespace FreeWPFShell.Services
 
         #endregion
 
-        /// <summary>构造请求信封：{"op":...,"token":...,...args}（扁平结构，与 Rust 端解析对应）。</summary>
+
         public static byte[] BuildEnvelope(string token, string op, IReadOnlyDictionary<string, object?>? args = null)
         {
             var envelope = new Dictionary<string, object?>(args?.Count + 2 ?? 2)
@@ -108,10 +103,7 @@ namespace FreeWPFShell.Services
             return JsonSerializer.SerializeToUtf8Bytes(envelope);
         }
 
-        /// <summary>
-        /// 发送一次请求（短连接，语义对齐原 HttpClient.GetStringAsync：失败抛异常，返回响应体字符串）。
-        /// op=exit 时写入请求后立即关闭，不等待响应（agent 收到即退出）。
-        /// </summary>
+
         public static async Task<string> SendRequestAsync(string host, int port, string token, string op,
             IReadOnlyDictionary<string, object?>? args = null, int timeoutMs = DefaultTimeoutMs)
         {
@@ -146,7 +138,7 @@ namespace FreeWPFShell.Services
             return text;
         }
 
-        /// <summary>探针错误响应 {"err":"..."} 对齐原 HTTP 非 2xx 抛异常的语义。</summary>
+
         private static void ThrowIfErrResponse(string text)
         {
             if (text.Length < 8 || text[0] != '{' || !text.Contains("\"err\"")) return;

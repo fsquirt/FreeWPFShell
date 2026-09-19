@@ -2,9 +2,7 @@ using FreeWPFShell.Models;
 
 namespace FreeWPFShell.Tests.Models
 {
-    /// <summary>
-    /// CronJobItem.ScheduleDescription：cron 表达式 → 中文描述的纯逻辑测试。
-    /// </summary>
+
     [TestClass]
     public class CronJobItemTests
     {
@@ -24,21 +22,21 @@ namespace FreeWPFShell.Tests.Models
         [TestMethod]
         public void ScheduleDescription_MinuteEveryN()
         {
-            // "*/15" + 全通配 → "每15分钟"
+
             Assert.AreEqual("每15分钟", new CronJobItem { Schedule = "*/15 * * * *" }.ScheduleDescription);
         }
 
         [TestMethod]
         public void ScheduleDescription_DailyAtTime()
         {
-            // 每天 03:30：min=30, hour=3, dom/month/dow=*
+
             Assert.AreEqual("每天 03:30", new CronJobItem { Schedule = "30 3 * * *" }.ScheduleDescription);
         }
 
         [TestMethod]
         public void ScheduleDescription_InvalidFormat_ReturnsRaw()
         {
-            // 字段数不对时原样返回
+
             string raw = "0 0 * *";
             Assert.AreEqual(raw, new CronJobItem { Schedule = raw }.ScheduleDescription);
         }

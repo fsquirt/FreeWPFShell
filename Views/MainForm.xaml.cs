@@ -21,17 +21,17 @@ namespace FreeWPFShell.Views
         public ObservableCollection<SshSessionService> ActiveSessions { get; } = new();
         private SshSessionService? _currentSession;
 
-        // 复用的画刷
+
         private static readonly SolidColorBrush s_activeTabBg = new(Color.FromRgb(0x2D, 0x2D, 0x30));
         private static readonly SolidColorBrush s_chartRxFill = new(Color.FromArgb(120, 39, 174, 96));
         private static readonly SolidColorBrush s_chartTxFill = new(Color.FromArgb(180, 216, 67, 21));
 
-        // 预创建的柱状图矩形（复用，不每 tick new）
+
         private readonly Rectangle[] _chartRxRects = new Rectangle[50];
         private readonly Rectangle[] _chartTxRects = new Rectangle[50];
         private bool _chartInitialized;
 
-        // 侧边栏绑定的 ObservableCollection，直接复用 MonitorData 的集合
+
         private readonly ObservableCollection<ProcessItem> _sidebarProcesses = new();
         private readonly ObservableCollection<DiskItem> _sidebarDisks = new();
 
@@ -123,16 +123,14 @@ namespace FreeWPFShell.Views
 
                 if (content is TerminalAndSFTP termPage)
                 {
-                    // 先保存会话引用：Cleanup() 内部会把 termPage.Session 置 null，
-                    // 若在此之后再读取 termPage.Session 将恒为 null，导致会话无法
-                    // 从 ActiveSessions 移除、Dispose 不执行、隧道残留。
+
                     var session = termPage.Session;
-                    // 再清理引用链（退订事件、释放 Terminal 原生资源），再断开连接
+
                     termPage.Cleanup();
                     if (session != null)
                     {
                         ActiveSessions.Remove(session);
-                        session.Dispose(); // → Disconnect → CleanupTunnels
+                        session.Dispose(); 
                     }
                 }
 
@@ -140,14 +138,14 @@ namespace FreeWPFShell.Views
                 else if (content is FrameworkElement fe && fe.DataContext is IDisposable disposable)
                     disposable.Dispose();
 
-                // 等后台断开线程跑完，然后GC回收 + 强制trim工作集
+
                 Task.Run(async () =>
                 {
                     await Task.Delay(3000);
                     GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
                     GC.WaitForPendingFinalizers();
                     GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
-                    // 等效于 memreduct：强制OS回收进程的物理页面
+
                     SetProcessWorkingSetSize(Process.GetCurrentProcess().Handle, (IntPtr)(-1), (IntPtr)(-1));
                 });
             }
@@ -239,17 +237,17 @@ namespace FreeWPFShell.Views
             TxtNetUp.Text = d.NetUp; TxtNetDown.Text = d.NetDown; TxtNetIface.Text = d.NetIface;
             TxtNetMax.Text = d.NetMax; TxtNetMid.Text = d.NetMid;
 
-            // 内联更新而不创建新 ObservableCollection
+
             SyncCollection(_sidebarProcesses, d.Processes);
             SyncCollection(_sidebarDisks, d.Disks);
             DrawNetChart(d);
         }
 
-        /// <summary>内联同步：避免 new ObservableCollection 造成 GC 压力</summary>
+
         private static void SyncCollection<T>(ObservableCollection<T> target, System.Collections.Generic.IReadOnlyList<T> source)
         {
             int srcCount = source.Count;
-            // 调整大小
+
             while (target.Count > srcCount) target.RemoveAt(target.Count - 1);
             for (int i = 0; i < srcCount; i++)
             {
@@ -278,7 +276,7 @@ namespace FreeWPFShell.Views
             if (maxVal < 1024) maxVal = 1024;
             double barW = width / 50.0;
 
-            // 懒初始化预分配的矩形
+
             if (!_chartInitialized)
             {
                 for (int i = 0; i < 50; i++)
@@ -296,7 +294,7 @@ namespace FreeWPFShell.Views
                 _chartInitialized = true;
             }
 
-            // 仅更新高度和底部位置，不创建新对象
+
             for (int i = 0; i < 50; i++)
             {
                 var rxRect = _chartRxRects[i];
@@ -309,7 +307,7 @@ namespace FreeWPFShell.Views
                     Canvas.SetTop(rxRect, height - rxH);
                     txRect.Height = txH; txRect.Visibility = Visibility.Visible;
                     Canvas.SetTop(txRect, height - txH);
-                    // 更新宽度以防 DPI / 布局变化
+
                     double newW = Math.Ceiling(barW);
                     rxRect.Width = newW; txRect.Width = newW;
                     Canvas.SetLeft(rxRect, i * barW); Canvas.SetLeft(txRect, i * barW);

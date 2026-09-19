@@ -8,15 +8,12 @@ using Renci.SshNet;
 
 namespace FreeWPFShell.ViewModels
 {
-    /// <summary>
-    /// SSH 隧道管理页 ViewModel。管理活跃会话下拉、隧道创建/删除，
-    /// 以及隧道列表展示。
-    /// </summary>
+
     public partial class SshTunnelViewModel : ObservableObject
     {
         private readonly SshTunnelManager _tunnelManager;
 
-        /// <summary>活跃会话列表（来自主窗口）。</summary>
+
         public ObservableCollection<SshSessionService> ActiveSessions { get; } = new();
 
         [ObservableProperty]
@@ -25,7 +22,7 @@ namespace FreeWPFShell.ViewModels
         [ObservableProperty]
         private int _tunnelTypeIndex;
 
-        /// <summary>隧道类型：true=本地转发(服务器->本机)，false=远程转发(本机->服务器)。</summary>
+
         public bool IsLocal => TunnelTypeIndex == 0;
 
         partial void OnTunnelTypeIndexChanged(int value) => OnPropertyChanged(nameof(IsLocal));
@@ -42,10 +39,10 @@ namespace FreeWPFShell.ViewModels
         [ObservableProperty]
         private string _remark = "手动创建";
 
-        /// <summary>全局隧道列表（绑定 DataGrid）。</summary>
+
         public ObservableCollection<SshTunnelInfo> ActiveTunnels => _tunnelManager.ActiveTunnels;
 
-        /// <summary>隧道创建成功/失败提示。</summary>
+
         public Action<string>? ShowMessage { get; set; }
 
         public SshTunnelViewModel(SshTunnelManager? tunnelManager = null)
@@ -81,14 +78,14 @@ namespace FreeWPFShell.ViewModels
                 ForwardedPort port;
                 if (IsLocal)
                 {
-                    // 服务器 -> 本机 (Local Port Forwarding)
+
                     port = new ForwardedPortLocal("127.0.0.1", bindPort, DestAddr, destPort);
                     client.AddForwardedPort(port);
                     port.Start();
                 }
                 else
                 {
-                    // 本机 -> 服务器 (Remote Port Forwarding)
+
                     port = new ForwardedPortRemote(destPort, DestAddr, bindPort);
                     client.AddForwardedPort(port);
                     port.Start();

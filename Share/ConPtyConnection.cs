@@ -113,8 +113,8 @@ public class ConPtyConnection : ITerminalConnection, IDisposable
 
     public event EventHandler<TerminalOutputEventArgs>? TerminalOutput;
     IntPtr _hPC = IntPtr.Zero;
-    IntPtr _hPipeIn = IntPtr.Zero;   // 写给子进程
-    IntPtr _hPipeOut = IntPtr.Zero;  // 从子进程读
+    IntPtr _hPipeIn = IntPtr.Zero;   
+    IntPtr _hPipeOut = IntPtr.Zero;  
     IntPtr _hPipeInRead = IntPtr.Zero;
     IntPtr _hPipeOutWrite = IntPtr.Zero;
     PROCESS_INFORMATION _pi;
@@ -187,7 +187,7 @@ public class ConPtyConnection : ITerminalConnection, IDisposable
     public void Close()
     {
         _cts.Cancel();
-        // 1. 先强行杀死子进程 (ssh.exe)，防止 IO 挂起导致的死锁
+
         if (_pi.hProcess != IntPtr.Zero)
         {
             TerminateProcess(_pi.hProcess, 0);
@@ -196,10 +196,10 @@ public class ConPtyConnection : ITerminalConnection, IDisposable
         }
         if (_pi.hThread != IntPtr.Zero) { CloseHandle(_pi.hThread); _pi.hThread = IntPtr.Zero; }
 
-        // 2. 关闭 ConPTY 句柄
+
         if (_hPC != IntPtr.Zero) { ClosePseudoConsole(_hPC); _hPC = IntPtr.Zero; }
 
-        // 3. 关闭所有管道句柄
+
         if (_hPipeIn != IntPtr.Zero) { CloseHandle(_hPipeIn); _hPipeIn = IntPtr.Zero; }
         if (_hPipeOut != IntPtr.Zero) { CloseHandle(_hPipeOut); _hPipeOut = IntPtr.Zero; }
         if (_hPipeInRead != IntPtr.Zero) { CloseHandle(_hPipeInRead); _hPipeInRead = IntPtr.Zero; }

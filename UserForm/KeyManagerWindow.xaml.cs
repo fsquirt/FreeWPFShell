@@ -39,7 +39,7 @@ namespace FreeWPFShell.UserForm
             string filePath = dlg.FileName;
             string defaultName = System.IO.Path.GetFileName(filePath);
 
-            // 先尝试无密码导入
+
             try
             {
                 var key = _keyRepo.Import(filePath, defaultName, null);
@@ -49,11 +49,11 @@ namespace FreeWPFShell.UserForm
             }
             catch (InvalidOperationException)
             {
-                // 需要密码，继续
+
             }
             catch (Renci.SshNet.Common.SshPassPhraseNullOrEmptyException)
             {
-                // 需要密码，继续
+
             }
             catch (Exception ex)
             {
@@ -61,7 +61,7 @@ namespace FreeWPFShell.UserForm
                 return;
             }
 
-            // 密钥有密码保护，弹窗输入
+
             var passphraseDlg = new PassphraseDialog();
             passphraseDlg.Owner = this;
             if (passphraseDlg.ShowDialog() != true) return;

@@ -1,4 +1,4 @@
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 
 namespace FreeWPFShell.Models
 {
@@ -31,7 +31,7 @@ namespace FreeWPFShell.Models
                 if (parts.Length != 5) return Schedule;
                 string min = parts[0], hour = parts[1], dom = parts[2], month = parts[3], dow = parts[4];
 
-                // Exact matches
+
                 if (min == "*" && hour == "*" && dom == "*" && month == "*" && dow == "*")
                     return "每分钟";
                 if (min.StartsWith("*/") && hour == "*" && dom == "*" && month == "*" && dow == "*")
@@ -49,7 +49,7 @@ namespace FreeWPFShell.Models
                 if (min == "0" && hour == "0" && dom == "1" && month == "1" && dow == "*")
                     return "每年1月1日 00:00";
 
-                // Helper: format hour/min with step support like */2
+
                 string fmtTime(string h, string m)
                 {
                     string mm = m == "0" ? "00" : (m.StartsWith("*/") ? $"每{m.Substring(2)}分钟" : m.PadLeft(2, '0'));

@@ -24,9 +24,9 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::Path;
 
-/// 单帧上限，防止垃圾数据导致无界内存分配
+
 const MAX_FRAME_LEN: usize = 10 * 1024 * 1024;
-/// 每个连接的读超时：半开连接不会永久占用线程
+
 const READ_TIMEOUT: Duration = Duration::from_secs(15);
 
 fn read_frame(stream: &mut TcpStream) -> std::io::Result<Vec<u8>> {
@@ -59,8 +59,7 @@ fn ok_body(success: bool) -> Vec<u8> {
     success.to_string().into_bytes()
 }
 
-/// 处理单个连接：读取一帧请求 → 校验 token → 按 op 路由 → 写回一帧响应。
-/// 响应体为手写拼接的 JSON，字段结构与旧 serde 序列化版本完全一致，C# 端 DTO 不变。
+
 fn handle_conn(
     mut stream: TcpStream,
     token: &Option<String>,
@@ -82,7 +81,7 @@ fn handle_conn(
         }
     };
 
-    // Token 校验（token 文件在启动时读取并删除）
+
     if let Some(t) = token {
         if get_str(&envelope, "token") != Some(t.as_str()) {
             let _ = write_frame(&mut stream, b"{\"err\":\"unauthorized\"}");
@@ -93,7 +92,7 @@ fn handle_conn(
     let op = get_str(&envelope, "op").unwrap_or("");
 
     let body: Vec<u8> = match op {
-        // 退出指令：立即退出进程，不回包（客户端写完帧即关闭）
+
         "exit" => std::process::exit(0),
         "stats" => {
             let g = stats_ref.lock().unwrap();
@@ -116,8 +115,7 @@ fn handle_conn(
         "killall" => {
             let path = get_str(&envelope, "path").unwrap_or("");
             let sig = get_u64(&envelope, "sig").unwrap_or(15) as i32;
-            // C# 传的是 /proc/[pid]/exe 的 readlink 结果，直接扫描 /proc 按 exe 全路径精确匹配；
-            // 不用 killall 命令优先的原因：它只认 15 字符 comm，长进程名/改名进程会匹配不到
+
             let mut targets: Vec<u32> = Vec::new();
             if !path.is_empty() {
                 if let Ok(entries) = fs::read_dir("/proc") {
@@ -140,7 +138,7 @@ fn handle_conn(
                 }
                 true
             } else {
-                // exe 精确匹配不到（如二进制已被删除/替换），退回 killall 按名称匹配
+
                 let proc_name = Path::new(path).file_name().and_then(|n| n.to_str()).unwrap_or(path);
                 std::process::Command::new("killall").arg(format!("-{}", sig)).arg(proc_name).status().map(|s| s.success()).unwrap_or(false)
             };
@@ -153,7 +151,7 @@ fn handle_conn(
             ok_body(success)
         }
         "login_records" => {
-            // kind 决定日志文件与是否只取成功记录：wtmp=登录成功记录，btmp=登录失败记录
+
             let kind = get_str(&envelope, "kind").unwrap_or("wtmp");
             let count = get_u64(&envelope, "count").unwrap_or(if kind == "btmp" { 100 } else { 0 }) as usize;
             let (path, only_good) = if kind == "btmp" { ("/var/log/btmp", false) } else { ("/var/log/wtmp", true) };
@@ -228,8 +226,7 @@ fn main() {
         let mut collector = Collector::new();
         loop {
             thread::sleep(Duration::from_secs(1));
-            // 兜底自退：客户端死亡/网络中断导致无法收到退出指令时，
-            // 超过 30 秒没有任何连接请求则自行退出，避免僵尸进程残留
+
             let idle_secs = now_secs() - last_req_clone.load(Ordering::Relaxed);
             if idle_secs > 30 { std::process::exit(0); }
 
@@ -240,7 +237,7 @@ fn main() {
     });
 
     for stream in listener.incoming() {
-        // 每次有连接到达都视为客户端存活（thread-per-connection：慢请求不阻塞轮询）
+
         last_request.store(now_secs(), Ordering::Relaxed);
         if let Ok(stream) = stream {
             let stats_c = stats_ref.clone();

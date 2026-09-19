@@ -26,7 +26,7 @@ namespace FreeWPFShell.UserForm
                 BtnNo.Visibility = Visibility.Visible;
                 BtnOk.Visibility = Visibility.Collapsed;
             }
-            else // Default OK
+            else 
             {
                 BtnOk.Visibility = Visibility.Visible;
                 BtnYes.Visibility = Visibility.Collapsed;
@@ -35,7 +35,7 @@ namespace FreeWPFShell.UserForm
 
             this.Title = title;
 
-            // 处理图标
+
             if (image != MessageBoxImage.None)
             {
                 TxtIcon.Visibility = Visibility.Visible;
@@ -94,7 +94,7 @@ namespace FreeWPFShell.UserForm
             {
                 var msgBox = new ModernMessageBox(message, title, button, image);
                 
-                // 修复：仅当 MainWindow 已完全初始化并显示时才设置 Owner
+
                 var mainWin = Application.Current.MainWindow;
                 if (mainWin != null && mainWin.IsVisible)
                 {

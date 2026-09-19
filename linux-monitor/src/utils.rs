@@ -21,7 +21,7 @@ pub fn now_secs() -> i64 {
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as i64
 }
 
-/// JSON 字符串转义（含引号、反斜杠与控制字符）
+
 pub fn json_escape(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 8);
     for c in s.chars() {
@@ -38,13 +38,13 @@ pub fn json_escape(s: &str) -> String {
     out
 }
 
-/// Unix 时间戳 → "YYYY-MM-DD HH:MM:SS"（UTC，civil 算法，替代 time crate）
+
 pub fn epoch_to_string(secs: i64) -> String {
     let days = secs.div_euclid(86400);
     let sod = secs.rem_euclid(86400);
     let (h, m, s) = (sod / 3600, (sod % 3600) / 60, sod % 60);
 
-    // Howard Hinnant civil_from_days
+
     let z = days + 719_468;
     let era = z.div_euclid(146_097);
     let doe = z.rem_euclid(146_097);

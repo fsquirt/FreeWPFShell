@@ -10,10 +10,7 @@ using FreeWPFShell.Share;
 
 namespace FreeWPFShell.ViewModels
 {
-    /// <summary>
-    /// 系统管理页 ViewModel。管理进程/服务/登录记录/网络连接/Cron 五大功能区的
-    /// 数据集合、过滤逻辑与操作命令，通过 SshSessionService 调用远端系统信息。
-    /// </summary>
+
     public partial class SystemManagementViewModel : ObservableObject
     {
         private readonly SshSessionService _session;
@@ -21,10 +18,10 @@ namespace FreeWPFShell.ViewModels
         private readonly System.Windows.Threading.Dispatcher _dispatcher;
         private bool _isRefreshingProcess;
 
-        /// <summary>确保在 UI 线程上执行集合修改，避免 ObservableCollection 跨线程异常。</summary>
+
         private void RunOnUiThread(Action action)
         {
-            // 测试环境（无 WPF Application）直接执行，避免等待不存在的 UI 消息循环导致死锁
+
             if (System.Windows.Application.Current == null)
             {
                 action();
@@ -34,7 +31,7 @@ namespace FreeWPFShell.ViewModels
             else _dispatcher.Invoke(action);
         }
 
-        // 原始数据（用于过滤）
+
         private List<LoginRecord> _wtmpRaw = new();
         private List<LoginRecord> _btmpRaw = new();
         private List<ServiceItem> _allServicesRaw = new();
@@ -42,7 +39,7 @@ namespace FreeWPFShell.ViewModels
         private List<NetConnItem> _allNetConnsRaw = new();
         private List<CronJobItem> _allCronJobsRaw = new();
 
-        // 展示集合
+
         public ObservableCollection<LoginRecord> WtmpRecords { get; } = new();
         public ObservableCollection<LoginRecord> BtmpRecords { get; } = new();
         public ObservableCollection<ServiceItem> ServiceRecords { get; } = new();
@@ -50,24 +47,24 @@ namespace FreeWPFShell.ViewModels
         public ObservableCollection<NetConnItem> NetConns { get; } = new();
         public ObservableCollection<CronJobItem> CronJobs { get; } = new();
 
-        // 搜索/过滤
+
         [ObservableProperty] private string _serviceSearch = string.Empty;
         [ObservableProperty] private string _processSearch = string.Empty;
         [ObservableProperty] private string _netSearch = string.Empty;
         [ObservableProperty] private string _cronSearch = string.Empty;
-        // 初始值与 UI 开关默认状态保持一致（默认勾选），确保页面加载时过滤即生效
+
         [ObservableProperty] private bool _filterInactive = true;
         [ObservableProperty] private bool _filterEmpty = true;
         [ObservableProperty] private bool _filterEmptyNet = true;
         [ObservableProperty] private bool _filterDisabledCron;
 
-        // 选中项
+
         [ObservableProperty] private ProcessItem? _selectedProcess;
         [ObservableProperty] private NetConnItem? _selectedNetConn;
         [ObservableProperty] private ServiceItem? _selectedService;
         [ObservableProperty] private CronJobItem? _selectedCronJob;
 
-        // Cron 表单
+
         [ObservableProperty] private string _cronMin = "*";
         [ObservableProperty] private string _cronHour = "*";
         [ObservableProperty] private string _cronDom = "*";
@@ -77,10 +74,10 @@ namespace FreeWPFShell.ViewModels
         [ObservableProperty] private string _cronServiceStatus = string.Empty;
         [ObservableProperty] private bool _cronStatusRunning;
 
-        // 进程详情文本
+
         [ObservableProperty] private string _processDetailText = string.Empty;
 
-        // UI 提示
+
         public Action<string, string>? ShowMessage { get; set; }
         public Action<string, string>? ShowError { get; set; }
         public Func<string, string, bool>? Confirm { get; set; }
@@ -104,7 +101,7 @@ namespace FreeWPFShell.ViewModels
 
         public void Stop() => _processTimer?.Stop();
 
-        // ── 登录记录 ─────────────────────────────────────────────
+
 
         public async Task LoadWtmpAsync(int count = 10)
         {
@@ -201,7 +198,7 @@ namespace FreeWPFShell.ViewModels
             return sb.ToString();
         }
 
-        // ── 服务 ─────────────────────────────────────────────────
+
 
         public async Task LoadServicesAsync()
         {
@@ -277,7 +274,7 @@ namespace FreeWPFShell.ViewModels
         [ObservableProperty] private string _logContent = string.Empty;
         [ObservableProperty] private string _logFileName = string.Empty;
 
-        // ── 进程 ─────────────────────────────────────────────────
+
 
         public async Task RefreshProcessData()
         {
@@ -376,7 +373,7 @@ namespace FreeWPFShell.ViewModels
             CopyToClipboard(SelectedProcess.Pid.ToString());
         }
 
-        // ── 网络连接 ─────────────────────────────────────────────
+
 
         public async Task LoadNetConnsAsync()
         {
@@ -424,7 +421,7 @@ namespace FreeWPFShell.ViewModels
             await LoadNetConnsAsync();
         }
 
-        // ── Cron ─────────────────────────────────────────────────
+
 
         public async Task LoadCronJobsAsync()
         {

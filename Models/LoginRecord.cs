@@ -16,7 +16,7 @@ namespace FreeWPFShell.Models
         [JsonPropertyName("timestamp")]
         public long Timestamp { get; set; }
 
-        // IP归属地，由C#端查询IpGeoService填充
+
         public string Geo { get; set; } = string.Empty;
     }
 }

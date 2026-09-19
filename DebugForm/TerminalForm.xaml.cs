@@ -14,9 +14,7 @@ using System.Windows.Shapes;
 
 namespace FreeWPFShell.View
 {
-    /// <summary>
-    /// TerminalForm.xaml 的交互逻辑
-    /// </summary>
+
     public partial class TerminalForm : Window
     {
         private ConPtyConnection? _connection;

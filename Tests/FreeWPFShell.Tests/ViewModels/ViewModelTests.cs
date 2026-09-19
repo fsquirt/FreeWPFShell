@@ -4,9 +4,7 @@ using FreeWPFShell.ViewModels;
 
 namespace FreeWPFShell.Tests.ViewModels
 {
-    /// <summary>
-    /// ViewModel 纯逻辑单元测试（不依赖真实 SSH 连接）。
-    /// </summary>
+
     [TestClass]
     public class SystemManagementViewModelTests
     {
@@ -80,7 +78,7 @@ namespace FreeWPFShell.Tests.ViewModels
             var vm = new SystemManagementViewModel(session);
             try
             {
-                vm.ApplyCronPreset("not-a-cron"); // 字段数不对，应安全返回
+                vm.ApplyCronPreset("not-a-cron"); 
             }
             finally { vm.Stop(); }
         }

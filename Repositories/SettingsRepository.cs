@@ -9,7 +9,7 @@ namespace FreeWPFShell.Repositories
         private readonly string _filePath;
         private static readonly JsonSerializerOptions s_writeIndented = new() { WriteIndented = true };
 
-        // 缓存已加载的设置，避免重复读磁盘
+
         private AppSettings? _cached;
         private DateTime _lastModified = DateTime.MinValue;
 

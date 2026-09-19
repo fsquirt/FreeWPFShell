@@ -6,11 +6,7 @@ using FreeWPFShell.Share;
 
 namespace FreeWPFShell.Services
 {
-    /// <summary>
-    /// 会话级 SSH 隧道管理器（单一职责）。
-    /// 负责注册、停止、清理本会话关联的所有隧道，避免残留隧道占用端口或导致后续连接异常。
-    /// 端口创建由各调用方（连接/跳板机/监控/隧道页）完成并调用 RegisterTunnel 登记。
-    /// </summary>
+
     public class TunnelService : ITunnelService
     {
         private readonly string _hostId;

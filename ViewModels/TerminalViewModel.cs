@@ -10,10 +10,7 @@ using Renci.SshNet.Sftp;
 
 namespace FreeWPFShell.ViewModels
 {
-    /// <summary>
-    /// 终端 + SFTP 页 ViewModel。承载 SFTP 文件列表、导航、传输状态与操作逻辑。
-    /// 终端原生控件（Microsoft.Terminal.Wpf）交互保留在 Code-behind。
-    /// </summary>
+
     public partial class TerminalViewModel : ObservableObject
     {
         private readonly SshSessionService _session;
@@ -27,7 +24,7 @@ namespace FreeWPFShell.ViewModels
         [ObservableProperty]
         private string _currentPath = "/";
 
-        // 传输状态
+
         [ObservableProperty]
         private int _upActive;
         [ObservableProperty]
@@ -50,7 +47,7 @@ namespace FreeWPFShell.ViewModels
         [ObservableProperty]
         private double _downProgress;
 
-        // 状态图标/提示（由 Code-behind 或 UI 读取）
+
         [ObservableProperty]
         private string _statusText = "当前没有传输任务";
         [ObservableProperty]
@@ -58,14 +55,14 @@ namespace FreeWPFShell.ViewModels
 
         private CancellationTokenSource? _transferCts;
 
-        // UID/GID → 用户名/组名 缓存
+
         private Dictionary<int, string> _userMap = new();
         private Dictionary<int, string> _groupMap = new();
 
         private SftpClient? Sftp => _session.SftpClient;
         private Renci.SshNet.SshClient? Ssh => _session.MasterClient;
 
-        // UI 交互回调
+
         public Action<string, string>? ShowMessage { get; set; }
         public Func<string, string, bool>? Confirm { get; set; }
         public Action? TransferStateChanged { get; set; }
@@ -82,7 +79,7 @@ namespace FreeWPFShell.ViewModels
             TransferStateChanged?.Invoke();
         }
 
-        // ── 导航 ─────────────────────────────────────────────────
+
 
         [RelayCommand]
         private void GoBack()
@@ -270,7 +267,7 @@ namespace FreeWPFShell.ViewModels
             return $"{d:0.##} {s_sizeUnits[i]}";
         }
 
-        // ── 下载 ─────────────────────────────────────────────────
+
 
         public async Task DownloadAsync(IEnumerable<RemoteFile> items, string localDir)
         {
@@ -392,7 +389,7 @@ namespace FreeWPFShell.ViewModels
             }
         }
 
-        // ── 上传 ─────────────────────────────────────────────────
+
 
         public void UploadLocalItem(string localPath, string remoteDir)
         {
@@ -517,7 +514,7 @@ namespace FreeWPFShell.ViewModels
             return p;
         }
 
-        // ── 删除/重命名 ──────────────────────────────────────────
+
 
         public void Delete(IEnumerable<RemoteFile> items)
         {
@@ -571,7 +568,7 @@ namespace FreeWPFShell.ViewModels
             catch (Exception ex) { ShowMessage?.Invoke("重命名失败", ex.Message); }
         }
 
-        // ── 复制 / 粘贴 ──────────────────────────────────────────
+
 
         public string BuildCopyText(IEnumerable<RemoteFile> items)
         {
@@ -614,7 +611,7 @@ namespace FreeWPFShell.ViewModels
                 _ = _session.EditRemoteFileAsync(file.FullName, editor);
         }
 
-        // ── 传输状态 ─────────────────────────────────────────────
+
 
         private void UpdateTransferStatus()
         {

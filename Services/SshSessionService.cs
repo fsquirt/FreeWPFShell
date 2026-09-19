@@ -69,23 +69,23 @@ namespace FreeWPFShell.Services
         private readonly SettingsRepository _settingsRepo;
         private readonly object _sftpLock = new();
 
-        // SSH 隧道代理（跳板机）
+
         private SshClient? _jumpClient;
         private ForwardedPortLocal? _jumpPort;
         public object SftpLock => _sftpLock;
 
-        // 会话级隧道管理（单一职责）
+
         private ITunnelService? _tunnelService;
 
-        // SSH/SFTP 客户端工厂（连接参数构建）
+
         private readonly IConnectionFactory _connectionFactory;
 
         private RemoteFileService? _fileService;
         private SshMonitorService? _monitorService;
 
-        // SFTP 看门狗：SFTP 连接独立于主 SSH 且可能被服务器/NAT 掐断，断开后自动重连
+
         private System.Timers.Timer? _sftpWatchdog;
-        // 0=空闲 1=重连中（Interlocked 防止并发重连循环）
+
         private int _sftpReconnectState = 0;
         private const int SftpReconnectMaxAttempts = 5;
         private const int SftpReconnectIntervalMs = 3000;
@@ -115,7 +115,7 @@ namespace FreeWPFShell.Services
         public Action? OnConnected { get; set; }
         public Action<Exception>? OnConnectFailed { get; set; }
 
-        /// <summary>加载预载私钥（密钥认证时）。连接与 SFTP 重连共用。</summary>
+
         private PrivateKeyFile? LoadPreloadedKey()
         {
             if (HostInfo.AuthMethod != SshAuthMethod.PrivateKey) return null;
@@ -136,7 +136,7 @@ namespace FreeWPFShell.Services
                 preloadedKey = LoadPreloadedKey();
             }
 
-            // SSH 隧道代理：预加载跳板机密钥
+
             PrivateKeyFile? jumpKey = null;
             if (HostInfo.UseProxy && HostInfo.Proxy?.Type == ProxyType.Ssh && !string.IsNullOrEmpty(HostInfo.Proxy.SshKeyId))
             {
@@ -152,7 +152,7 @@ namespace FreeWPFShell.Services
                 {
                     var settings = _settingsRepo.Load();
 
-                    // SSH 隧道代理：先连接跳板机，建立端口转发
+
                     if (HostInfo.UseProxy && HostInfo.Proxy?.Type == ProxyType.Ssh)
                     {
                         ConnectionStatus = "连接跳板机...";
@@ -165,7 +165,7 @@ namespace FreeWPFShell.Services
                         _jumpClient.AddForwardedPort(_jumpPort);
                         _jumpPort.Start();
 
-                        // 注册隧道到管理器
+
                         var tunnelInfo = new SshTunnelInfo
                         {
                             Id = $"Jump_{SessionId}",
@@ -181,7 +181,7 @@ namespace FreeWPFShell.Services
                         };
                         RegisterTunnel(tunnelInfo);
 
-                        // 通过转发端口连接目标主机（BuildConnectionInfo 会自动检测 _jumpPort 并使用转发端口）
+
                         MasterClient = BuildSshClient(preloadedKey);
                     }
                     else
@@ -197,16 +197,16 @@ namespace FreeWPFShell.Services
                     {
                         IsAppCursorMode = isApp;
                     };
-                    // 订阅终端断连：连接意外断开时自动清理本会话隧道
+
                     TerminalConnection.ConnectionLost += OnTerminalConnectionLost;
 
-                    // 先在后台线程建好 ShellStream，UI 线程设 Connection 时不会卡
+
                     TerminalConnection.Start();
 
                     IsConnected = true;
                     Application.Current?.Dispatcher.BeginInvoke(() => OnConnected?.Invoke());
 
-                    // SFTP
+
                     try
                     {
                         ConnectionStatus = "SFTP 建立连接...";
@@ -222,7 +222,7 @@ namespace FreeWPFShell.Services
                         Debug.WriteLine("SFTP Connection Failed: " + ex.Message);
                     }
 
-                    // Monitor
+
                     try
                     {
                         if (MasterClient != null && SftpClient != null)
@@ -231,9 +231,7 @@ namespace FreeWPFShell.Services
                             _monitorService.MonitorUpdated += (s, e) => MonitorUpdated?.Invoke(this, e);
                             _monitorService.ConnectionStatusCallback = (status) => ConnectionStatus = status;
                             _monitorService.RegisterTunnelCallback = RegisterTunnel;
-                            // 探针上报发行版标识：先持久化到 hosts.json（再刷新内存值）。
-                            // 顺序不能反：HostInfo 与列表/仓库是同一实例，先赋值会让
-                            // UpdateLinuxDistro 的变更检查误判"无变化"而跳过 Save
+
                             _monitorService.DistroDetectedCallback = distro =>
                             {
                                 Task.Run(() =>
@@ -247,7 +245,7 @@ namespace FreeWPFShell.Services
                                     catch (Exception ex) { Debug.WriteLine("保存发行版标识失败: " + ex.Message); }
                                 });
                             };
-                            // 监控轮询检测到连接断开时，自动清理隧道（兜底信号，覆盖终端流未及时返回 0 的场景）
+
                             _monitorService.ConnectionLostCallback = CleanupTunnels;
                             _monitorService.StartAsync().GetAwaiter().GetResult();
                         }
@@ -283,11 +281,7 @@ namespace FreeWPFShell.Services
             _sftpWatchdog.Elapsed += OnSftpWatchdogTick;
         }
 
-        /// <summary>
-        /// 每 2 秒检测 SFTP 连接健康状态。检测到断开且主 SSH 仍存活时，
-        /// 启动一次后台重连循环（最多 5 次、间隔 3s；全部失败冷却 30s 后由看门狗再次触发）。
-        /// 主 SSH 已断时重连无意义（隧道也断了），交给上层会话清理与探针自退兜底。
-        /// </summary>
+
         private void OnSftpWatchdogTick(object? sender, System.Timers.ElapsedEventArgs e)
         {
             if (!IsConnected || SftpClient == null || SftpClient.IsConnected) return;
@@ -320,7 +314,7 @@ namespace FreeWPFShell.Services
                         Thread.Sleep(SftpReconnectIntervalMs);
                     }
 
-                    // 全部失败：标记断开并冷却，冷却结束后看门狗会再次触发重连循环
+
                     IsSftpConnected = false;
                     ConnectionStatus = "SFTP 重连失败，等待自动重试...";
                     Thread.Sleep(SftpReconnectCooldownMs);
@@ -332,7 +326,7 @@ namespace FreeWPFShell.Services
             });
         }
 
-        /// <summary>在 _sftpLock 内原子替换 SFTP 客户端（新 client 已连接），旧 client 在锁外释放。</summary>
+
         private void SwapSftpClient(SftpClient fresh)
         {
             SftpClient old;
@@ -341,7 +335,7 @@ namespace FreeWPFShell.Services
                 old = SftpClient;
                 SftpClient = fresh;
             }
-            // 文件服务换绑新 client（保留已打开的编辑器 watcher）
+
             _fileService?.UpdateClient(fresh);
             if (old != null)
             {
@@ -358,19 +352,11 @@ namespace FreeWPFShell.Services
         public void RegisterTunnel(SshTunnelInfo tunnel)
             => _tunnelService?.RegisterTunnel(tunnel);
 
-        /// <summary>
-        /// 幂等清理本会话创建的所有 SSH 隧道（Stop 端口并从全局隧道表移除）。
-        /// 在连接意外断开、主动断开或会话结束时都会调用，确保不会残留隧道。
-        /// 委托给独立的 TunnelService 处理，避免上帝对象内维护大量隧道状态。
-        /// </summary>
+
         public void CleanupTunnels()
             => _tunnelService?.CleanupTunnels();
 
-        /// <summary>
-        /// 终端连接断连回调：当 SSH 连接意外断开（网络中断/服务器关闭）时，
-        /// 由 SshTerminalConnection 触发，立即清理本会话所有隧道，
-        /// 不依赖 UI 弹窗确认，避免残留隧道占用端口或导致后续连接异常。
-        /// </summary>
+
         private void OnTerminalConnectionLost(object? sender, EventArgs e)
         {
             CleanupTunnels();
@@ -399,7 +385,7 @@ namespace FreeWPFShell.Services
             IsConnected = false;
             IsSftpConnected = false;
 
-            // 清掉回调，断开 session → terminalPage 的引用链
+
             OnConnected = null;
             OnConnectFailed = null;
 
@@ -408,16 +394,15 @@ namespace FreeWPFShell.Services
                 try { TerminalConnection?.Close(); } catch { }
                 TerminalConnection = null;
 
-                // 停止 SFTP 看门狗（会话已主动关闭，不再重连）
+
                 try { _sftpWatchdog?.Stop(); _sftpWatchdog?.Dispose(); } catch { }
                 _sftpWatchdog = null;
 
-                // 先停监控（内部会向探针发退出指令并 pkill 兜底）：
-                // 必须在跳板机隧道关闭之前执行，否则隧道已断，退出指令与 pkill 都无法到达探针
+
                 try { _monitorService?.Stop(); } catch { }
                 _monitorService = null;
 
-                // 清理跳板机资源
+
                 try { _jumpPort?.Stop(); } catch { }
                 _jumpPort = null;
                 try { _jumpClient?.Disconnect(); _jumpClient?.Dispose(); } catch { }
@@ -426,7 +411,7 @@ namespace FreeWPFShell.Services
                 try { _fileService?.Dispose(); } catch { }
                 _fileService = null;
 
-                // 清理本会话创建的所有隧道（含跳板机、监控、手动创建的），幂等
+
                 try
                 {
                     if (TerminalConnection != null)

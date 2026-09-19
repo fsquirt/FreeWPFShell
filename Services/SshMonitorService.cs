@@ -46,7 +46,7 @@ namespace FreeWPFShell.Services
         private static readonly Regex s_uptimeRegex = new(@"up\s+(.*?),?\s+\d+\s+user", RegexOptions.Compiled);
         private readonly StringBuilder _cmdBuilder = new StringBuilder(512);
 
-        // 静态复用的分割字符数组，避免每次 Split 分配新数组
+
         private static readonly char[] s_newlineChars = { '\n', '\r' };
         private static readonly char[] s_spaceChars = { ' ' };
         private static readonly char[] s_semicolonComma = { ':', ',' };
@@ -54,18 +54,18 @@ namespace FreeWPFShell.Services
         private static readonly char[] s_colonSpace = { ':', ' ' };
         private static readonly char[] s_spaceTab = { ' ', '\t' };
 
-        // 复用的 Json 选项，避免每次反序列化创建
+
         private static readonly JsonSerializerOptions s_jsonOptions = new() { PropertyNameCaseInsensitive = true };
 
-        // 复用列表，避免每 tick 分配新 List
+
         private readonly List<ProcessItem> _reusableProcs = new(16);
         private readonly List<DiskItem> _reusableDisks = new(8);
 
         public Action<string>? ConnectionStatusCallback { get; set; }
         public Action<SshTunnelInfo>? RegisterTunnelCallback { get; set; }
-        // 当监控轮询检测到 SSH 连接断开时触发，用于清理会话相关资源（如隧道）
+
         public Action? ConnectionLostCallback { get; set; }
-        // 探针上报发行版标识（/etc/os-release 的 ID=）时触发，连接建立后首次 stats 即回调
+
         public Action<string>? DistroDetectedCallback { get; set; }
         private string _lastDistro = "";
 
@@ -85,10 +85,7 @@ namespace FreeWPFShell.Services
             Monitor = monitor;
         }
 
-        /// <summary>
-        /// 仅供单元测试使用：构造一个不依赖真实 SSH 客户端的实例，
-        /// 用于直接测试 top/proc 文本解析逻辑。
-        /// </summary>
+
         internal SshMonitorService(MonitorData monitor)
         {
             _sshClient = null!;
@@ -123,7 +120,7 @@ namespace FreeWPFShell.Services
             }
         }
 
-        /// <summary>构造探针请求参数（扁平键值，与 Rust 端 JSON 信封解析对应）。</summary>
+
         private static IReadOnlyDictionary<string, object?> Args(params (string key, object? value)[] pairs)
         {
             var d = new Dictionary<string, object?>(pairs.Length);
@@ -131,15 +128,11 @@ namespace FreeWPFShell.Services
             return d;
         }
 
-        /// <summary>通过 SSH 隧道向探针发送一次 TCP 协议请求（短连接，语义对齐原 HttpClient）。</summary>
+
         private Task<string> SendAsync(string op, IReadOnlyDictionary<string, object?>? args = null, int timeoutMs = MonitorProtocol.DefaultTimeoutMs)
             => MonitorProtocol.SendRequestAsync("127.0.0.1", (int)LinuxMonitorLocalPort, _monitorToken, op, args, timeoutMs);
 
-        /// <summary>
-        /// 向探针发送退出指令（op=exit，agent 收到即退出进程，不回包）。
-        /// best-effort：仅在主 SSH 连接存活时尝试（隧道依赖其端口转发），
-        /// 失败静默忽略，由 pkill 兜底与 agent 30 秒空闲自退兜底。
-        /// </summary>
+
         public void SendExitCommand()
         {
             try
@@ -158,7 +151,7 @@ namespace FreeWPFShell.Services
         {
             if (!_sshClient.IsConnected)
             {
-                // 连接已断开：通知上层清理资源（隧道等），并停止轮询避免空转
+
                 ConnectionLostCallback?.Invoke();
                 _monitorTimer?.Stop();
                 return;
@@ -374,8 +367,7 @@ namespace FreeWPFShell.Services
 
             NotifyStatus("建立 ssh 隧道...");
             LinuxMonitorLocalPort = (uint)(System.Security.Cryptography.RandomNumberGenerator.GetInt32(40000, 60001));
-            // 通过跳板机连接时，remoteHost 用 "0.0.0.0" 确保目标 SSH 服务器在所有接口监听
-            // 直连时 "127.0.0.1" 和 "0.0.0.0" 效果相同（SSH.NET 内部会转换）
+
             string monitorRemoteHost = _hostInfo.UseProxy && _hostInfo.Proxy?.Type == ProxyType.Ssh ? "0.0.0.0" : "127.0.0.1";
             var port = new ForwardedPortLocal("127.0.0.1", LinuxMonitorLocalPort, monitorRemoteHost, LinuxMonitorLocalPort);
             port.Exception += (sender, e) =>
@@ -384,7 +376,7 @@ namespace FreeWPFShell.Services
             };
             _sshClient.AddForwardedPort(port);
 
-            // 异步启动端口转发，绝不阻塞 UI
+
             await Task.Run(() => port.Start());
 
             var tunnelInfo = new SshTunnelInfo
@@ -402,7 +394,7 @@ namespace FreeWPFShell.Services
             string binPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "linux-monitor", "linux-monitor");
             if (!File.Exists(binPath)) return;
 
-            // 异步计算 MD5，避免阻塞
+
             string localHash = "";
             await Task.Run(() =>
             {
@@ -414,7 +406,7 @@ namespace FreeWPFShell.Services
                 }
             });
 
-            // 异步执行远程命令
+
             await Task.Run(() => _sshClient.CreateCommand("mkdir -p /tmp/FreeWPFShell").Execute());
 
             bool needsUpload = true;
@@ -438,7 +430,7 @@ namespace FreeWPFShell.Services
             if (needsUpload)
             {
                 NotifyStatus("上传 Linux_Monitor...");
-                // 在后台读文件到内存，减小锁内操作
+
                 byte[] fileBytes = await Task.Run(() => File.ReadAllBytes(binPath));
                 await Task.Run(() =>
                 {
@@ -463,7 +455,7 @@ namespace FreeWPFShell.Services
                 }
             });
 
-            // 异步执行远程命令链
+
             await Task.Run(() =>
             {
                 _sshClient.CreateCommand($"chmod 600 {tokenPath}").Execute();
@@ -627,8 +619,7 @@ namespace FreeWPFShell.Services
 
         public void Stop()
         {
-            // 优先让探针优雅退出（走隧道发送退出指令，主 SSH 存活时必达），
-            // pkill 仅作兜底（探针卡死/服务器上残留旧版本 agent 的场景）
+
             SendExitCommand();
 
             _monitorCts?.Cancel();
