@@ -55,6 +55,24 @@ namespace FreeWPFShell.ViewModels
 
         private CancellationTokenSource? _transferCts;
 
+        private readonly object _counterLock = new();
+
+        private void AddUpActive(int delta) { lock (_counterLock) { UpActive = Math.Max(0, UpActive + delta); } }
+        private void AddUpTotal(int delta) { lock (_counterLock) { UpTotal = Math.Max(0, UpTotal + delta); } }
+        private void AddUpDone(int delta) { lock (_counterLock) { UpDone = Math.Max(0, UpDone + delta); } }
+        private void AddDownActive(int delta) { lock (_counterLock) { DownActive = Math.Max(0, DownActive + delta); } }
+        private void AddDownTotal(int delta) { lock (_counterLock) { DownTotal = Math.Max(0, DownTotal + delta); } }
+        private void AddDownDone(int delta) { lock (_counterLock) { DownDone = Math.Max(0, DownDone + delta); } }
+
+        private void ResetTransferCounters()
+        {
+            lock (_counterLock)
+            {
+                UpActive = 0; UpTotal = 0; UpDone = 0;
+                DownActive = 0; DownTotal = 0; DownDone = 0;
+            }
+        }
+
 
         private Dictionary<int, string> _userMap = new();
         private Dictionary<int, string> _groupMap = new();
@@ -277,15 +295,14 @@ namespace FreeWPFShell.ViewModels
             if (UpActive == 0 && DownActive == 0)
             {
                 _transferCts = new CancellationTokenSource();
-                DownTotal = 0; DownDone = 0;
-                UpTotal = 0; UpDone = 0;
+                ResetTransferCounters();
             }
 
             foreach (var item in items)
             {
                 int count = item.IsDirectory ? await CountRemoteFilesAsync(item.FullName) : 1;
-                DownTotal += count;
-                DownActive++;
+                AddDownTotal(count);
+                AddDownActive(1);
                 _ = DownloadItemAsync(item, localDir, sftp);
             }
         }
@@ -348,8 +365,8 @@ namespace FreeWPFShell.ViewModels
                 }
                 finally
                 {
-                    DownDone++;
-                    DownActive--;
+                    AddDownDone(1);
+                    AddDownActive(-1);
                     System.Windows.Application.Current?.Dispatcher.BeginInvoke(UpdateTransferStatus);
                 }
             });
@@ -383,7 +400,7 @@ namespace FreeWPFShell.ViewModels
                             System.Windows.Application.Current?.Dispatcher.BeginInvoke(UpdateTransferStatus);
                         });
                     }
-                    DownDone++;
+                    AddDownDone(1);
                 }
                 catch { }
             }
@@ -400,13 +417,12 @@ namespace FreeWPFShell.ViewModels
             if (UpActive == 0 && DownActive == 0)
             {
                 _transferCts = new CancellationTokenSource();
-                UpTotal = 0; UpDone = 0;
-                DownTotal = 0; DownDone = 0;
+                ResetTransferCounters();
             }
 
             int count = CountLocalFiles(localPath);
-            UpTotal += count;
-            UpActive++;
+            AddUpTotal(count);
+            AddUpActive(1);
 
             Task.Run(() =>
             {
@@ -445,8 +461,8 @@ namespace FreeWPFShell.ViewModels
                 }
                 finally
                 {
-                    UpDone++;
-                    UpActive--;
+                    AddUpDone(1);
+                    AddUpActive(-1);
                     System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
                     {
                         UpdateTransferStatus();
@@ -478,7 +494,7 @@ namespace FreeWPFShell.ViewModels
                                 uploaded => { UpProgress = fileSize > 0 ? (double)uploaded / fileSize * 100 : 0; });
                         }
                     }
-                    UpDone++;
+                    AddUpDone(1);
                 }
                 catch { }
             });
@@ -520,7 +536,7 @@ namespace FreeWPFShell.ViewModels
         {
             var sftp = Sftp;
             if (sftp == null || !sftp.IsConnected) return;
-            UpActive++;
+            AddUpActive(1);
             Task.Run(() =>
             {
                 try
@@ -537,7 +553,7 @@ namespace FreeWPFShell.ViewModels
                 }
                 finally
                 {
-                    UpActive--;
+                    AddUpActive(-1);
                     System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => LoadPath(CurrentPath, true));
                 }
             });
@@ -584,7 +600,7 @@ namespace FreeWPFShell.ViewModels
             if (string.IsNullOrEmpty(clipboardText)) return;
             if (clipboardText.StartsWith($"FreeWPFRemoteCopy|{_session.HostInfo.Id}|"))
             {
-                UpActive++;
+                AddUpActive(1);
                 Task.Run(() =>
                 {
                     try
@@ -598,7 +614,7 @@ namespace FreeWPFShell.ViewModels
                     }
                     finally
                     {
-                        UpActive--;
+                        AddUpActive(-1);
                         System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => LoadPath(CurrentPath, true));
                     }
                 });
@@ -635,8 +651,7 @@ namespace FreeWPFShell.ViewModels
             else
             {
                 StatusText = "当前没有传输任务";
-                UpTotal = UpDone = 0;
-                DownTotal = DownDone = 0;
+                ResetTransferCounters();
             }
         }
 
