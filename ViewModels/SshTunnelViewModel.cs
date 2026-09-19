@@ -51,7 +51,7 @@ namespace FreeWPFShell.ViewModels
         }
 
         [RelayCommand]
-        private void AddTunnel()
+        private async Task AddTunnelAsync()
         {
             var session = SelectedSession;
             if (session == null)
@@ -78,17 +78,17 @@ namespace FreeWPFShell.ViewModels
                 ForwardedPort port;
                 if (IsLocal)
                 {
-
-                    port = new ForwardedPortLocal("127.0.0.1", bindPort, DestAddr, destPort);
-                    client.AddForwardedPort(port);
-                    port.Start();
+                    var local = new ForwardedPortLocal("127.0.0.1", bindPort, DestAddr, destPort);
+                    client.AddForwardedPort(local);
+                    await Task.Run(() => local.Start());
+                    port = local;
                 }
                 else
                 {
-
-                    port = new ForwardedPortRemote(destPort, DestAddr, bindPort);
-                    client.AddForwardedPort(port);
-                    port.Start();
+                    var remote = new ForwardedPortRemote(destPort, DestAddr, bindPort);
+                    client.AddForwardedPort(remote);
+                    await Task.Run(() => remote.Start());
+                    port = remote;
                 }
 
                 session.RegisterTunnel(new SshTunnelInfo
@@ -112,13 +112,14 @@ namespace FreeWPFShell.ViewModels
         }
 
         [RelayCommand]
-        private void DeleteTunnel(SshTunnelInfo? tunnel)
+        private async Task DeleteTunnelAsync(SshTunnelInfo? tunnel)
         {
             if (tunnel == null) return;
             try
             {
-                if (tunnel.PortConfig != null && tunnel.PortConfig.IsStarted)
-                    tunnel.PortConfig.Stop();
+                var port = tunnel.PortConfig;
+                if (port != null && port.IsStarted)
+                    await Task.Run(() => port.Stop());
             }
             catch { }
             _tunnelManager.UnregisterTunnel(tunnel.Id);
