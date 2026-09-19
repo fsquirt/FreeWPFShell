@@ -74,6 +74,29 @@ pub fn read_pid_uid_gid(pid: u32) -> (u32, u32) {
 }
 
 
+fn collect_unit_pids() -> HashMap<String, u32> {
+    let mut map: HashMap<String, u32> = HashMap::new();
+    let dir = match fs::read_dir("/proc") { Ok(d) => d, Err(_) => return map };
+    for entry in dir.flatten() {
+        let pid: u32 = match entry.file_name().to_string_lossy().parse() {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+        if pid == 0 { continue; }
+        let content = match fs::read_to_string(format!("/proc/{}/cgroup", pid)) { Ok(c) => c, Err(_) => continue };
+        for line in content.lines() {
+            let path = match line.rsplit(':').next() { Some(p) => p, None => continue };
+            let unit = match path.split('/').find(|seg| seg.ends_with(".service")) { Some(u) => u, None => continue };
+            let better = match map.get(unit) {
+                Some(&cur) => pid < cur,
+                None => true,
+            };
+            if better { map.insert(unit.to_string(), pid); }
+        }
+    }
+    map
+}
+
 pub fn get_systemd_services() -> Vec<ServiceItem> {
     let out = match Command::new("systemctl")
         .args(["list-units", "--type=service", "--all", "--no-legend", "--no-pager"])
@@ -92,60 +115,36 @@ pub fn get_systemd_services() -> Vec<ServiceItem> {
         load_state: String,
         active_state: String,
         sub_state: String,
-        pid_slot: Option<usize>, 
     }
 
     let mut rows: Vec<Row> = Vec::new();
-    let mut active_units: Vec<String> = Vec::new();
     for line in out.lines() {
         if line.trim().is_empty() { continue; }
         let mut it = line.split_whitespace();
-        let name = match it.next() { Some(n) => n.to_string(), None => continue };
+        let mut name = match it.next() { Some(n) => n, None => continue };
+        if name == "●" {
+            name = match it.next() { Some(n) => n, None => continue };
+        }
+        let name = name.trim_start_matches('●').to_string();
         if !name.ends_with(".service") { continue; }
         let load_state = it.next().unwrap_or("").to_string();
         let active_state = it.next().unwrap_or("").to_string();
         let sub_state = it.next().unwrap_or("").to_string();
-        let description = {
-            let rest_start = name.len() + load_state.len() + active_state.len() + sub_state.len() + 4;
-            if line.len() > rest_start { line[rest_start..].trim().to_string() } else { String::new() }
-        };
-        let pid_slot = if active_state == "active" {
-            active_units.push(name.clone());
-            Some(active_units.len() - 1)
-        } else {
-            None
-        };
-        rows.push(Row { name, description, load_state, active_state, sub_state, pid_slot });
+        let description = it.collect::<Vec<&str>>().join(" ");
+        rows.push(Row { name, description, load_state, active_state, sub_state });
     }
 
 
-    let mut pids: Vec<u32> = vec![0; active_units.len()];
-    if !active_units.is_empty() {
-        let mut cmd = Command::new("systemctl");
-        cmd.arg("show");
-        for u in &active_units { cmd.arg(u); }
-        cmd.args(["-p", "MainPID", "--value"]);
-        if let Ok(o) = cmd.output() {
-            if o.status.success() {
-                let stdout = String::from_utf8_lossy(&o.stdout).into_owned();
-                let lines: Vec<&str> = stdout.lines().collect();
-                if lines.len() == active_units.len() {
-                    for (i, l) in lines.iter().enumerate() {
-                        pids[i] = l.trim().parse().unwrap_or(0);
-                    }
-                }
-            }
-        }
-    }
+    let unit_pids = collect_unit_pids();
 
     let mut services = Vec::with_capacity(rows.len());
     for row in rows.into_iter() {
-        let (pid, user, group) = match row.pid_slot.and_then(|i| pids.get(i).copied()) {
-            Some(p) if p > 0 => {
-                let (uid_val, gid_val) = read_pid_uid_gid(p);
-                (p, resolve_uid(uid_val, &passwd_cache), resolve_gid(gid_val, &group_cache))
-            }
-            _ => (0, String::new(), String::new()),
+        let pid = unit_pids.get(&row.name).copied().unwrap_or(0);
+        let (user, group) = if pid > 0 {
+            let (uid_val, gid_val) = read_pid_uid_gid(pid);
+            (resolve_uid(uid_val, &passwd_cache), resolve_gid(gid_val, &group_cache))
+        } else {
+            (String::new(), String::new())
         };
         services.push(ServiceItem {
             name: row.name,
