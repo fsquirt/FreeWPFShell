@@ -110,6 +110,11 @@ namespace FreeWPFShell.UserForm
             if (string.IsNullOrWhiteSpace(txtHost.Text)) { ModernMessageBox.Show("请输入主机IP地址。", "提示", MessageBoxButton.OK, MessageBoxImage.Information); txtHost.Focus(); return false; }
             if (string.IsNullOrWhiteSpace(txtUsername.Text)) { ModernMessageBox.Show("请输入用户名。", "提示", MessageBoxButton.OK, MessageBoxImage.Information); txtUsername.Focus(); return false; }
             if (!int.TryParse(txtPort.Text, out int port) || port < 1 || port > 65535) { ModernMessageBox.Show("端口号无效。", "提示", MessageBoxButton.OK, MessageBoxImage.Warning); txtPort.Focus(); return false; }
+            if (rbPassword.IsChecked != true && rbKey.IsChecked != true)
+            {
+                ModernMessageBox.Show("未选定认证方式，请选择「密码登录」或「密钥登录」。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+                return false;
+            }
             if (string.IsNullOrEmpty(_editingHostId))
             {
                 if (rbPassword.IsChecked == true && string.IsNullOrEmpty(txtPassword.Text)) { ModernMessageBox.Show("请输入密码。", "提示", MessageBoxButton.OK, MessageBoxImage.Information); txtPassword.Focus(); return false; }
@@ -119,6 +124,11 @@ namespace FreeWPFShell.UserForm
 
             if (chkProxy.IsChecked == true && cmbProxyType.SelectedIndex == 3)
             {
+                if (rbJumpPassword.IsChecked != true && rbJumpKey.IsChecked != true)
+                {
+                    ModernMessageBox.Show("未选定认证方式，请选择「密码登录」或「密钥登录」。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return false;
+                }
                 if (string.IsNullOrWhiteSpace(txtJumpHost.Text)) { ModernMessageBox.Show("请输入跳板机IP地址。", "提示", MessageBoxButton.OK, MessageBoxImage.Information); txtJumpHost.Focus(); return false; }
                 if (!int.TryParse(txtJumpPort.Text, out int jp) || jp < 1 || jp > 65535) { ModernMessageBox.Show("跳板机端口号无效。", "提示", MessageBoxButton.OK, MessageBoxImage.Warning); txtJumpPort.Focus(); return false; }
                 if (string.IsNullOrWhiteSpace(txtJumpUser.Text)) { ModernMessageBox.Show("请输入跳板机用户名。", "提示", MessageBoxButton.OK, MessageBoxImage.Information); txtJumpUser.Focus(); return false; }

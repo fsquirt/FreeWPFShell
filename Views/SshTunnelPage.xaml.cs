@@ -17,7 +17,7 @@ namespace FreeWPFShell.Views
             ViewModel = new SshTunnelViewModel();
             DataContext = ViewModel;
 
-            ViewModel.ShowMessage = msg => ModernMessageBox.Show(msg);
+            ViewModel.ShowMessage = (msg, image) => ModernMessageBox.Show(msg, "提示", MessageBoxButton.OK, image);
 
 
             if (Application.Current.MainWindow is MainForm mf)
