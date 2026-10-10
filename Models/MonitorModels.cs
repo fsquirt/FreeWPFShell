@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace FreeWPFShell.Models
 {
@@ -28,5 +29,9 @@ namespace FreeWPFShell.Models
         public uint Pid { get; set; }
         public string User { get; set; } = string.Empty;
         public string Program { get; set; } = string.Empty;
+
+        /// <summary>远程地址的 IP 归属地，由客户端查询本地 IP 库填充。</summary>
+        [JsonIgnore]
+        public string RemoteGeo { get; set; } = string.Empty;
     }
 }

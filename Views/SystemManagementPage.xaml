@@ -106,6 +106,7 @@
                     <DataGridTextColumn Header="协议" Binding="{Binding Proto}" Width="60"/>
                     <DataGridTextColumn Header="本地地址" Binding="{Binding Local}" Width="1.5*"/>
                     <DataGridTextColumn Header="远程地址" Binding="{Binding Remote}" Width="1.5*"/>
+                    <DataGridTextColumn Header="远程地址IP归属地" Binding="{Binding RemoteGeo}" Width="1.5*"/>
                     <DataGridTextColumn Header="状态" Binding="{Binding State}" Width="100"/>
                     <DataGridTextColumn Header="PID" Binding="{Binding Pid}" Width="60"/>
                     <DataGridTextColumn Header="用户" Binding="{Binding User}" Width="80"/>

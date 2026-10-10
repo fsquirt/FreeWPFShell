@@ -379,7 +379,9 @@ namespace FreeWPFShell.ViewModels
         {
             try
             {
-                _allNetConnsRaw = await _session.GetNetConnsAsync();
+                var conns = await _session.GetNetConnsAsync();
+                await Task.Run(() => FillRemoteGeo(conns));
+                _allNetConnsRaw = conns;
                 ApplyNetFilter();
             }
             catch (Exception ex) { ShowError?.Invoke("读取网络连接失败", ex.Message); }
@@ -387,6 +389,28 @@ namespace FreeWPFShell.ViewModels
 
         partial void OnNetSearchChanged(string value) => ApplyNetFilter();
         partial void OnFilterEmptyNetChanged(bool value) => ApplyNetFilter();
+
+        private static void FillRemoteGeo(List<NetConnItem> conns)
+        {
+            foreach (var c in conns)
+            {
+                string ip = ExtractRemoteIp(c.Remote);
+                if (ip.Length == 0) continue;
+                try { c.RemoteGeo = IpGeoService.Instance.Query(ip).SimpleGeo; }
+                catch { c.RemoteGeo = string.Empty; }
+            }
+        }
+
+        /// <summary>从 "1.2.3.4:5678" / "[::1]:22" 形式的远程地址中取出 IP。</summary>
+        private static string ExtractRemoteIp(string remote)
+        {
+            if (string.IsNullOrWhiteSpace(remote)) return string.Empty;
+            string host = remote.Trim();
+            int idx = host.LastIndexOf(':');
+            if (idx > 0) host = host[..idx];
+            if (host.Length >= 2 && host[0] == '[' && host[^1] == ']') host = host[1..^1];
+            return System.Net.IPAddress.TryParse(host, out _) ? host : string.Empty;
+        }
 
         private void ApplyNetFilter()
         {
