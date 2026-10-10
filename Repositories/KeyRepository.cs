@@ -117,8 +117,9 @@ namespace FreeWPFShell.Repositories
         }
 
 
-        private void SavePassphrase(SshKeyInfo keyInfo, string passphrase)
+        private void SavePassphrase(SshKeyInfo keyInfo, string passphrase, bool? useVault = null)
         {
+            if (useVault.HasValue) keyInfo.UseVault = useVault.Value;
             if (keyInfo.UseVault)
             {
 
@@ -211,6 +212,45 @@ namespace FreeWPFShell.Repositories
                 byte[] decrypted = ProtectedData.Unprotect(encrypted, null, DataProtectionScope.CurrentUser);
                 return Encoding.UTF8.GetString(decrypted);
             }
+        }
+
+        /// <summary>
+        /// 数据导出专用：不触发 Windows Hello 验证，返回密钥 ID 与其密码短语。
+        /// 调用方必须自行先完成一次身份验证；解密失败的密钥不会出现在结果中。
+        /// </summary>
+        public Dictionary<string, string> DecryptPassphrasesForExport()
+        {
+            var result = new Dictionary<string, string>();
+            foreach (var key in GetAll())
+            {
+                if (!key.HasPassphrase) continue;
+                try { result[key.Id] = DecryptPassphrase(key); }
+                catch { }
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// 把所有密钥密码短语迁移到指定存储方式（true = Windows 凭据管理器 + Hello 验证，false = DPAPI）。
+        /// 已经是目标方式或无密码保护的密钥会被跳过，返回实际迁移的条数。
+        /// 从凭据管理器读取不会触发验证，调用方必须先完成一次身份验证。
+        /// </summary>
+        public int MigratePassphrases(bool useVault)
+        {
+            int migrated = 0;
+            foreach (var key in GetAll())
+            {
+                if (!key.HasPassphrase || key.UseVault == useVault) continue;
+
+                string passphrase;
+                try { passphrase = DecryptPassphrase(key); }
+                catch { continue; }
+
+                SavePassphrase(key, passphrase, useVault);
+                migrated++;
+            }
+            if (migrated > 0) Save();
+            return migrated;
         }
 
         public void Delete(string id)

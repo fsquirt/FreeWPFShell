@@ -107,8 +107,6 @@ namespace FreeWPFShell.Repositories
         public async Task<SshConnectionInfo> GetAndDecryptAsync(string id)
         {
             var host = FindById(id) ?? throw new Exception("未在配置文件中找到该主机。");
-            var settings = _settingsRepo.Load();
-
 
             if (host.AuthMethod == SshAuthMethod.PrivateKey)
             {
@@ -119,44 +117,86 @@ namespace FreeWPFShell.Repositories
             {
                 bool verified = await RequestAuthenticationAsync($"验证身份以解密并连接至 {host.HostName}");
                 if (!verified) throw new UnauthorizedAccessException("身份验证失败或被取消。");
-
-                return await Task.Run(() =>
-                {
-                    var vault = new PasswordVault();
-                    try
-                    {
-                        var cred = vault.Retrieve(VAULT_RESOURCE_NAME, id);
-                        cred.RetrievePassword();
-                        host.DecryptedSshSecret = cred.Password;
-                        return host;
-                    }
-                    catch { throw new Exception("Windows凭据管理器中未找到该主机的密码记录。"); }
-                });
             }
-            else
+
+            return await Task.Run(() => DecryptCore(host));
+        }
+
+        /// <summary>
+        /// 数据导出专用：不触发 Windows Hello 验证，直接解密全部主机的密码。
+        /// 调用方必须自行先完成一次身份验证。
+        /// </summary>
+        public void DecryptAllForExport()
+        {
+            foreach (var host in GetAll())
             {
-                return await Task.Run(() =>
-                {
-                    try
-                    {
-                        if (!string.IsNullOrEmpty(host.ProtectedSecret))
-                        {
-                            byte[] encrypted = Convert.FromBase64String(host.ProtectedSecret);
-                            byte[] secret = ProtectedData.Unprotect(encrypted, null, DataProtectionScope.CurrentUser);
-                            host.DecryptedSshSecret = Encoding.UTF8.GetString(secret);
-                        }
-                        return host;
-                    }
-                    catch (Exception ex) { throw new Exception("凭据解密失败：" + ex.Message); }
-                });
+                try { DecryptCore(host); }
+                catch { host.DecryptedSshSecret = null; }
             }
         }
 
-        private void SaveSecret(SshConnectionInfo host, string secret)
+        /// <summary>
+        /// 把所有主机密码迁移到指定存储方式（true = Windows 凭据管理器 + Hello 验证，false = DPAPI）。
+        /// 已经是目标方式的记录会被跳过，返回实际迁移的条数。
+        /// 从凭据管理器读取不会触发验证，调用方必须先完成一次身份验证。
+        /// </summary>
+        public int MigrateSecrets(bool useVault)
+        {
+            int migrated = 0;
+            foreach (var host in GetAll())
+            {
+                if (host.AuthMethod != SshAuthMethod.Password) continue;
+                if (host.UseVault == useVault) continue;
+
+                string? secret;
+                try { secret = DecryptCore(host).DecryptedSshSecret; }
+                catch { continue; }
+                if (string.IsNullOrEmpty(secret)) continue;
+
+                SaveSecret(host, secret, useVault);
+                migrated++;
+            }
+            if (migrated > 0) Save();
+            return migrated;
+        }
+
+        private SshConnectionInfo DecryptCore(SshConnectionInfo host)
+        {
+            if (host.AuthMethod == SshAuthMethod.PrivateKey)
+            {
+                return host;
+            }
+
+            if (host.UseVault)
+            {
+                try
+                {
+                    var vault = new PasswordVault();
+                    var cred = vault.Retrieve(VAULT_RESOURCE_NAME, host.Id);
+                    cred.RetrievePassword();
+                    host.DecryptedSshSecret = cred.Password;
+                    return host;
+                }
+                catch { throw new Exception("Windows凭据管理器中未找到该主机的密码记录。"); }
+            }
+
+            try
+            {
+                if (!string.IsNullOrEmpty(host.ProtectedSecret))
+                {
+                    byte[] encrypted = Convert.FromBase64String(host.ProtectedSecret);
+                    byte[] secret = ProtectedData.Unprotect(encrypted, null, DataProtectionScope.CurrentUser);
+                    host.DecryptedSshSecret = Encoding.UTF8.GetString(secret);
+                }
+                return host;
+            }
+            catch (Exception ex) { throw new Exception("凭据解密失败：" + ex.Message); }
+        }
+
+        private void SaveSecret(SshConnectionInfo host, string secret, bool? useVault = null)
         {
             if (string.IsNullOrEmpty(secret)) return;
-            var settings = _settingsRepo.Load();
-            host.UseVault = settings.UseWindowsHello;
+            host.UseVault = useVault ?? _settingsRepo.Load().UseWindowsHello;
 
             if (host.UseVault)
             {

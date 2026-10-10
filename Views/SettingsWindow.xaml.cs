@@ -55,6 +55,68 @@ namespace FreeWPFShell.Views
             }
         }
 
+        private async void BtnExportData_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new Microsoft.Win32.SaveFileDialog
+            {
+                Title = "导出数据",
+                Filter = "文本文件|*.txt",
+                DefaultExt = ".txt",
+                FileName = $"FreeWPFShell_导出_{DateTime.Now:yyyyMMdd_HHmmss}.txt"
+            };
+            if (dlg.ShowDialog() != true) return;
+
+            try
+            {
+                string report = await Services.DataExportService.BuildReportAsync();
+                await System.IO.File.WriteAllTextAsync(dlg.FileName, report, System.Text.Encoding.UTF8);
+                UserForm.ModernMessageBox.Show($"已导出到:\n{dlg.FileName}", "导出成功", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // 用户取消或身份验证失败，直接中止
+            }
+            catch (Exception ex)
+            {
+                UserForm.ModernMessageBox.Show("导出失败: " + ex.Message, "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private async void BtnMigrateHello_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var (hosts, keys) = await Services.CredentialMigrationService.MigrateToVaultAsync();
+                UserForm.ModernMessageBox.Show(BuildMigrationMessage(hosts, keys), "迁移完成", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                UserForm.ModernMessageBox.Show("迁移失败: " + ex.Message, "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private async void BtnMigrateDpapi_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var (hosts, keys) = await Services.CredentialMigrationService.MigrateToDpapiAsync();
+                UserForm.ModernMessageBox.Show(BuildMigrationMessage(hosts, keys), "迁移完成", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // 用户取消或身份验证失败，直接中止
+            }
+            catch (Exception ex)
+            {
+                UserForm.ModernMessageBox.Show("迁移失败: " + ex.Message, "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private static string BuildMigrationMessage(int hosts, int keys)
+            => hosts == 0 && keys == 0
+                ? "没有需要迁移的凭据。"
+                : $"已迁移主机密码 {hosts} 个，密钥密码 {keys} 个。";
+
         private void CmbBackdrop_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (CmbBackdrop.SelectedItem is ComboBoxItem item && item.Tag is string tag)
