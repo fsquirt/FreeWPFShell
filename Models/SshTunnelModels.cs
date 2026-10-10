@@ -28,6 +28,11 @@ namespace FreeWPFShell.Models
 
                     return $"{DestAddress}:{BindPort} -> 服务器监听:{DestPort}";
                 }
+                else if (Type == "动态(SOCKS5)")
+                {
+
+                    return $"SOCKS5 代理 127.0.0.1:{BindPort}";
+                }
                 return $"{BindAddress}:{BindPort} -> {DestAddress}:{DestPort}";
             }
         }

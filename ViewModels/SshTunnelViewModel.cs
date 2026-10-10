@@ -25,7 +25,16 @@ namespace FreeWPFShell.ViewModels
 
         public bool IsLocal => TunnelTypeIndex == 0;
 
-        partial void OnTunnelTypeIndexChanged(int value) => OnPropertyChanged(nameof(IsLocal));
+        public bool IsDynamic => TunnelTypeIndex == 2;
+
+        public bool IsStaticTunnel => TunnelTypeIndex != 2;
+
+        partial void OnTunnelTypeIndexChanged(int value)
+        {
+            OnPropertyChanged(nameof(IsLocal));
+            OnPropertyChanged(nameof(IsDynamic));
+            OnPropertyChanged(nameof(IsStaticTunnel));
+        }
 
         [ObservableProperty]
         private string _bindPort = "8080";
@@ -65,18 +74,34 @@ namespace FreeWPFShell.ViewModels
                 ShowMessage?.Invoke("所选主机未连接或已断开。");
                 return;
             }
-            if (!uint.TryParse(BindPort, out uint bindPort) ||
-                !uint.TryParse(DestPort, out uint destPort) ||
-                string.IsNullOrWhiteSpace(DestAddr))
+            if (!uint.TryParse(BindPort, out uint bindPort) || bindPort == 0)
             {
-                ShowMessage?.Invoke("请正确填写端口号和地址。");
+                ShowMessage?.Invoke("请正确填写本机端口。");
                 return;
+            }
+
+            bool isDynamic = IsDynamic;
+            uint destPort = 0;
+            if (!isDynamic)
+            {
+                if (!uint.TryParse(DestPort, out destPort) || string.IsNullOrWhiteSpace(DestAddr))
+                {
+                    ShowMessage?.Invoke("请正确填写服务器地址和端口。");
+                    return;
+                }
             }
 
             try
             {
                 ForwardedPort port;
-                if (IsLocal)
+                if (isDynamic)
+                {
+                    var dynamicPort = new ForwardedPortDynamic("127.0.0.1", bindPort);
+                    client.AddForwardedPort(dynamicPort);
+                    await Task.Run(() => dynamicPort.Start());
+                    port = dynamicPort;
+                }
+                else if (IsLocal)
                 {
                     var local = new ForwardedPortLocal("127.0.0.1", bindPort, DestAddr, destPort);
                     client.AddForwardedPort(local);
@@ -96,14 +121,16 @@ namespace FreeWPFShell.ViewModels
                     HostId = session.HostInfo.Id,
                     HostName = session.DisplayName,
                     PortConfig = port,
-                    Type = IsLocal ? "服务器->本机" : "本机->服务器",
-                    BindAddress = IsLocal ? "127.0.0.1" : "*",
+                    Type = isDynamic ? "动态(SOCKS5)" : (IsLocal ? "服务器->本机" : "本机->服务器"),
+                    BindAddress = IsLocal || isDynamic ? "127.0.0.1" : "*",
                     BindPort = bindPort,
-                    DestAddress = DestAddr,
-                    DestPort = destPort,
+                    DestAddress = isDynamic ? string.Empty : DestAddr,
+                    DestPort = isDynamic ? 0 : destPort,
                     Remark = Remark
                 });
-                ShowMessage?.Invoke("隧道创建成功并在后台运行！");
+                ShowMessage?.Invoke(isDynamic
+                    ? $"SOCKS5 代理已启动，请把浏览器/应用的代理设置为 127.0.0.1:{bindPort}"
+                    : "隧道创建成功并在后台运行！");
             }
             catch (Exception ex)
             {
