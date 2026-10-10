@@ -39,6 +39,9 @@ namespace FreeWPFShell.Views
         {
             InitializeComponent();
 
+            var version = typeof(MainForm).Assembly.GetName().Version;
+            if (version != null) Title = $"FreeWPFShell {version}";
+
             var settingsRepo = Core.AppServices.GetService<Repositories.SettingsRepository>();
             BackdropService.ApplyToAllWindows(settingsRepo.Load().BackdropType);
 
