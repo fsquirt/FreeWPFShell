@@ -16,5 +16,5 @@ using System.Windows;
 [assembly: AssemblyDescription("开源免费的Windows SSH客户端")] 
 [assembly: AssemblyProduct("FreeWPFShell")]            
 [assembly: AssemblyCopyright("https://github.com/fsquirt")] 
-[assembly: AssemblyVersion("2.3.0.0")]                 
-[assembly: AssemblyFileVersion("2.3.0.0")]             
+[assembly: AssemblyVersion("2.3.1.0")]                 
+[assembly: AssemblyFileVersion("2.3.1.0")]             
