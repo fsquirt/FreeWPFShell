@@ -1,6 +1,6 @@
 # FreeWPFShell - Windows SSH 客户端
 
-FreeWPFShell 是一款基于 WPF 开发的Windows SSH 客户端。并集成了一个由 Rust 编写的轻量级远程监控 Agent。
+FreeWPFShell 是一款基于 WPF 开发的Windows SSH 客户端。并集成了一个由 Rust 编写的轻量级远程监控探针。
 
 ---
 

@@ -527,7 +527,7 @@ namespace FreeWPFShell.Services
                 HostName = _hostInfo.HostName ?? _hostInfo.IpAddress,
                 Type = "本地(监控)", BindAddress = "127.0.0.1",
                 BindPort = LinuxMonitorLocalPort, DestAddress = "127.0.0.1",
-                DestPort = LinuxMonitorLocalPort, Remark = "自动创建 - Linux Monitor探针",
+                DestPort = LinuxMonitorLocalPort, Remark = "自动创建 - 探针",
                 PortConfig = port
             };
 

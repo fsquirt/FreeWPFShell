@@ -43,6 +43,44 @@ namespace FreeWPFShell.Views
                 if (item.Tag?.ToString() == settings.ImageStretchMode.ToString()) { CmbStretch.SelectedItem = item; break; }
         }
 
+        private void BtnPickColor_Click(object sender, RoutedEventArgs e)
+        {
+            if (Services.NativeDialogs.TryChooseColor(this, ParseColor(TxtTerminalBg.Text), out var picked))
+            {
+                TxtTerminalBg.Text = $"#{picked.R:X2}{picked.G:X2}{picked.B:X2}";
+            }
+        }
+
+        private void BtnPickFont_Click(object sender, RoutedEventArgs e)
+        {
+            string family = TxtTerminalFont.Text.Trim();
+            int size = int.TryParse(TxtTerminalFontSize.Text, out int parsed) ? parsed : 10;
+
+            if (Services.NativeDialogs.TryChooseFont(this, ref family, ref size))
+            {
+                TxtTerminalFont.Text = family;
+                TxtTerminalFontSize.Text = size.ToString();
+            }
+        }
+
+        private static System.Windows.Media.Color ParseColor(string? text)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(text)
+                    && System.Windows.Media.ColorConverter.ConvertFromString(text.Trim()) is System.Windows.Media.Color color)
+                {
+                    return color;
+                }
+            }
+            catch
+            {
+                // 非法颜色文本，回退到默认背景色
+            }
+
+            return System.Windows.Media.Color.FromRgb(0x1E, 0x30, 0x47);
+        }
+
         private void BtnSelectImage_Click(object sender, RoutedEventArgs e)
         {
             var dlg = new Microsoft.Win32.OpenFileDialog
