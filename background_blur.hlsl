@@ -13,9 +13,25 @@ cbuffer PixelShaderSettings
 
 static const float M_PI = 3.14159265f;
 
+// customParams.x = 拉伸模式（原生控件传入）
+// customParams.y = 背景图“降暗比例”的负值（0 = 原图亮度，-0.1 = 亮度降低 10%，-1.0 = 全黑）
+//                  未设置时原生控件传 0，正好表示不降暗
+static const float DEFAULT_IMAGE_BRIGHTNESS = 1.0f;
+
 float Gaussian2D(float x, float y, float sigma)
 {
     return 1 / (sigma * sqrt(2 * M_PI)) * exp(-0.5 * (x * x + y * y) / (sigma * sigma));
+}
+
+// 采样背景图并应用亮度系数（纯色背景不参与变暗）
+float4 SampleImage(float2 uv, bool mapImage, float brightness)
+{
+    float4 c = mapImage ? imageTexture.Sample(samplerState, uv) : background;
+    if (mapImage)
+    {
+        c.rgb *= brightness;
+    }
+    return c;
 }
 
 float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
@@ -64,6 +80,9 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
 
     float4 termColor = shaderTexture.Sample(samplerState, tex);
 
+    // 背景图亮度系数：1.0 = 原图，0.9 = 亮度降低 10%
+    float imgBrightness = DEFAULT_IMAGE_BRIGHTNESS + min(customParams.y, 0.0f);
+
     // 1. 背景高斯模糊
     float4 bgBlurred = float4(0, 0, 0, 0);
     float blurWeightSum = 0;
@@ -74,7 +93,7 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
         {
             float w = Gaussian2D(bx, by, 12.0f);
             float2 sUV = imgUV + float2(bx * texelWidth * 8.0f, by * texelHeight * 8.0f);
-            bgBlurred += (mapImage ? imageTexture.Sample(samplerState, sUV) : background) * w;
+            bgBlurred += SampleImage(sUV, mapImage, imgBrightness) * w;
             blurWeightSum += w;
         }
     }
@@ -98,7 +117,7 @@ float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
     float blurMask = smoothstep(0.0005f, 0.02f, textMask);
 
     // 3. 合成：文字下方显示模糊背景，其余显示原始背景，文字贴在顶层
-    float4 bgNormal = mapImage ? imageTexture.Sample(samplerState, imgUV) : background;
+    float4 bgNormal = SampleImage(imgUV, mapImage, imgBrightness);
     float4 finalBg = lerp(bgNormal, bgBlurred, blurMask);
 
     float3 finalColor = termColor.rgb + finalBg.rgb * (1.0f - termColor.a);

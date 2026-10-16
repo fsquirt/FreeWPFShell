@@ -30,6 +30,7 @@ namespace FreeWPFShell.Views
             TxtTerminalBg.Text = settings.TerminalBackground;
             TogImageBg.IsChecked = settings.UseImageBackground;
             TxtImagePath.Text = settings.ImageBackgroundPath;
+            TxtImageBrightness.Text = settings.ImageBrightnessReduce.ToString();
             TxtTraceTimeout.Text = settings.TracerouteTimeout.ToString();
             TxtTraceMaxHops.Text = settings.TracerouteMaxHops.ToString();
             TxtTerminalFont.Text = settings.TerminalFont;
@@ -138,6 +139,7 @@ namespace FreeWPFShell.Views
             settings.TerminalBackground = TxtTerminalBg.Text.Trim();
             settings.UseImageBackground = TogImageBg.IsChecked ?? false;
             settings.ImageBackgroundPath = TxtImagePath.Text;
+            if (int.TryParse(TxtImageBrightness.Text, out int brightness)) settings.ImageBrightnessReduce = Math.Clamp(brightness, 0, 100);
             settings.TerminalFont = TxtTerminalFont.Text.Trim();
             if (int.TryParse(TxtTerminalFontSize.Text, out int fs)) settings.TerminalFontSize = fs;
 

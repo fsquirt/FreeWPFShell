@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:mica="clr-namespace:MicaWPF.Controls;assembly=MicaWPF"
         mc:Ignorable="d"
-        Title="设置" Height="880" Width="420"
+        Title="设置" Height="910" Width="420"
         SystemBackdropType="Acrylic"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
         FontFamily="Microsoft YaHei">
@@ -107,6 +107,11 @@
                     <ComboBoxItem Content="Center (居中)" Tag="4"/>
                 </ComboBox>
             </StackPanel>
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,12" IsEnabled="{Binding IsChecked, ElementName=TogImageBg}">
+                <TextBlock Text="图片亮度降低(%)：" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <mica:TextBox x:Name="TxtImageBrightness" Width="60" ToolTip="0 = 原图亮度，100 = 全黑。默认 10。"/>
+            </StackPanel>
+
             <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                 <mica:ToggleSwitch x:Name="TogInjectLocale" VerticalAlignment="Center" Margin="0,0,10,0"/>
                 <TextBlock Text="连接后自动注入中文环境变量" FontSize="14" VerticalAlignment="Center" ToolTip="启用后将在登录时自动执行 export LANG=zh_CN.UTF-8 等命令。"/>

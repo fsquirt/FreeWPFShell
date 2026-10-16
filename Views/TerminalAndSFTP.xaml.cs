@@ -109,6 +109,7 @@ namespace FreeWPFShell.Views
                 Terminal.PixelShaderImagePath = settings.ImageBackgroundPath;
                 Terminal.PixelShaderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "background_blur.hlsl");
                 Terminal.PixelShaderImageStretchMode = (Microsoft.Terminal.Wpf.PixelShaderImageStretchMode)settings.ImageStretchMode;
+                TerminalShaderBridge.SetImageBrightnessReduce(Terminal, settings.ImageBrightnessReduce);
                 Terminal.ShowScrollBar = false;
             }
             else

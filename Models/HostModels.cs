@@ -69,6 +69,7 @@ namespace FreeWPFShell.Models
         public bool UseImageBackground { get; set; } = false;
         public string? ImageBackgroundPath { get; set; }
         public int ImageStretchMode { get; set; } = 1; 
+        public int ImageBrightnessReduce { get; set; } = 50;
         public int TracerouteTimeout { get; set; } = 2; 
         public int TracerouteMaxHops { get; set; } = 30; 
         public string TerminalFont { get; set; } = "Cascadia Code";
